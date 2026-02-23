@@ -6,3 +6,28 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+/*
+.bases-header {
+}
+.bases-relatednotes-view-container,
+.bases-list-group,
+.bases-view-is-grouped {
+  display: flex; 
+  flex-direction: column;
+}
+*/
+
+.bases-relatednodes-group-ul {
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+.bases-relatednodes-group-ul.collapsed,
+.bases-relatednodes-btn-collapse-all.collapsed {
+  display: none;
+}
+.bases-relatednodes-btn-collapse-all {
+  position: absolute;
+  right: 0px;
+  z-index: 3;
+}
