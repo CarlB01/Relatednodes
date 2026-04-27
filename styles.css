@@ -1,33 +1,187 @@
-/*
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
-
-If your plugin does not need CSS, delete this file.
-
-*/
-/*
-.bases-header {
+/* BASES HEADER */
+.bases-relatednodes-intro {
+  font-size: 20;
+  color: blue;
 }
-.bases-relatednotes-view-container,
-.bases-list-group,
-.bases-view-is-grouped {
-  display: flex; 
-  flex-direction: column;
-}
-*/
-
-.bases-relatednodes-group-ul {
-  margin-top: 2px;
-  margin-bottom: 2px;
+.bases-header-collapsible{
+ display: none;
 }
 
-.bases-relatednodes-group-ul.collapsed,
-.bases-relatednodes-btn-collapse-all.collapsed {
-  display: none;
+.bases-relatednodes-super-container {
 }
-.bases-relatednodes-btn-collapse-all {
+
+/* MAIN CONTAINER */
+.bases-relatednodes-view-container {
+  position: absolute;
+  height: 100%;
+  width: 100%;
+  
+  --scaleFactor: 1; /* updated by JS */
+
+  border-radius: calc(4px * var(--scaleFactor));
+  padding: 5px;
+  
+  /* transform: scale(var(--scaleFactor)); */
+  font-size: calc(12px * var(--scaleFactor));
+}
+
+.active {
+  visibility: visible;
+}
+
+/* REGIONS */
+.bases-relatednodes-center-region {
+  anchor-name: --centerContainer;
+  position: absolute;
+  min-height: 10%;
+  width: 50%;
+  top: 25%;
+  left: 20%;
+  border-width: 20px;
+  height: auto;
+  min-height: calc(30px * var(--scaleFactor));
+  min-width: calc(100px * var(--scaleFactor));
+  padding-top: calc(50px * var(--scaleFactor));
+  padding-bottom: calc(50px * var(--scaleFactor));
+  font-size: calc(16px * var(--scaleFactor));
+  align-items: center; 
+  text-align: center;
+}
+
+.bases-relatednodes-upper-region {
+  anchor-name: --definedUpperContainer;
+  position: absolute;
+  position-anchor: --centerContainer;
+  bottom: anchor(top);
+  left: anchor(left);
+  right: anchor(right);
+  max-height: 25%;
+  min-height: 20px;
+  max-width: 50%;
+  --columns: 2; 
+  columns: 3rem var(--columns);
+  gap: 5px; /* Adds space between columns */
+  align-content: center;
+  margin: 0 auto; 
+  text-align: center;
+  overflow: scroll;
+}
+
+.bases-relatednodes-friend-region {
+  --columns: 1; /* updated by JS */
+  position: absolute; 
+  columns: 4em var(--columns);
+  position-anchor: --centerContainer;
+  bottom: anchor(bottom);
+  right: anchor(left);
+  width: fit-content;
+  min-height: anchor-size(height);
+  align-content: center;
+  margin: 0 auto; 
+  padding: calc(5px * var(--scaleFactor));
+
+  gap: 10px; /* Adds space between columns */
+  text-align: center;
+  overflow: auto;
+}
+
+.bases-relatednodes-sibling-region {
+  --columns: 1; /* updated by JS */
+  position: absolute; 
+  columns: 4em var(--columns);
+  position-anchor: --centerContainer;
+  bottom: anchor(bottom);
+  left: anchor(right);
+  width: fit-content;
+  min-height: 20px;
+  align-content: center;
+  margin: 0 auto; 
+  padding: calc(5px * var(--scaleFactor));
+  /* background-image: linear-gradient(45deg, #a76f6f, transparent); */
+
+  gap: 10px; /* Adds space between columns */
+  text-align: center;
+  overflow: auto;
+}
+
+.bases-relatednodes-lower-region {
+  --columns: 4; /* updated by JS */
+  columns: 8em var(--columns);
+  /* background-image: linear-gradient(45deg, #a76f6f, transparent);*/
+  width: fit-content;
+  align-content: center;
+  margin: 0 auto; 
+  text-align: center;
+  padding: calc(3px * var(--scaleFactor));
+  min-height: 20px;
+  gap: 5px; /* Adds space between columns */
+}
+
+.bases-relatednodes-upper-region .absolute-child {
   position: absolute;
   right: 0px;
+  top: 0px;
   z-index: 3;
+}
+
+/*****************/
+/*    GROUPS     */
+/*****************/
+.bases-relatednodes-outergroup {}
+
+.bases-relatednodes-group {  }
+
+.bases-relatednodes-group-ul {}
+
+.bases-relatednodes-group-ul.collapsed {
+  display: none;
+}
+
+
+.bases-relatednodes-info-region {
+    container-type: inline;
+}
+
+/*****************/
+/*    items      */
+/*****************/
+
+.bases-relatednodes-btn-collapse-all {
+  position:relative;
+  right: 0px;
+  top: 0px;
+  z-index: 3;
+}
+
+.bases-list-entry {
+  margin-top: -2px; /* avstand mellom boksene */
+}
+.relatednotes-text, 
+.relatednotes-compact {
+  break-inside: avoid; /* Prevents items from breaking across columns if possible */
+  box-sizing: border-box;
+  display: inline-block;
+	margin: calc(5px * var(--scaleFactor) * var(--scaleFactor) ) auto; /* top right bottom left */
+	vertical-align: middle;
+  align-items: center;
+  position: relative;
+	background-size: cover;
+	/* box-shadow: 0 1px calc(4px * var(--scaleFactor)) #0008; */
+  /* border: 1px solid gray; */
+  /* border-radius: calc(4px * var(--scaleFactor)); */
+  background-color: color-mix(in srgb, var(--background-primary), transparent 50%);
+  text-decoration: none;
+  /* font-width: ultra-condensed; */
+  font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+  z-index: 1;
+  padding-left: calc(3px * var(--scaleFactor));
+  padding-right: calc(3px * var(--scaleFactor));
+  padding-top: calc(2px * var(--scaleFactor) * var(--scaleFactor));
+}
+
+.relatednotes-compact {
+	margin: calc(2px * var(--scaleFactor) * var(--scaleFactor) ); /* top right bottom left */
+  font-size: calc(10px * var(--scaleFactor));
+  padding-top: 0;  
 }

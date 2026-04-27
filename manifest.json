@@ -1,9 +1,9 @@
 {
-	"id": "relatednodes-2",
-	"name": "Related nodes 2",
-	"version": "0.0.1",
+	"id": "relatednodes",
+	"name": "Related nodes",
+	"version": "0.0.4",
 	"minAppVersion": "0.15.0",
-	"description": "start på nytt",
+	"description": "w/bezier connecting lines",
 	"author": "CarlB01",
 	"isDesktopOnly": false
 }
