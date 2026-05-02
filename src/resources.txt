@@ -295,3 +295,43 @@ private diagonalLine(el: HTMLElement, color: string, thick: number) {
       return map;
     }, new Map()).values()];
   };
+
+
+
+  private forceRefreshByLeafSwitch() {
+    const workspace = this.app.workspace;
+    const currentLeaf = workspace.activeLeaf;
+
+    if (!currentLeaf) return;
+
+    // 1. Find another leaf to temporarily activate
+    // Prefer another markdown leaf in the main area
+    let tempLeaf: WorkspaceLeaf | null = null;
+
+    // Option A: Use another existing markdown leaf
+    const markdownLeaves = workspace.getLeavesOfType("markdown");
+    tempLeaf = markdownLeaves.find(leaf => leaf !== currentLeaf) || null;
+
+    // Option B: If no other markdown leaf, create a temporary empty leaf (safer fallback)
+    if (!tempLeaf) {
+        tempLeaf = workspace.getLeaf(false);  // false = reuse if possible, don't split
+    }
+
+    if (tempLeaf && tempLeaf !== currentLeaf) {
+        // Switch away
+        workspace.setActiveLeaf(tempLeaf, { focus: true });
+
+        // Immediately switch back (use small timeout to let Obsidian process the change)
+        setTimeout(() => {
+            if (currentLeaf) {
+                workspace.setActiveLeaf(currentLeaf, { focus: true });
+            }
+            // Optional: call your onDataUpdated after returning
+            setTimeout(() => this.onDataUpdated(), 10);
+        }, 10);   // 10-30ms is usually enough
+    } else {
+        // Fallback if we can't find/switch leaves
+        this.onDataUpdated();
+    }
+  }
+  

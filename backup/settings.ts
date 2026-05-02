@@ -1,11 +1,30 @@
 import RelatednodesPlugin from "./main";
-import {App, PluginSettingTab, Setting} from "obsidian";
+import {App, BasesEntry, FrontMatterInfo, PluginSettingTab, Point, Setting} from "obsidian";
 
+export interface RelatedNodeGroup {
+	key: string;
+	isDefined: boolean;
+	entries: BasesEntry[];
+}
+
+export type Relation = "center" | "parent" | "child" | "friend"| "sibling" | "undefined" | "ignored";
+export type Direction = "up" | "down" | "left" | "right";
+export type Nodetype = "file" | "other";
 type settingsParamsTypes = "text" | "textArea";
 
 export interface LeftTop {
 	left: string
 	top: string
+}
+
+export const relationOrder: Record<Relation, number> = {
+  "center": 0,
+  "parent": 1,
+  "child": 2,
+	"friend": 3,
+  "sibling": 4,
+  "undefined": 5,
+	"ignored": 6,
 }
 
 export const GATE_LEFT: LeftTop = {
@@ -28,9 +47,40 @@ export const GATE_DOWN: LeftTop = {
 	top: 'calc(100% + 1px)'
 }
 
+export interface Gate {
+	direction: Direction | undefined;
+	svg: SVGSVGElement | undefined;
+	connections: RelatedNode[];
+	unspecified: RelatedNode[];
+};
+
+export const DEFAULT_GATE: Gate = {
+	direction: undefined,
+	svg: undefined,
+	connections: [],
+	unspecified: []
+}
+
 export interface KeyPair {
 	key: string;
 	value: string;
+}
+
+export interface RelatedNode {
+	name: string;
+	tags: string;
+	basename: string;
+	alias: string;
+	path: string;
+	properties: any[][] | undefined;
+	type: Nodetype | undefined;
+	relation: Relation | undefined;
+	info: string | undefined;
+	div: HTMLElement | undefined;
+	ignored: RelatedNode[] | undefined;
+	upperGate: Gate;
+	lowerGate: Gate;
+	friendGate: Gate;
 }
 
 export interface MyPluginSettings {
@@ -59,6 +109,38 @@ export const DEFAULT_SETTINGS: MyPluginSettings = {
 	displayBasesToolbar: false,
 	displayAliases: false,
 	relatedNotesName: 'minBrain' // dormant - for future
+}
+
+export const DEFAULT_NODE: RelatedNode = {
+	type: undefined,
+	tags: "",
+	name: "",
+	basename: "",
+	alias: "",
+	path: "",
+	relation: undefined,
+	div: undefined,
+	info: undefined,
+	ignored: undefined,
+	upperGate: {
+		direction: undefined,
+		svg: undefined,
+		connections: [],
+		unspecified: []
+	},
+	lowerGate: {
+		direction: undefined,
+		svg: undefined,
+		connections: [],
+		unspecified: []
+	},
+	friendGate: {
+		direction: undefined,
+		svg: undefined,
+		connections: [],
+		unspecified: []
+	},
+	properties: undefined
 }
 
 /********* SETTINGS WINDOW */

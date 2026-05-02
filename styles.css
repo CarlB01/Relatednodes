@@ -68,6 +68,13 @@
   overflow: scroll;
 }
 
+.bases-relatednodes-upper-region .absolute-child {
+  position: absolute;
+  right: 0px;
+  top: 0px;
+  z-index: 3;
+}
+
 .bases-relatednodes-friend-region {
   --columns: 1; /* updated by JS */
   position: absolute; 
@@ -105,6 +112,14 @@
   overflow: auto;
 }
 
+.bases-relatednodes-lower-main-region {
+  position: absolute;
+  width: 100%;
+  position-anchor: --centerContainer;
+  top: anchor(bottom);
+  overflow:auto;
+}
+
 .bases-relatednodes-lower-region {
   --columns: 4; /* updated by JS */
   columns: 8em var(--columns);
@@ -116,13 +131,6 @@
   padding: calc(3px * var(--scaleFactor));
   min-height: 20px;
   gap: 5px; /* Adds space between columns */
-}
-
-.bases-relatednodes-upper-region .absolute-child {
-  position: absolute;
-  right: 0px;
-  top: 0px;
-  z-index: 3;
 }
 
 /*****************/
