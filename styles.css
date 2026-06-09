@@ -1,195 +1,290 @@
 
 /* BASES HEADER */
-.bases-relatednodes-intro {
-  font-size: 20;
-  color: blue;
-}
 .bases-header-collapsible{
  display: none;
 }
 
-.bases-relatednodes-super-container {
+/* Obsidian Vault name */
+.workspace-sidedock-vault-profile {
 }
 
 /* MAIN CONTAINER */
-.bases-relatednodes-view-container {
+.related-intro {
+  font-size: 20;
+  color: blue;
+}
+
+.related-svg-layer {
+  width: "100%";
+  height: "100%";
+  position: absolute; 
+  z-index: 0; 
+}
+
+.related-view-container {
   position: absolute;
-  height: 100%;
   width: 100%;
+  height: 100%; /* gets adjusted by js if toolbar visible */
   
   --scaleFactor: 1; /* updated by JS */
 
   border-radius: calc(4px * var(--scaleFactor));
-  padding: 5px;
   
   /* transform: scale(var(--scaleFactor)); */
   font-size: calc(12px * var(--scaleFactor));
 }
 
-.active {
-  visibility: visible;
-}
-
-/* REGIONS */
-.bases-relatednodes-center-region {
-  anchor-name: --centerContainer;
+/* ALL REGIONS */
+.related-area {
+  
   position: absolute;
+  width: fit-content;
+  padding: 0.4rem; 
+  
+  /*background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px; 
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15);*/
+  
+  /*
+  pointer-events: auto;
+  font-size: calc(12px * var(--scaleFactor));
+  */
+} 
+
+/* Spesific REGIONS */
+.related-center-area {
+  anchor-name: --related-center;
   min-height: 10%;
-  width: 50%;
+  max-width: 50%;
   top: 25%;
   left: 20%;
-  border-width: 20px;
-  height: auto;
   min-height: calc(30px * var(--scaleFactor));
-  min-width: calc(100px * var(--scaleFactor));
+  min-width: calc(min(150px * var(--scaleFactor), 33%));
   padding-top: calc(50px * var(--scaleFactor));
   padding-bottom: calc(50px * var(--scaleFactor));
+  padding-left: calc(20px * var(--scaleFactor));;
+  padding-right: calc(20px * var(--scaleFactor));;
   font-size: calc(16px * var(--scaleFactor));
   align-items: center; 
   text-align: center;
 }
 
-.bases-relatednodes-upper-region {
-  anchor-name: --definedUpperContainer;
-  position: absolute;
-  position-anchor: --centerContainer;
+.related-top-area {
+  anchor-name: --related-top;
+  position-anchor: --related-center;
   bottom: anchor(top);
   left: anchor(left);
   right: anchor(right);
-  max-height: 25%;
-  min-height: 20px;
-  max-width: 50%;
-  --columns: 2; 
+  overflow:visible;
+
+  --columns: 2;
   columns: 3rem var(--columns);
-  gap: 5px; /* Adds space between columns */
+  gap: 30px; /* Adds space between columns */
+  
   align-content: center;
   margin: 0 auto; 
   text-align: center;
-  overflow: scroll;
+  
+  padding: calc(3px * var(--scaleFactor));
+  min-height: 20px;
 }
 
-.bases-relatednodes-upper-region .absolute-child {
-  position: absolute;
+.related-top-area .absolute-child {
+
   right: 0px;
   top: 0px;
   z-index: 3;
 }
 
-.bases-relatednodes-friend-region {
-  --columns: 1; /* updated by JS */
-  position: absolute; 
-  columns: 4em var(--columns);
-  position-anchor: --centerContainer;
-  bottom: anchor(bottom);
+.related-left-area {
+  position-anchor: --related-center;
+  
+  --columns: 1;
+  columns: 3rem var(--columns);
+  gap: 25px; /* Adds space between columns */
   right: anchor(left);
-  width: fit-content;
-  min-height: anchor-size(height);
-  align-content: center;
-  margin: 0 auto; 
-  padding: calc(5px * var(--scaleFactor));
-
-  gap: 10px; /* Adds space between columns */
+  
+  position-area: left center;
+  bottom: anchor(bottom);
+  overflow-y: auto;
+  overflow-x: visible;
+  
+  /*top: 10px;*/
   text-align: center;
-  overflow: auto;
+  margin-left: 0.3rem;
+  padding: calc(5px * var(--scaleFactor));
 }
 
-.bases-relatednodes-sibling-region {
-  --columns: 1; /* updated by JS */
-  position: absolute; 
-  columns: 4em var(--columns);
-  position-anchor: --centerContainer;
-  bottom: anchor(bottom);
+.related-right-area {
+  position-anchor: --related-center;
+  position: absolute;
+    
   left: anchor(right);
-  width: fit-content;
+
+  min-height: anchor-size(height);
+  overflow-y: auto;
+  overflow-x: visible;
+
+  --columns: 2;
+  columns: 3rem var(--columns);
+  gap: 25px; /* Adds space between columns */
+  
+  /*top: 10px;*/
   min-height: 20px;
   align-content: center;
-  margin: 0 auto; 
+  text-align: center;
+  margin-right: 0.3rem;
   padding: calc(5px * var(--scaleFactor));
   /* background-image: linear-gradient(45deg, #a76f6f, transparent); */
 
-  gap: 10px; /* Adds space between columns */
-  text-align: center;
-  overflow: auto;
 }
 
-.bases-relatednodes-lower-main-region {
-  position: absolute;
-  width: 100%;
-  position-anchor: --centerContainer;
-  top: anchor(bottom);
-  overflow:auto;
+.related-right-area.short {
+  bottom: anchor(bottom);   
+}
+.related-right-area:not(.short) {
+  top: anchor(--related-top top);   
 }
 
-.bases-relatednodes-lower-region {
-  --columns: 4; /* updated by JS */
-  columns: 8em var(--columns);
+
+
+
+.related-bottom-area {
+  anchor-name: --related-bottom;
   /* background-image: linear-gradient(45deg, #a76f6f, transparent);*/
-  width: fit-content;
+  position-anchor: --related-center;
+    
+  --columns: 4;
+  columns: 6rem var(--columns);
+    overflow-y: auto;
+  overflow-x: visible;
   align-content: center;
   margin: 0 auto; 
   text-align: center;
+  
   padding: calc(3px * var(--scaleFactor));
+  padding-right: calc(px * var(--scaleFactor));
   min-height: 20px;
-  gap: 5px; /* Adds space between columns */
+  gap: 30px; /* Adds space between columns */
+  opacity: 1;
 }
 
-/*****************/
-/*    GROUPS     */
-/*****************/
-.bases-relatednodes-outergroup {}
+/* Default: bottom takes full lower span */
+.related-bottom-area:not(.narrow) {
+    position-area: bottom span-all;
+    max-width: 95vw;
+}
 
-.bases-relatednodes-group {  }
+/* Narrow mode: yield lower-right to the right card */
+.related-bottom-area.narrow {
+    position-area: bottom span-left;   /* only left + center */
+    max-width: 620px;                  /* adjust as needed */
+}
 
-.bases-relatednodes-group-ul {}
+/* Multi-column container - very important for top/bottom */
+.related-columns {
+  flex: auto;
+  flex-flow: column wrap;
+  /* border: 1px solid var(--background-modifier-border);
+  border-color: green;
+  border-radius: 12px; */
+  padding: 1rem * var(--scaleFactor); 
+  width: fit-content;
+  max-width: 8rem;
+  height: fit-content;
+  justify-content: center;
+  vertical-align: middle;
+  align-items: center;
+  align-content: center;
+  text-align: center;
+  align-content: center;
+  margin: 0 auto; 
+  text-align: center;
+  transition: all 0.3s ease; 
+}
 
-.bases-relatednodes-group-ul.collapsed {
+.related-groups {
+  transition: all 0.3s ease;
+  background-color: aqua;
+}
+
+.related-groups.expanded {
+  background: rgba(183, 183, 183, 0.313);
+  box-shadow: inset 0 0 20px 20px var(--background-secondary); 
+  break-inside: avoid; /* Prevents items from breaking across columns if possible */
+}
+.related-groups:not(.expanded) {
+  background-color: inherit;
+  break-inside: inherit;
+}
+
+.related-linkDiv {
+  width: 100%;
+  padding: calc(5px * var(--scaleFactor)); /* top right bottom left */
+  display: inline-block; /* makes the info 'i' appear normally */
+}
+
+.related-linkDiv.hidden {
   display: none;
 }
 
-
-.bases-relatednodes-info-region {
-    container-type: inline;
+.related-linkDiv:not(.hidden) {
+  display:inherit;
 }
 
-/*****************/
-/*    items      */
-/*****************/
-
-.bases-relatednodes-btn-collapse-all {
-  position:relative;
-  right: 0px;
-  top: 0px;
-  z-index: 3;
-}
-
-.bases-list-entry {
-  margin-top: -2px; /* avstand mellom boksene */
-}
-.relatednotes-text, 
-.relatednotes-compact {
-  break-inside: avoid; /* Prevents items from breaking across columns if possible */
-  box-sizing: border-box;
-  display: inline-block;
-	margin: calc(5px * var(--scaleFactor) * var(--scaleFactor) ) auto; /* top right bottom left */
-	vertical-align: middle;
-  align-items: center;
+.related-link, 
+.related-compact {
   position: relative;
-	background-size: cover;
-	/* box-shadow: 0 1px calc(4px * var(--scaleFactor)) #0008; */
-  /* border: 1px solid gray; */
-  /* border-radius: calc(4px * var(--scaleFactor)); */
-  background-color: color-mix(in srgb, var(--background-primary), transparent 50%);
-  text-decoration: none;
+  break-inside: avoid; /* Prevents items from breaking across columns if possible */
   /* font-width: ultra-condensed; */
+  background-color: color-mix(in srgb, var(--background-primary), transparent 50%);
   font-family: 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+  line-height: 0.8;
+  padding: 0;
+	margin: 0 calc(3px * var(--scaleFactor)) 0 calc(3px * var(--scaleFactor)); /* top right bottom left */
   z-index: 1;
-  padding-left: calc(3px * var(--scaleFactor));
-  padding-right: calc(3px * var(--scaleFactor));
-  padding-top: calc(2px * var(--scaleFactor) * var(--scaleFactor));
+  text-decoration: none !important;
+  border-bottom: none !important;
 }
 
-.relatednotes-compact {
+.related-compact {
 	margin: calc(2px * var(--scaleFactor) * var(--scaleFactor) ); /* top right bottom left */
   font-size: calc(10px * var(--scaleFactor));
   padding-top: 0;  
+}
+
+.related-info-button,
+.related-plusminus {
+  position: absolute;
+  white-space: nowrap;
+  background-color: rgb(from var(--background-primary) r g b);
+  box-shadow: 0 1px calc(4px * var(--scaleFactor)) #0008;  
+  border: 1px solid gray;
+  border-radius: calc(8px * var(--scaleFactor));
+  padding: calc(3px * var(--scaleFactor));
+  font-size: calc(10px * var(--scaleFactor));
+  font-weight: 900;
+  /* borderColor = '#068ef6' */
+  left: calc(100% - 5px);
+  top: calc(100% - 5px);
+  z-index: 101;
+  overflow: visible;
+}
+
+.related-plusminus {
+  left: calc(100% - 15px);
+}
+
+
+.related-info-hover {
+  /* width: 150px;
+  position: absolute;
+  top: anchor(top);
+  right: anchor(left);
+  background-color: rgb(from var(--background-primary) r g b);     
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px; 
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15);
+   z-index: 1102; */
 }

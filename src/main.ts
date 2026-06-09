@@ -1,37 +1,12 @@
-import {App, Modal, Plugin, BasesViewConfig, BasesAllOptions, BasesOptions, TFile, Notice, WorkspaceLeaf} from 'obsidian';
-import {DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab} from "./settings";
-import { RelatedNodesView } from './view';
-import { BaseSidebarView, VIEW_TYPE_BASE_PANEL } from "./sidebar-view";
+import {App, Modal, Plugin, BasesOptions, TFile, Notice, MarkdownView, WorkspaceLeaf} from 'obsidian';
+import {DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab} from "./settings.js";
+import { RelatednotesView } from './view.js';
+import { BaseSidebarView, VIEW_TYPE_BASE_PANEL } from "./sidebar-view.js";
 
-export const relatedNodesViewType = 'relatedNodesViewType';
+export const relatednodesID = 'relatednotesViewType';
+export const superChargedLinkAttribs = 'internal-link data-link-icon data-link-icon-after data-link-text';
 
-/*
-const defaultCollapseOptions: BasesOptions = {
-		type: 'text', //'text', 'property'
-		displayName: 'All collapsed (yes/no)',
-		key: 'collapsed',
-		default: 'yes',
-}
-const defaultPropertyOptions: BasesOptions = {
-		type: 'property', //'text', 'property'
-		displayName: 'default group By property',
-		key: 'tags',
-		default: 'file.tags',
-}
-const ignorePropertyOptions: BasesOptions = {
-		type: 'property', //'text', 'property'
-		displayName: 'ignore following properties',
-		key: 'ignore',
-		default: '#excalidraw',
-}
-// neighbour notes  containing these tags are considered 'parents'
-const parentTagsOptions: BasesOptions = {
-		type: 'text', //'text', 'property'
-		displayName: 'parent tags (comma separated, include \'#\')',
-		key: 'parentTags',
-		default: parentDefaults.join(", ")
-}
-*/
+
 const separatorOptions: BasesOptions = {
 		type: 'text', //'text', 'property'
 		displayName: 'separate values',
@@ -46,13 +21,13 @@ const parentAttributesOptions: BasesOptions = {
 		default: 'tilhører',
 }
 
-export default class RelatednodesPlugin extends Plugin {
-	
-	settings: MyPluginSettings | undefined;
+export default class RelatednotesPlugin extends Plugin {
 
+	declare settings: MyPluginSettings;
+	
 	async onload() {
-		await this.loadSettings();
 		
+		await this.loadSettings();      // ← Main call
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new SampleSettingTab(this.app, this));
 	
@@ -63,40 +38,24 @@ export default class RelatednodesPlugin extends Plugin {
 		);
 
 		// 2. Add a ribbon icon to open the sidebar tab
-		this.addRibbonIcon("apple", "Open Relatednodes", () => {
+		this.addRibbonIcon("apple", "Open Relatednotes", () => {
 			this.activateViewForBase('bases/minBrain.base');
 		});
 
 		// Tell Obsidian about the new view type that this plugin provides.
-		/*
-		this.registerBasesView(relatedNodesViewType, {
+		
+		this.registerBasesView(relatednodesID, {
 			name: 'Relatert',
 			icon: 'lucide-apple',
 			factory: (controller, containerEl) => 
-				new RelatedNodesView(controller, containerEl),
-			options: () => ([
-				defaultCollapseOptions, 
-				defaultPropertyOptions,
-				ignorePropertyOptions,
-				parentTagsOptions, 
-				childTagsOptions, 
-				parentAttributesOptions,
-				separatorOptions
-			]),
-		});
-		*/
-		this.registerBasesView(relatedNodesViewType, {
-			name: 'Relatert',
-			icon: 'lucide-apple',
-			factory: (controller, containerEl) => 
-				new RelatedNodesView(controller, containerEl, this),
+				new RelatednotesView(controller, containerEl, this),
 			options: () => ([
 				parentAttributesOptions,
 				separatorOptions
 			]),
 		});
 	};
-	
+
 	async activateViewForBase(path: string) {
 		const file = this.app.vault.getAbstractFileByPath(path);
 		if (!(file instanceof TFile) || file.extension !== 'base') {
@@ -136,7 +95,8 @@ export default class RelatednodesPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<MyPluginSettings>);
+		const loadedData = await this.loadData();
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
 	}
 
 	async saveSettings() {

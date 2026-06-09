@@ -1,8 +1,8 @@
-import { BasesEntry, BasesPropertyId, BasesQueryResult, FrontMatterCache, MetadataCache, parseFrontMatterTags, parsePropertyId, TFile, Vault } from "obsidian";
-import RelatednodesPlugin from "./main";
-import { NoteProperties2 } from "./noteProperties";
+import { BasesEntry, MetadataCache, parseFrontMatterAliases, parseFrontMatterTags, TFile, Vault } from "obsidian";
+import RelatednotesPlugin from "./main.js";
+import { updateMessage } from "./view.js";
 
-type Nodetype = "file" | "other";
+type Notetype = "file" | "other";
 export type Relation = "center" | "parent" | "child" | "friend"| "sibling" | "undefined" | "ignored";
 export type Direction = "up" | "down" | "left" | "right";
 
@@ -15,7 +15,15 @@ const relationOrder: Record<Relation, number> = {
   "undefined": 5,
   "ignored": 6,
 }
-export interface RelatedNodeGroup {
+
+const DEFAULT_GATE: Gate = {
+  direction: undefined,
+  svg: undefined,
+  connections: [],
+  unspecified: []
+}
+
+export interface RelatedNoteGroup {
 	key: string;
 	isDefined: boolean;
 	entries: BasesEntry[];
@@ -24,340 +32,414 @@ export interface RelatedNodeGroup {
 export interface Gate {
 	direction: Direction | undefined;
 	svg: SVGSVGElement | undefined;
-	connections: RelatedNode[];
-	unspecified: RelatedNode[];
+	connections: NoteProperties[];
+	unspecified: NoteProperties[];
 };
 
-export interface RelatedNode {
-	type: Nodetype | undefined;
-	tags: string | undefined;
-	name: string | undefined;
-	basename: string | undefined;
-	alias: string | undefined;
-	path: string | undefined;
-	properties: any[][] | undefined;
-	relation: Relation | undefined;
-	div: HTMLElement | undefined;
-	info: string | undefined;
-	ignored: RelatedNode[] | undefined;
-	upperGate: Gate;
-	lowerGate: Gate;
-	friendGate: Gate;
+export interface NoteProperties {
+  filename: string;
+  basename: string;
+  aliases?: string[];
+  tags?: string[];
+  properties: [string, any][];
+  connectionCount: number;
+  sharedLinksWithStart: number;
+  degree: 'zero' | 'first' | 'second';
+  file: TFile;
+  type?: Notetype;
+	relation?: Relation;
+	div?: HTMLElement;
+	info?: string;
+	ignored?: NoteProperties[];
+	upperGate?: Gate;
+	lowerGate?: Gate;
+	friendGate?: Gate;
 }
 
-const getDefaultNode = (): RelatedNode => ({
-	type: undefined,
-	tags: undefined,
-	name: undefined,
-	basename: undefined,
-	alias: undefined,
-	path: undefined,
-	relation: undefined,
-	div: undefined,
-	info: undefined,
-	ignored: undefined,
-	upperGate: {
-		direction: 'up',
-		svg: undefined,
-		connections: [],
-		unspecified: []
-	},
-	lowerGate: {
-		direction: 'down',
-		svg: undefined,
-		connections: [],
-		unspecified: []
-	},
-	friendGate: {
-		direction: 'left',
-		svg: undefined,
-		connections: [],
-		unspecified: []
-	},
-	properties: undefined
-});
-
-interface NoteProperties {
-  relation: string;
-  path: string;
-  upperGate: any;
-	filename: string;
-	basename: string;
-	aliases: string;
-	tags: string;
-	properties: [string | undefined, string | undefined][];
+export interface GroupedNotes {
+  tag: string;
+  notes: NoteProperties[];
 }
 
+interface GateGroups {
+  connections: GroupedNotes[];
+  unspecified: GroupedNotes[];
+}
 
 export class RelatedData {
-  private displayAliases = this.plugin.settings!.displayAliases;
-  private parentProperties = this.itemsOf(this.plugin.settings!.parentProperties);
-  private parentTags = this.itemsOf(this.plugin.settings!.parentTags);
-  private childProperties = this.itemsOf(this.plugin.settings!.childProperties);
-  private childTags = this.itemsOf(this.plugin.settings!.childTags);
-  private friendProperties = this.itemsOf(this.plugin.settings!.friendProperties);
-  private friendTags = this.itemsOf(this.plugin.settings!.friendTags);
-  private ignoreFragments = this.itemsOf(this.plugin.settings!.ignoreNameFragments);    
-  private ignoreTags = this.itemsOf(this.plugin.settings!.ignoreTags);
+  private readonly displayAliases;
+  private readonly parentProperties;
+  private readonly parentTags;
+  private readonly childProperties;
+  private readonly childTags;
+  private readonly friendProperties;
+  private readonly friendTags;
+  private readonly ignoreFragments;
+  private readonly ignoreTags;
+    // Main cache
+  private noteCache = new Map<string, NoteProperties>(); // basename → note. Source of truth.
 
-  centerNode: RelatedNode | undefined;
-  siblings: RelatedNode[] = [];
-  private allNodes: RelatedNode[] = [];
-  private potentialSiblingChildren: [BasesEntry, RelatedNode][] = [];
+  centerNote: NoteProperties | undefined;
+  siblings: NoteProperties[] = [];
 
-  private mostRecentActiveFile: TFile | null | undefined;
+  mostRecentActiveFile: TFile | null = null;
 
   constructor(
     private app: {
       workspace: any; metadataCache: MetadataCache; vault: Vault},
-      public plugin: RelatednodesPlugin  
+      public plugin: RelatednotesPlugin,
+      private callback: (callId: updateMessage) => void
   ) {
-
+      this.displayAliases = this.plugin.settings!.displayAliases;
+      this.parentProperties = this.itemsOf(this.plugin.settings!.parentProperties);
+      this.parentTags = this.itemsOf(this.plugin.settings!.parentTags);
+      this.childProperties = this.itemsOf(this.plugin.settings!.childProperties);
+      this.childTags = this.itemsOf(this.plugin.settings!.childTags);
+      this.friendProperties = this.itemsOf(this.plugin.settings!.friendProperties);
+      this.friendTags = this.itemsOf(this.plugin.settings!.friendTags);
+      this.ignoreFragments = this.itemsOf(this.plugin.settings!.ignoreNameFragments);
+      this.ignoreTags = this.itemsOf(this.plugin.settings!.ignoreTags);
   }
 
-  update(
-    activeFile: TFile | null,
-    queryResult: BasesQueryResult, 
-    order: BasesPropertyId[] 
-  ){
-    this.mostRecentActiveFile = activeFile
+  async update(activeFile: TFile | null) {
+    if (!activeFile) return;
+
+    this.mostRecentActiveFile = activeFile;
+
+    // Clear previous data
     this.siblings.length = 0;
-    this.allNodes.length = 0;
-    this.potentialSiblingChildren.length = 0;
-    
-    const centernodeFrontmatter = activeFile 
-      ? this.app.metadataCache.getFileCache(activeFile)?.frontmatter 
-      : null;
- 
-    this.centerNode = this.buildCenterNode(activeFile!, centernodeFrontmatter!);
-    this.allNodes.push(this.centerNode!);
+    this.noteCache.clear();
 
-    this.buildFirstDegreeNodes(this.centerNode, centernodeFrontmatter!, queryResult, order)
+    // Create center note
+    this.centerNote = this.getNoteProperties(activeFile, 'center');
+    this.noteCache.set(this.centerNote.basename, this.centerNote);
+
+    // Process all related notes
+    await this.updateNotesRelatedTo(this.centerNote!, 'center');
     
-    this.buildSiblingNodes();
+    await this.buildSiblingNotes();
+
+    this.callback('dataModelReady');
+}
+
+    // Helper method (recommended)
+  getFirstTag(note: NoteProperties): string | undefined {
+    if (!note.tags) return undefined;
+    if (Array.isArray(note.tags)) {
+        return note.tags[0];                    // first tag
+    }
+    if (typeof note.tags === 'string') {
+        return note.tags;
+    }
+    return undefined;
   }
 
-  sortedSiblings (): RelatedNode[] {
-    return this.siblings
-      .sort((a: { relation: string | undefined; }, b: { relation: string | undefined; }) => {
-        const orderA = relationOrder[a.relation as Relation] ?? 999;
-        const orderB = relationOrder[b.relation as Relation] ?? 999;
-        return orderA - orderB;
-      })
+  // ===================== Update notestree data =====================
+  
+  private setCenterNoteRelation(
+    centerNote: NoteProperties, 
+    newNote: NoteProperties
+  ){
+    switch (newNote.relation) {
+      case "ignored":
+        centerNote.ignored!.push(newNote) ;
+        break;
+      case "parent": 
+        newNote.lowerGate!.connections = [centerNote];
+        centerNote.upperGate!.connections.push(newNote); 
+        break;
+      case "child": 
+        newNote.upperGate!.connections = [centerNote];
+        centerNote.lowerGate!.connections.push(newNote); 
+        break;
+        case "friend": 
+        newNote.friendGate!.connections = [centerNote];
+        newNote.friendGate!.direction = 'right';
+        centerNote.friendGate!.connections.push(newNote); 
+        break;
+      default: 
+        newNote.upperGate!.connections = [centerNote];
+        centerNote.lowerGate!.unspecified.push(newNote); break;
+    }
   };
 
+  private async buildSiblingNotes() {
+    const parents = this.getNotesByRelationFromCache('parent');
 
-
-  // ===================== Update nodestree data =====================
-
-  private buildCenterNode(
-    activeFile: TFile, 
-    activeFrontMatter: FrontMatterCache
-  ): RelatedNode 
-  {  
-    return this.centerNode = {
-      ... getDefaultNode(),
-      type: "other",
-      relation: "center",
-      name: activeFile?.basename 
-        ?? this.app.workspace.getMostRecentLeaf()?.view?.getDisplayText() 
-        ?? "(??)",
-      tags: this.mostRecentActiveFile 
-        ? parseFrontMatterTags(activeFrontMatter)?.join(',')
-        : "",
-      basename: activeFile?.basename ?? "",
-      path: activeFile?.path ?? "", 
-      ignored: [],
-    };
-  }
-
-  private buildFirstDegreeNodes(
-    centerNode: RelatedNode,
-    centerNodefrontmatter: FrontMatterCache,
-    queryResult: BasesQueryResult, 
-    order: BasesPropertyId[] 
-  ){
-
-    for (const group of queryResult.groupedData) {
-      const groupKeys = this.itemsOf(group.key?.toString() ?? "");
-      
-      var nodetype: Nodetype;
-      for (const element of group.entries) {
-        // avoid additional appearance of same node as center node
-        if (element.file.path == this.mostRecentActiveFile?.path) {continue};
-  
-        // some bases stuff
-        for (const propertyName of order) {
-          const { type, name } = parsePropertyId(propertyName);
-          const value = element.getValue(propertyName);
-          if (value == null)  continue;
-          (name === 'name' && type === 'file')
-            ? nodetype = "file"
-            : nodetype = "other";
-        }
-        
-        // What is this note/element's relation to center note?
-        const relation = this.findRelation(
-          centerNodefrontmatter, 
-          null,
-          this.centerNode?.basename!,
-          element,
-          null,
-          element.file.basename,
-          element.file.path,
-          groupKeys
-        );
-
-        // What is this note/element's relation to center note?
-        
-
-        //prepare parent/child
-        const newNode: RelatedNode = {...getDefaultNode(),
-          type: "file",
-          tags: groupKeys.join(','),
-          relation: relation,
-          name: element.file.name, 
-          basename: element.file.basename,
-          alias: this.displayAliases
-            ? Array(element.getValue('formula.alias'))[0]?.toString() ?? undefined 
-            : undefined,
-          path: element.file.path
-        }
-            
-        switch (newNode.relation) {
-          case "ignored":
-            centerNode.ignored!.push(newNode) ;
-            break;
-          case "parent": 
-            newNode.lowerGate.connections = [centerNode];
-            centerNode.upperGate.connections.push(newNode); 
-            this.potentialSiblingChildren.push([element, newNode]);
-            break;
-          case "child": 
-            newNode.upperGate.connections = [centerNode];
-            centerNode.lowerGate.connections.push(newNode); 
-            break;
-            case "friend": 
-            newNode.friendGate.connections = [centerNode];
-            newNode.friendGate.direction = 'right';
-            centerNode.friendGate.connections.push(newNode); 
-            break;
-          default: 
-            newNode.upperGate.connections = [centerNode];
-            centerNode.lowerGate.unspecified.push(newNode); break;
-        }
-        this.allNodes.push(newNode);
-      }
+    for (const parent of parents) {
+        await this.updateNotesRelatedTo(parent, "parent");
     }
+
+    this.siblings = this.getNotesByRelationFromCache('sibling');
+}
+
+  private async updateNotesRelatedTo(primaryNote: NoteProperties, relation: Relation) {
+    const secondaries = await this.getSecondariesFrom(primaryNote);
+
+    for (const secondaryNote of secondaries) {
+        if (this.noteCache.has(secondaryNote.basename)) continue;
+
+        secondaryNote.relation = this.findRelation(primaryNote, secondaryNote);
+
+        if (relation === 'parent') {
+            this.setSiblingNoteRelation(primaryNote, secondaryNote);
+        } else if (relation === 'center') {
+            this.setCenterNoteRelation(primaryNote, secondaryNote);
+        }
+
+        this.noteCache.set(secondaryNote.basename, secondaryNote);
+    }
+}
+
+  /** All notes of a specific relation */
+  getNotesByRelationFromCache(relation: Relation): NoteProperties[] {
+    return Array.from(this.noteCache.values())
+      .filter(note => note.relation === relation);
   }
 
-  private buildSiblingNodes() {
+  private setSiblingNoteRelation(
+    primaryNote: NoteProperties, 
+    newNote: NoteProperties
+  ) {
+      if (this.noteCache.has(newNote.basename)) return;
 
-    this.potentialSiblingChildren.forEach(element => {
-      element[1].lowerGate.connections = this.nodesRelatedTo(element[0], element[1], "sibling");
+      this.noteCache.set(newNote.basename, newNote);
+
+      if (newNote.relation! == 'ignored') {
+        primaryNote.ignored!.push(newNote);
+        return;
+      }
+
+      if (!['child', 'undefined'].includes(newNote.relation!)) {
+        return;
+      }
+      
+      newNote.relation = 'sibling';
+      this.noteCache.set(newNote.basename!, newNote);
+      
+      newNote.upperGate!.connections = [primaryNote];
+      primaryNote.lowerGate?.connections.push(newNote);
+  }
+
+  private async getSecondariesFrom(primaryNote: NoteProperties): Promise<NoteProperties[]> {
+    const filesSet = await this.getFirstDegreeFiles(primaryNote.file);
+
+    const secondaries: NoteProperties[] = [];
+
+    for (const file of filesSet) {
+        if (file.path === primaryNote.file.path) continue; // skip self
+
+        const noteProps = this.getNoteProperties(file, 'undefined');
+        secondaries.push(noteProps);
+    }
+
+    // Sort: first by tag, then by connection count
+    return secondaries.sort((a, b) => {
+        const tagA = this.getFirstTag(a);
+        const tagB = this.getFirstTag(b);
+
+        if (tagA !== tagB) {
+            if (!tagA) return 1;
+            if (!tagB) return -1;
+            return tagA.localeCompare(tagB);
+        }
+        return (b.connectionCount ?? 0) - (a.connectionCount ?? 0);
     });
-  }
-
-  private nodesRelatedTo(primaryElement: BasesEntry, primaryElementNode: RelatedNode, relation: Relation):RelatedNode[] {
-    var relatedNodes: RelatedNode[] = [];
-
-    primaryElementNode.ignored = [];
-
-    const secondaries = this.getSecondariesFromElement(primaryElement);
-    for (const secondaryNode of secondaries) {
-      
-      if (this.siblingExists(secondaryNode.basename!)) {continue};
-      if (this.otherExists(secondaryNode.basename!)) {continue};
-
-      // of these secondaries we want only siblings
-      secondaryNode.relation = this.findRelation(
-        null,
-        primaryElement, 
-        primaryElement.file.basename,
-        secondaryNode, 
-        null,
-        secondaryNode.basename!, 
-        secondaryNode.path!,
-        this.itemsOf(secondaryNode.tags ?? "")
-      );
-      
-      if (!['ignored', 'child', 'undefined'].includes(secondaryNode.relation)) {
-        continue;
-      }
-      
-      if (relation == 'ignored') {
-        primaryElementNode.ignored.push(secondaryNode);
-      } else {
-        secondaryNode.upperGate!.connections = [primaryElementNode];
-        relatedNodes.push(secondaryNode);
-        this.siblings.push(secondaryNode);
-      }
-    }
-    return relatedNodes;
-  }
-
-  private getSecondariesFromElement(element: BasesEntry): RelatedNode[] {
-    const value = element.getValue('formula.secondaries')?.toString() ?? "";
-    if (!value) return [];
-
-    const filenames = value
-      .split(/\r?\n/)
-      .map(name => name.trim())
-      .filter(name => name.length > 0);
-      
-    const secondaries: RelatedNode[] = [];
-
-    for (const name of filenames) {
-      // Resolve the file
-      let file = this.app.vault.getFileByPath(name);
-      if (!file) {
-        // Fallback if you only have basename
-        file = this.app.vault.getFiles().find(f => f.basename === name || f.name === name) ?? null;
-      }
-      if (!file) continue;
-
-      const cache = this.app.metadataCache.getFileCache(file);
-      if (!cache) continue;
-
-      const frontmatter = cache.frontmatter || {};
-
-      let newSecondary: RelatedNode = {...getDefaultNode(),
-        type: "file",
-        tags: this.itemsOf(frontmatter.tags)[0] ?? "", // or use cache.tags if you want all tags
-        name: file.name,
-        basename: file.basename,
-        alias: this.itemsOf(frontmatter.aliases)[0] ?? "",
-        path: frontmatter.path,
-        properties: Object.entries(frontmatter)
-          .filter(([key]) => !['aliases', 'tags'].includes(key)) // handle specially if needed
-          .map(([key, value]) => [key, value]),
-        relation: undefined,
-        div: undefined,
-        info: undefined,
-        ignored: undefined,
-      };
-
-      secondaries.push(newSecondary);
-    }
-    return secondaries;
-  }
-
+}
 
   // ===================== helper functions =====================
 
+  /**
+   * Helper to safely get backlinks, with optional Backlink Cache plugin support.
+   * Returns a Set of all files that link to the given file (incoming backlinks).
+   */
+  private async getIncomingBacklinks(file: TFile): Promise<Set<TFile>> {
+    const backlinkSources = new Set<TFile>();
+
+    // 1. Primary method: getBacklinks (async)
+    const backlinks = await this.getBacklinks(file);
+
+    if (backlinks?.data) {
+        for (const sourcePath of Object.keys(backlinks.data)) {
+            const sourceFile = this.app.vault.getFileByPath(sourcePath);
+            if (sourceFile) {
+                backlinkSources.add(sourceFile);
+            }
+        }
+    }
+
+    // 2. Backup method using resolvedLinks (catches more cases)
+    const resolvedLinks = this.app.metadataCache.resolvedLinks;
+    for (const [sourcePath, links] of Object.entries(resolvedLinks)) {
+        if (links[file.path] && sourcePath !== file.path) {
+            const sourceFile = this.app.vault.getFileByPath(sourcePath);
+            if (sourceFile) {
+                backlinkSources.add(sourceFile);
+            }
+        }
+    }
+
+    // Remove self-references if any
+    backlinkSources.delete(file);
+
+    return backlinkSources;
+  }
+
+
+  private async getBacklinks(file: TFile): Promise<any> {
+    const mc = this.app.metadataCache;
+
+    // Safer readiness check (avoids TS error)
+    const isReady = (mc as any).initialized === true || 
+                    Object.keys(mc.resolvedLinks ?? {}).length > 0;
+
+    if (!isReady) {
+        await this.waitForResolvedLinks();
+    }
+
+    // 1. Best: Backlink Cache plugin (if installed)
+    if ((mc as any).getBacklinksForFile?.safe) {
+        try {
+            return await (mc as any).getBacklinksForFile.safe(file);
+        } catch (e) {
+            console.debug("Backlink Cache .safe() failed", e);
+        }
+    }
+
+    // 2. Fallback to standard (undocumented) method
+    if ((mc as any).getBacklinksForFile) {
+        try {
+            return (mc as any).getBacklinksForFile(file);
+        } catch (e) {
+            console.warn("getBacklinksForFile failed", e);
+        }
+    }
+
+    // 3. Ultimate fallback: empty result
+    return { data: {} };
+  }
+
+  /** Helper to wait for metadata cache */
+  private async waitForResolvedLinks(timeout = 8000): Promise<void> {
+    const start = Date.now();
+    const mc = this.app.metadataCache;
+
+    while (Date.now() - start < timeout) {
+      const isInitialized = (mc as any).initialized === true;
+      const hasLinks = Object.keys(mc.resolvedLinks ?? {}).length > 0;
+
+      if (isInitialized || hasLinks) {
+        return;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 120));
+    }
+
+    console.warn("Timeout waiting for Obsidian metadata cache to initialize");
+  }
+  
+  /**
+   * Returns all first-degree connected files (both outgoing links + incoming backlinks).
+   */
+  private async getFirstDegreeFiles(file: TFile): Promise<Set<TFile>> {
+    const connections = new Set<TFile>();
+
+    // === Outgoing Links ===
+    const cache = this.app.metadataCache.getFileCache(file);
+
+    // Method 1: From file cache links
+    if (cache?.links) {
+      for (const link of cache.links) {
+        const target = this.app.metadataCache.getFirstLinkpathDest(link.link, file.path);
+        if (target instanceof TFile) {
+          connections.add(target);
+        }
+      }
+    }
+
+    // Method 2: From resolvedLinks (extra coverage)
+    const resolvedFromThisFile = this.app.metadataCache.resolvedLinks?.[file.path];
+    if (resolvedFromThisFile) {
+      for (const targetPath in resolvedFromThisFile) {
+        const targetFile = this.app.vault.getFileByPath(targetPath);
+        if (targetFile) {
+          connections.add(targetFile);
+        }
+      }
+    }
+
+    // === Incoming Backlinks (now async) ===
+    const incoming = await this.getIncomingBacklinks(file);
+    incoming.forEach(source => connections.add(source));
+
+    // Remove self-references if any
+    connections.delete(file);
+
+    return connections;
+}
+
+  private getNoteProperties(
+    file: TFile,
+    relation: Relation,
+    type: Notetype = 'file',
+    degree: 'zero' |'first' | 'second' = 'zero',
+    connectionCount: number = 0,
+    sharedLinksWithStart: number = 0
+  ): NoteProperties {
+    const cache = this.app.metadataCache.getFileCache(file);
+    const frontmatter = cache?.frontmatter ?? {};
+
+    return {
+      filename: file.name,
+      basename: file.basename,
+      aliases: parseFrontMatterAliases(cache?.frontmatter) ?? [],
+      tags: parseFrontMatterTags(cache?.frontmatter) ?? [],
+      properties: Object.entries(frontmatter)
+          .filter(([key]) => !['aliases', 'tags'].includes(key)),
+      connectionCount,
+      sharedLinksWithStart,
+      degree,
+      relation,
+      type,
+      file,
+      ignored: [],
+      upperGate: {
+        ...DEFAULT_GATE,
+        connections: [],
+        unspecified: []
+      },
+      lowerGate: {
+        ...DEFAULT_GATE,
+        connections: [],
+        unspecified: []
+      },
+      friendGate: {
+        ...DEFAULT_GATE,
+        connections: [],
+        unspecified: []
+      }
+    };
+  }
+  
+  private getPropertyAsArray(node: NoteProperties, key: string): string[] {
+    const value = node.properties.find(([k]) => k === key)?.[1];
+
+    if (Array.isArray(value)) {
+        return value.filter((v): v is string => typeof v === 'string');
+    }
+    if (typeof value === 'string') return [value];
+    return [];
+  }
+
   private findRelation(
-    a1: FrontMatterCache | null | undefined,
-    a2: BasesEntry | null,
-    aName: string,
-    b1: FrontMatterCache | null | undefined,
-    b2: BasesEntry | null,
-    bName: string,
-    bPath: string,
-    bTags: string[]
+    noteA: NoteProperties,
+    noteB: NoteProperties,
   ): Relation {
 
-    const noteA = new NoteProperties2(a1, a2);
-    const noteB = new NoteProperties2(b1, b2);
+    const aName = noteA.basename; 
+    const bName = noteB.basename;
+    const bPath = noteB.file.path;
+    const bTags = noteB.tags ?? [];
 
     // Early ignore check
     if (this.foundPart(bPath, this.ignoreFragments) || 
@@ -366,20 +448,20 @@ export class RelatedData {
     }
 
     // Parent relationship (A links to B as parent OR B links to A as child)
-    if (this.checkProperties(noteA, noteB, bName, this.parentProperties) ||
-        this.checkProperties(noteB, noteA, aName, this.childProperties)) {
+    if (this.linksTo(noteA, noteB, bName, this.parentProperties) ||
+        this.linksTo(noteB, noteA, aName, this.childProperties)) {
         return "parent";
     }
 
     // Child relationship
-    if (this.checkProperties(noteA, noteB, bName, this.childProperties) ||
-        this.checkProperties(noteB, noteA, aName, this.parentProperties)) {
+    if (this.linksTo(noteA, noteB, bName, this.childProperties) ||
+        this.linksTo(noteB, noteA, aName, this.parentProperties)) {
         return "child";
     }
 
     // Friend relationship
-    if (this.checkProperties(noteA, noteB, bName, this.friendProperties) ||
-        this.checkProperties(noteB, noteA, aName, this.friendProperties)) {
+    if (this.linksTo(noteA, noteB, bName, this.friendProperties) ||
+        this.linksTo(noteB, noteA, aName, this.friendProperties)) {
         return "friend";
     }
 
@@ -391,222 +473,183 @@ export class RelatedData {
     return "undefined";
   }
 
-  private checkProperties(
-    noteA: NoteProperties2,
-    noteB: NoteProperties2,
+  private linksTo(
+    noteA: NoteProperties,
+    noteB: NoteProperties,
     basename: string,
     propertiesToLookFor: string[]
-  ): boolean {
+  ): boolean {  
 
     if (!propertiesToLookFor?.length) return false;
 
     return propertiesToLookFor.some(attrib => {
         if (!attrib) return false;
 
-        const values = noteA.getAsArray(attrib);
+        const values = this.getPropertyAsArray(noteA, attrib);
         return this.foundInlinks(values, basename);
     });
   }
 
-  private siblingExists(basename: string): RelatedNode | null {
-    return this.existingNode(this.siblings, basename);
+  /**
+ * Checks if the given values contain a link to the target basename
+ * (handles wikilinks, pipes, commas, etc.)
+ */
+  private foundInlinks(values: unknown[] | unknown, basename: string): boolean {
+    if (values == null) return false;
+
+    const normalized = this.normalizeToStringArray(values);
+    
+    // Fast early exit - cheap string check
+    if (!normalized.some(v => v.includes(basename))) {
+        return false;
+    }
+
+    // More precise check after cleaning wikilinks
+    return normalized
+        .map(this.cleanLink)
+        .includes(basename);
   }
 
-  private otherExists(basename: string): RelatedNode | null {
-    return this.existingNode(this.allNodes, basename);
+  /**
+   * Normalizes any input (string, array, null, etc.) into a clean string array
+   */
+  private normalizeToStringArray(input: unknown): string[] {
+      if (input == null) return [];
+
+      // If it's already an array, process each item
+      if (Array.isArray(input)) {
+          return input
+              .flatMap(item => this.splitAndClean(item))
+              .filter(Boolean);
+      }
+
+      // Single value (string, number, etc.)
+      return this.splitAndClean(input);
   }
 
-  private existingNode(nodes: RelatedNode[], basename:string): RelatedNode | null {
-    const candidate = nodes.find(s => s.basename === basename);
-    return (candidate === undefined)
-      ? null
-      : candidate 
+  /**
+   * Splits by comma and cleans each part (handles wikilinks with | )
+   */
+  private splitAndClean(value: unknown): string[] {
+    if (value == null) return [];
+
+    const str = String(value).trim();
+    if (!str) return [];
+
+    return str.split(',')
+        .flatMap(part => this.extractLinkTargets(part))
+        .filter(Boolean);
+  }
+
+  /**
+   * Handles both [[Link]] and [[Link|Display Text]] → returns clean link targets
+   */
+  private extractLinkTargets(text: string): string[] {
+      const trimmed = text.trim();
+      if (!trimmed) return [];
+
+      // Split on pipe (|) and take the first part (the actual link target)
+      const segments = trimmed.split('|').map(s => s.trim());
+
+      return segments.map(segment => this.trimWikilinks(segment));
+  }
+
+  /**
+   * Removes [[ and ]] from both sides
+   */
+  private trimWikilinks(str: string): string {
+      if (typeof str !== 'string' || !str) return '';
+
+      return str
+          .trim()
+          .replace(/^\[+/, '')   // remove one or more [ at start
+          .replace(/\]+$/, '')   // remove one or more ] at end
+          .trim();
+  }
+
+  /**
+   * Optional: Cleaner alias for trimWikilinks if you prefer the name
+   */
+  private cleanLink = (str: string): string => this.trimWikilinks(str);
+
+
+  
+  private checkTags(taggedWith: string[],
+                wantedTags: string[]): boolean {
+    //tagged with any of the wanted tags
+    const taggedWithSet = new Set(taggedWith ?? []);
+    if (wantedTags.some(tag => taggedWithSet.has(tag))) {
+      return true;
+    }
+    return false;
+  };
+    
+  private foundPart(text: string, wantedParts: string | string[]): boolean {
+    if (!text) return false;
+    const lowerText = text.toLowerCase();
+
+    const parts = Array.isArray(wantedParts) ? wantedParts : [wantedParts];
+
+    return parts.some(part => 
+        part && lowerText.includes(part.toLowerCase())
+    );
+  }
+    
+  //return an array 
+  public itemsOf(value: unknown): string[] {
+    if (value == null) return [];
+
+    const str = String(value).trim();
+    if (!str) return [];
+
+    return str.split(',')
+      .flatMap(part => part.trim())
+      .filter(Boolean);
+  }
+
+  sortedSiblings(): NoteProperties[] {
+    return [...this.siblings].sort((a, b) => {
+        // 1. Primary sort: by relation
+        const orderA = relationOrder[a.relation as Relation] ?? 999;
+        const orderB = relationOrder[b.relation as Relation] ?? 999;
+
+        if (orderA !== orderB) {
+            return orderA - orderB;
+        }
+
+        // 2. Secondary sort: by first tag (alphabetically)
+        const tagA = this.getFirstTag(a);
+        const tagB = this.getFirstTag(b);
+
+        if (tagA && tagB) {
+            return tagA.localeCompare(tagB);
+        }
+        if (tagA) return -1;   // notes with tags come first
+        if (tagB) return 1;
+        return 0;
+    });
+  }
+
+  groupByFirstTag(notes: NoteProperties[]): GroupedNotes[] {
+    const groups = notes.reduce((acc: Map<string, NoteProperties[]>, note) => {
+      const firstTag = note.tags?.[0]?.trim();
+      const groupKey = firstTag ? firstTag : "untagged";
+
+      if (!acc.has(groupKey)) {
+        acc.set(groupKey, []);
+      }
+      acc.get(groupKey)!.push(note);
+
+      return acc;
+    }, new Map());
+
+    return Array.from(groups.entries())
+      .map(([tag, notes]) => ({ tag, notes }))
+      .sort((a, b) => {
+        if (a.tag === "untagged") return 1;
+        if (b.tag === "untagged") return -1;
+      return a.tag.localeCompare(b.tag);
+      });
   };
 
-    /**
-   * Checks if the given values contain a link to the target basename
-   * (handles wikilinks, pipes, commas, etc.)
-   */
-    private foundInlinks(values: unknown[] | unknown, basename: string): boolean {
-      if (values == null) return false;
-  
-      const normalized = this.normalizeToStringArray(values);
-      
-      // Fast early exit - cheap string check
-      if (!normalized.some(v => v.includes(basename))) {
-          return false;
-      }
-  
-      // More precise check after cleaning wikilinks
-      return normalized
-          .map(this.cleanLink)
-          .includes(basename);
-    }
-  
-    /**
-     * Normalizes any input (string, array, null, etc.) into a clean string array
-     */
-    private normalizeToStringArray(input: unknown): string[] {
-        if (input == null) return [];
-  
-        // If it's already an array, process each item
-        if (Array.isArray(input)) {
-            return input
-                .flatMap(item => this.splitAndClean(item))
-                .filter(Boolean);
-        }
-  
-        // Single value (string, number, etc.)
-        return this.splitAndClean(input);
-    }
-  
-    /**
-     * Splits by comma and cleans each part (handles wikilinks with | )
-     */
-    private splitAndClean(value: unknown): string[] {
-      if (value == null) return [];
-  
-      const str = String(value).trim();
-      if (!str) return [];
-  
-      return str.split(',')
-          .flatMap(part => this.extractLinkTargets(part))
-          .filter(Boolean);
-    }
-  
-    /**
-     * Handles both [[Link]] and [[Link|Display Text]] → returns clean link targets
-     */
-    private extractLinkTargets(text: string): string[] {
-        const trimmed = text.trim();
-        if (!trimmed) return [];
-  
-        // Split on pipe (|) and take the first part (the actual link target)
-        const segments = trimmed.split('|').map(s => s.trim());
-  
-        return segments.map(segment => this.trimWikilinks(segment));
-    }
-  
-    /**
-     * Removes [[ and ]] from both sides
-     */
-    private trimWikilinks(str: string): string {
-        if (typeof str !== 'string' || !str) return '';
-  
-        return str
-            .trim()
-            .replace(/^\[+/, '')   // remove one or more [ at start
-            .replace(/\]+$/, '')   // remove one or more ] at end
-            .trim();
-    }
-  
-    /**
-     * Optional: Cleaner alias for trimWikilinks if you prefer the name
-     */
-    private cleanLink = (str: string): string => this.trimWikilinks(str);
-  
-  
-    private processStringOrArray(input: string | string[] | null | undefined): string[] {
-      if (input == null) return [];
-  
-      // Convert input to array if it's a single string
-      const items = Array.isArray(input) && input.every(item => typeof item === 'string') 
-        ? input.map(s => s.trim())
-        : typeof input === 'string' 
-          ? input.split(',').map(s => s.trim())
-          : []
-  
-      return items
-        .flatMap(part => {
-          // Split by '|' if present
-          const segments = part.includes('|') 
-            ? part.split('|').map(s => s.trim())
-            : [part];
-  
-        // Trim wikilinks [[ ]] from each segment
-        return segments.map(this.trimWikilinks);
-      })
-      .filter(Boolean);   // remove empty strings
-  }
-  
-    private checkTags(taggedWith: string[],
-                  wantedTags: string[]): boolean {
-      //tagged with any of the wanted tags
-      const taggedWithSet = new Set(taggedWith ?? []);
-      if (wantedTags.some(tag => taggedWithSet.has(tag))) {
-        return true;
-      }
-      return false;
-    };
-
-
-      private checkNoteProperties(noteProperties: NoteProperties,
-                    linktoName: string, 
-                    propertiesToLookFor: string[]): boolean {
-        
-        //const getValue = (probe: string) => propertiesToCheck.find(p => p[0] === probe)?.[1]; 
-    
-        return propertiesToLookFor.some(attrib => {
-          if (!attrib) return false;
-    
-          //has any of the wanted properties?
-          const values = noteProperties.properties;
-          if (values == null) return false;
-    
-          //the property points to linktoName?
-          if (Array.isArray(values)) {
-            return values.some(v => String(v).includes(linktoName));
-          }
-          return false;
-        });    
-      };
-    
-      private checkFrontmatterCache(frontmatter: FrontMatterCache | null | undefined,
-                    baseName: string, 
-                    propertiesToLookFor: string[]): boolean {
-        
-        return propertiesToLookFor.some(attrib => {
-          if (!attrib) return false;
-    
-          //has any of the wanted properties?
-          const values = frontmatter?.[attrib];
-          return this.foundInlinks(values, baseName);
-        });    
-      };
-    
-      private checkFrontmatterElements(element: BasesEntry,
-                    baseName: string, 
-                    propertiesToLookFor: string[]): boolean {
-        
-        return propertiesToLookFor.some(attrib => {
-          if (!attrib) return false;
-    
-          //has any of the wanted properties?
-          const values = element.getValue(`note.${attrib}`) as string | null;
-          return this.foundInlinks(values, baseName);
-        });    
-    
-      };
-    
-      private foundPart(text: string, wantedParts: string | string[]): boolean {
-        if (!text) return false;
-        const lowerText = text.toLowerCase();
-    
-        const parts = Array.isArray(wantedParts) ? wantedParts : [wantedParts];
-    
-        return parts.some(part => 
-            part && lowerText.includes(part.toLowerCase())
-        );
-      }
-    
-      public itemsOf(value: unknown): string[] {
-        if (value == null) return [];
-    
-        const str = String(value).trim();
-        if (!str) return [];
-    
-        return str.split(',')
-          .flatMap(part => part.trim())
-          .filter(Boolean);
-      }
 }

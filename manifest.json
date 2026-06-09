@@ -1,9 +1,9 @@
 {
 	"id": "relatednodes",
 	"name": "Related nodes",
-	"version": "0.0.4",
+	"version": "0.0.5",
 	"minAppVersion": "0.15.0",
-	"description": "w/bezier connecting lines",
+	"description": "rebuilt classes",
 	"author": "CarlB01",
 	"isDesktopOnly": false
 }

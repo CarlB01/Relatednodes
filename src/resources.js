@@ -1,4 +1,3 @@
-/*
 
 // https://danburzo.ro/dom-gestures/
 let gesture = false;
@@ -7,7 +6,7 @@ containerEl.addEventListener('gesturestart', e => {
   if (e.cancelable !== false) {
     e.preventDefault();
   }
-  /*
+  
   if (!gesture) {
     startGesture({
       translation: { x: 0, y: 0 },
@@ -19,7 +18,7 @@ containerEl.addEventListener('gesturestart', e => {
   } 
 }, { passive: false });
 
-/*
+
 containerEl.addEventListener('gesturechange', e => {
   if (e.cancelable !== false) {
     e.preventDefault();
@@ -37,7 +36,7 @@ containerEl.addEventListener('gesturechange', e => {
 containerEl.addEventListener('gestureend', e => {
   console.log(e.type);
   //if (gesture) {
-  /*
+  
     endGesture({
       translation: { x: 0, y: 0 },
       scale: e.scale,
@@ -48,7 +47,7 @@ containerEl.addEventListener('gestureend', e => {
   //	gesture = false;
 //	}
 });
-*/
+
 
   private connectPoints(x1: number, y1: number, x2: number, y2: number, svg: SVGSVGElement) {
     
@@ -334,4 +333,123 @@ private diagonalLine(el: HTMLElement, color: string, thick: number) {
         this.onDataUpdated();
     }
   }
+
+
+    // In your view class or wherever you create the note elements
+  private attachContextMenu(noteEl: HTMLElement, noteData: NoteProperties) {
+
+      // Desktop: Right Click
+      noteEl.addEventListener('contextmenu', (event: MouseEvent) => {
+          event.preventDefault();
+          event.stopPropagation();
+          this.showContextMenu(event, noteData);
+      });
+
+      // Mobile: Long Press
+      let longPressTimer: number | null = null;
+
+      noteEl.addEventListener('touchstart', (event: TouchEvent) => {
+          longPressTimer = window.setTimeout(() => {
+              this.showContextMenuForTouch(event, noteData);
+          }, 500); // 500ms = standard long press duration
+      });
+
+      noteEl.addEventListener('touchend', () => {
+          if (longPressTimer) clearTimeout(longPressTimer);
+      });
+
+      noteEl.addEventListener('touchmove', () => {
+          if (longPressTimer) {
+              clearTimeout(longPressTimer);
+              longPressTimer = null;
+          }
+      });
+  }
+
+  private showContextMenu(event: MouseEvent, noteData: NoteProperties) {
+      const menu = new Menu();
+
+      menu.addItem((item) => {
+          item.setTitle("Open Note")
+              .setIcon("file-text")
+              .onClick(() => {
+                  this.app.workspace.openLinkText(noteData.filename, "", false);
+              });
+      });
+
+      menu.addItem((item) => {
+          item.setTitle("Open in New Pane")
+              .setIcon("split")
+              .onClick(() => {
+                  this.app.workspace.openLinkText(noteData.filename, "", true);
+              });
+      });
+
+      menu.addSeparator();
+
+      menu.addItem((item) => {
+          item.setTitle("Copy Name")
+              .setIcon("copy")
+              .onClick(() => {
+                  navigator.clipboard.writeText(noteData.basename);
+              });
+      });
+
+      // Add more options as needed...
+
+      menu.showAtPosition({ x: event.clientX, y: event.clientY });
+  }
+
+  private showContextMenuForTouch(event: TouchEvent, noteData: NoteProperties) {
+      // Get position from touch
+      const touch = event.touches[0] || event.changedTouches[0];
+      
+      const menu = new Menu();
+      
+      // Same menu items as above...
+      menu.addItem((item) => item.setTitle("Open Note").setIcon("file-text").onClick(() => {
+          this.app.workspace.openLinkText(noteData.filename, "", false);
+      }));
+
+      // ... add other items
+
+      menu.showAtPosition({ 
+          x: touch!.clientX, 
+          y: touch!.clientY 
+      });
+  }
+
+
+  /*
+const defaultCollapseOptions: BasesOptions = {
+		type: 'text', //'text', 'property'
+		displayName: 'All collapsed (yes/no)',
+		key: 'collapsed',
+		default: 'yes',
+}
+const defaultPropertyOptions: BasesOptions = {
+		type: 'property', //'text', 'property'
+		displayName: 'default group By property',
+		key: 'tags',
+		default: 'file.tags',
+}
+const ignorePropertyOptions: BasesOptions = {
+		type: 'property', //'text', 'property'
+		displayName: 'ignore following properties',
+		key: 'ignore',
+		default: '#excalidraw',
+}
+// neighbour notes  containing these tags are considered 'parents'
+const parentTagsOptions: BasesOptions = {
+		type: 'text', //'text', 'property'
+		displayName: 'parent tags (comma separated, include \'#\')',
+		key: 'parentTags',
+		default: parentDefaults.join(", ")
+}
+*/
   
+/* callback example
+
+  this.registerResizeMonitors((message) => this.updateHub(message));
+
+*/

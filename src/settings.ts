@@ -1,4 +1,4 @@
-import RelatednodesPlugin from "./main";
+import RelatednotesPlugin from "./main.js";
 import {App, PluginSettingTab, Setting} from "obsidian";
 
 type settingsParamsTypes = "text" | "textArea";
@@ -119,9 +119,9 @@ const SETTING_IGNOREFRAGMENTS_TAGS: settingsParams = {... SETTING_PARAMS_GENERAL
 }
 
 export class SampleSettingTab extends PluginSettingTab {
-	plugin: RelatednodesPlugin;
+	plugin: RelatednotesPlugin;
 
-	constructor(app: App, plugin: RelatednodesPlugin) {
+	constructor(app: App, plugin: RelatednotesPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -286,6 +286,7 @@ export class SampleSettingTab extends PluginSettingTab {
 			el.style.maxHeight = "350px";        // ← adjust this value as needed
 			el.style.resize = "none";
 			el.style.overflowY = "auto";
+			// @ts-ignore fieldSizing is not yet in global DOM types
 			el.style.fieldSizing = "content";    // modern auto-grow
 
 			// Auto-resize function
