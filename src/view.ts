@@ -8,6 +8,7 @@ import {
     MarkdownView,
     WorkspaceSplit,
     FileView,
+    Platform,
 } from 'obsidian';
 
 import { RelatedData} from './data.js';
@@ -77,7 +78,9 @@ export class RelatednotesView extends BasesView implements HoverParent {
     this.app.workspace.onLayoutReady(async () => {
       // set up workspace resize monitors
       this.registerWorkspaceChanges();
-      this.setupSplitterTracking()
+      this.setupSplitterTracking();
+      this.setupMobileSafeguards();
+      this.setupVisibilitySafeguards();
       this.plugin.registerHoverLinkSource(relatednodesID, {
         display: 'My custom Hover', // Name shown in Page Preview settings
         defaultMod: false,          // or true if you want Ctrl/Cmd required
@@ -189,6 +192,7 @@ export class RelatednotesView extends BasesView implements HoverParent {
     }
     
   }
+
 
   /**
    * Helper function.
@@ -352,14 +356,6 @@ export class RelatednotesView extends BasesView implements HoverParent {
       this.updateHub('workspaceResized');
     }));
 
-      
-    // Method 1: Recommended - active-leaf-change
-    this.registerEvent(
-      this.app.workspace.on('active-leaf-change', async (leaf: WorkspaceLeaf | null) => {
-        this.updateHub('activeLeafChanged', leaf);
-      })
-    );
-
     // Optional: Also listen to file-open (more specific to Markdown files)
     this.registerEvent(
       this.app.workspace.on('file-open', (file: TFile | null) => {
@@ -392,7 +388,6 @@ export class RelatednotesView extends BasesView implements HoverParent {
    * @param filename - string
    * @returns [The matching TFile, or null and WorkspaceLeaf or null].
    */
-	
   private revealSomeLeafAndFile(): [TFile | null, WorkspaceLeaf | null] {
     
     const mdLeaves2 = this.app.workspace.getLeavesOfType('markdown');
@@ -450,7 +445,81 @@ export class RelatednotesView extends BasesView implements HoverParent {
 */
     return [null, null];
   }
+
+  setupMobileSafeguards() {
+    if (!Platform.isMobile) return;
+
+    // SAFEGUARD 3: Catch the exact moment the iOS slide-in sidebar animation completes.
+    // Obsidian's mobile drawer uses a CSS slide-in transition.
+    const leftSplit = this.areas.containerEl.closest('.mod-left-split') as HTMLElement;
+    if (leftSplit) {
+        this.registerDomEvent(leftSplit, 'transitionend', (e: TransitionEvent) => {
+            // Only trigger if the width transition finished changing the layout
+            if (e.propertyName === 'transform' || e.propertyName === 'width') {
+                this.areas.draw.updateOffBy();
+                this.redrawMyContainer(); // Final clean redraw at rest
+            }
+        });
+    }
+
+    // SAFEGUARD 4: Fallback for orientation changes (turning iPhone landscape/portrait)
+    this.registerDomEvent(window, 'orientationchange', () => {
+        setTimeout(() => {
+            this.areas.draw.updateOffBy();
+            this.redrawMyContainer();
+        }, 200); // 200ms delay gives iOS time to complete the rotation layout
+    });
+  }
 	
+  setupVisibilitySafeguards() {
+    // 1. SAFEGUARD: Detect when the view physically enters/leaves the iPhone screen
+    const visibilityObserver = new IntersectionObserver((entries) => {
+        for (let entry of entries) {
+            // isIntersecting is true the exact moment the panel slides into view
+            if (entry.isIntersecting) {
+                // 1. Wait for the initial layout timeout
+                setTimeout(() => {
+                    // 2. Wait until the browser thread is completely idle (finished rendering complex UI)
+                    if ('requestIdleCallback' in window) {
+                        window.requestIdleCallback(() => {
+                            this.areas.draw.updateOffBy();
+                            this.redrawMyContainer();
+                        }, { timeout: 200 }); // Timeout forces execution after 200ms maximum if busy
+                    } else {
+                        // Fallback for environments without idle callback support
+                        this.areas.draw.updateOffBy();
+                        this.redrawMyContainer();
+                    }
+                }, 150); 
+            }
+        }
+    }, { 
+        threshold: 0.1 // Triggers as soon as even 10% of the view is visible
+    });
+
+    // Start watching your add-on container element
+    visibilityObserver.observe(this.areas.containerEl);
+    this.register(() => visibilityObserver.disconnect());
+
+    // 2. SAFEGUARD: Catch when focus shoots back and forth after selecting a file
+    this.registerEvent(
+
+        this.app.workspace.on('active-leaf-change', (leaf: WorkspaceLeaf | null) => {
+          this.updateHub('activeLeafChanged', leaf)
+            // When a new file opens, clear any stale tracking data
+            this.areas.draw.offBy = { x: 0, y: 0 };
+            
+            // If our panel happens to still be visible, queue a safe redraw
+            if (this.areas.containerEl.isShown()) {
+                setTimeout(() => {
+                    this.areas.draw.updateOffBy();
+                    this.redrawMyContainer();
+                }, 150);
+            }
+        })
+    );
+}
+
   setupSplitterTracking() {
 
     // Find the left sidebar wrapper container holding your view
@@ -544,19 +613,7 @@ export class RelatednotesView extends BasesView implements HoverParent {
   }
 
   redrawMyContainer() {
-    // Your specific rendering logic (canvas update, SVG adjustments, calculations)
-    console.log('redraw?')
     this.areas.draw.allConnects();
   }
   
-  private isViewHidden(leaf: WorkspaceLeaf): boolean {
-      if (!leaf?.view?.containerEl) return true;
-
-      const container = leaf.view.containerEl;
-      const rect = container.getBoundingClientRect();
-
-      // Hidden if collapsed or zero-sized
-      return rect.width < 5 || rect.height < 5;
-  }
-
 }

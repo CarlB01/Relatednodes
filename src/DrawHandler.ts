@@ -1,4 +1,4 @@
-import { Point } from "obsidian";
+import { Platform, Point } from "obsidian";
 import { GATE_DOWN, GATE_LEFT, GATE_RIGHT, GATE_UP, LeftTop, } from "./settings.js";
 import { Gate, NoteProperties, RelatedData } from "./data.js";
 import { Areas } from "./Areas.js";
@@ -36,21 +36,29 @@ export class DrawHandler {
   }
 
   updateOffBy() {
-    if (this.offBy.x != 0) return;
+    const isMobile = Platform.isMobile;
     
-    const svg = this.areas.containerEl.createSvg("svg", {
-      attr: {
-        width: "1px",
-        height: "1px",
-        style: `position: absolute; z-index: -10; top: 0; left: 0; `
-      }
-    });
-    const rect = svg.getBoundingClientRect();
-    const x = rect.x; 
-    const y = rect.y; // window.pageYOffset-
+    // Measure the actual visible boundaries of your container
+    const rect = this.areas.containerEl.getBoundingClientRect();
+    
+    // SAFEGUARD 1: Avoid drawing if the container is hidden or currently off-screen (0x0 size)
+    // This stops drawings from completely breaking or vanishing
+    if (rect.width === 0 || rect.height === 0) {
+        return; 
+    }
 
-    this.offBy = {x: x, y: y};
-  }
+    let x = rect.left; 
+    let y = rect.top;
+
+    if (isMobile) {
+        // SAFEGUARD 2: Include native window offset tracking
+        x += window.scrollX || 0;
+        y += window.scrollY || 0;
+    }
+
+    this.offBy = { x: x, y: y };
+}
+  
   constructor(
     area: Areas,
     related: RelatedData
@@ -59,7 +67,7 @@ export class DrawHandler {
     this.related = related;
   }
 
-  // ========= organizers ==================
+  
 
   private centralVerticals(central: NoteProperties) {
     central.upperGate!.connections.forEach(relatedNote => {

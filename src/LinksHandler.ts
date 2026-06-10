@@ -43,7 +43,8 @@ export class LinksHandler {
     const linktext = this.plugin.settings?.displayAliases
       ? note.aliases?.[0] ?? note.basename
       : note.basename
-      
+    console.log('linktext?', linktext)
+
     const cls = `${this.infoHoverDescr} ${format} ${superChargedLinkAttribs}`;
 
     const linkEl = parent.createEl('a', { 
@@ -58,7 +59,6 @@ export class LinksHandler {
       }
     });
     linkEl.classList.add('internal-link');
-    linkEl.textContent = note.basename;
     
     linkEl.onClickEvent(this.handleLinkClick.bind(this));
 
