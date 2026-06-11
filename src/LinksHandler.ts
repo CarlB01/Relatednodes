@@ -43,7 +43,6 @@ export class LinksHandler {
     const linktext = this.plugin.settings?.displayAliases
       ? note.aliases?.[0] ?? note.basename
       : note.basename
-    console.log('linktext?', linktext)
 
     const cls = `${this.infoHoverDescr} ${format} ${superChargedLinkAttribs}`;
 

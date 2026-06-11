@@ -1,13 +1,12 @@
 import { Point } from "obsidian";
 import { updateMessage } from "./view.js";
 import { NoteProperties, RelatedData } from "./data.js";
-import RelatednotesPlugin from "./main.js";
+import RelatednotesPlugin, { RELATED_NOTES_VIEW_TYPE } from "./main.js";
 import { LinksHandler } from "./LinksHandler.js";
 import { DrawHandler } from "./DrawHandler.js";
 
 export class Areas {
   
-  readonly containerDescr = 'related-view-container'
   private readonly svgLayerDescr = 'related-svg-layer';
   
   private readonly areaDescr = 'related-area';
@@ -51,7 +50,7 @@ export class Areas {
     this.links = links;
 
     this.containerEl = parentEl;
-    this.containerEl.addClass(this.containerDescr);
+    this.containerEl.addClass(RELATED_NOTES_VIEW_TYPE);
 
     this.center = this.containerEl.createDiv(`${this.areaDescr} ${this.centerAreaDescr}`);
     this.left  = this.containerEl.createDiv(`${this.areaDescr} ${this.leftAreaDescr}`);

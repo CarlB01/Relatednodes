@@ -1,15 +1,15 @@
-import { App, ItemView, WorkspaceLeaf, TFile } from 'obsidian';
+import { App, ItemView, WorkspaceLeaf } from 'obsidian';
 
-export const VIEW_TYPE_BASE_PANEL = 'base-sidebar-view';
+export const VIEW_TYPE_RELATED_SIDEBAR_PANEL = 'related-sidebar-view';
 
-export class BaseSidebarView extends ItemView {
+export class SidebarView extends ItemView {
     constructor(leaf: WorkspaceLeaf, app: App) {
         super(leaf);
         this.app = app;
     }
 
     getViewType() {
-        return VIEW_TYPE_BASE_PANEL;
+        return VIEW_TYPE_RELATED_SIDEBAR_PANEL;
     }
 
     getDisplayText() {

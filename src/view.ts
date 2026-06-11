@@ -1,18 +1,16 @@
 import { 
-    BasesView,
-    QueryController,
     HoverPopover,
     TFile,
     WorkspaceLeaf,
     HoverParent,
     MarkdownView,
-    WorkspaceSplit,
     FileView,
     Platform,
+    ItemView,
 } from 'obsidian';
 
 import { RelatedData} from './data.js';
-import RelatednotesPlugin, { relatednodesID } from './main.js';
+import RelatednotesPlugin, { RELATED_NOTES_VIEW_TYPE, relatednodesID } from './main.js';
 import { LinksHandler } from './LinksHandler.js';
 import { Areas } from './Areas.js';
 
@@ -37,7 +35,7 @@ export type updateMessage =
   'viewContainerScrolled' |
   'requestedFullRedraw';
 
-export class RelatednotesView extends BasesView implements HoverParent {
+export class RelatednotesView extends ItemView implements HoverParent {
   readonly type = relatednodesID;
   private readonly displayWelcomeText = 'to view related notes, please open one of your notes first';
   private readonly groupDivInfo = 'related-group';
@@ -46,18 +44,13 @@ export class RelatednotesView extends BasesView implements HoverParent {
   private related: RelatedData;
   private linksHandler: LinksHandler;
   private areas: Areas;
+  plugin: RelatednotesPlugin;
 
   hoverPopover: HoverPopover | null = null;
   
-  constructor(
-    controller: QueryController, 
-    parentEl: HTMLElement,
-    public plugin: RelatednotesPlugin,
-  ) {
-    super(controller);
-
-    // hide bases toolbar for relatednotes in particular
-    this.displayBasesToolbar(parentEl, plugin.settings.displayBasesToolbar);
+  constructor(leaf: WorkspaceLeaf, plugin: RelatednotesPlugin) {
+    super(leaf);
+    this.plugin = plugin;
     
     // handling of links
     this.linksHandler = new LinksHandler(plugin,
@@ -70,31 +63,49 @@ export class RelatednotesView extends BasesView implements HoverParent {
     );
 
     // handling of areas - 'parent', 'child', 'friend', 'sibling' 
-    this.areas = new Areas(this.related, this.linksHandler, parentEl, plugin);
+    const { contentEl } = this;
+    this.areas = new Areas(this.related, this.linksHandler, contentEl, plugin);
   }
-  
-  onload(): void {
 
+  getViewType(): string {
+    return RELATED_NOTES_VIEW_TYPE;
+  }
+
+  getDisplayText(): string {
+    return "Related Notes";
+  }
+
+  getIcon(): string {
+    return "lucide-apple"; // or any other icon
+  }
+
+  async onOpen() {
+    const { contentEl } = this;
+    contentEl.empty();
+    
+    // set up workspace resize monitors
+    this.registerWorkspaceChanges();
+    this.setupSplitterTracking();
+    this.setupMobileSafeguards();
+    this.setupVisibilitySafeguards();
+    this.plugin.registerHoverLinkSource(relatednodesID, {
+      display: 'My custom Hover', // Name shown in Page Preview settings
+      defaultMod: false,          // or true if you want Ctrl/Cmd required
+    });
+    
     this.app.workspace.onLayoutReady(async () => {
-      // set up workspace resize monitors
-      this.registerWorkspaceChanges();
-      this.setupSplitterTracking();
-      this.setupMobileSafeguards();
-      this.setupVisibilitySafeguards();
-      this.plugin.registerHoverLinkSource(relatednodesID, {
-        display: 'My custom Hover', // Name shown in Page Preview settings
-        defaultMod: false,          // or true if you want Ctrl/Cmd required
-      });
 
       this.displayWelcome();
-      let f = null;
-      let l = null;
-      [f,l] = this.revealSomeLeafAndFile()
-      this.updateHub('activeLeafChanged', l);
+      const [initialFile, initialLeaf] = this.revealSomeLeafAndFile();
+      console.log('initialFile', initialFile?.basename);
+      console.log('initialLeaf', initialLeaf?.containerEl.classList.toString());
+        if (initialFile) {
+            this.updateHub('activeLeafChanged', initialFile, initialLeaf);
+        }      
     });
   }
 
-  onunload() {
+  async onClose() {
   }
 
   /**
@@ -127,7 +138,7 @@ export class RelatednotesView extends BasesView implements HoverParent {
    * The coordinator and handler of rebuilding relatednotes view.
    * @param caller - a string of type updateMessage.
    */
-  private async updateHub(caller: updateMessage, item?: any | null) {
+  private async updateHub(caller: updateMessage, item1?: any | null, item2?: any | null) {
     
     console.log('caller:', caller);
 
@@ -167,9 +178,10 @@ export class RelatednotesView extends BasesView implements HoverParent {
         return;
 
       case 'activeLeafChanged':
-        const leaf = item instanceof WorkspaceLeaf ? item : null;
-        if (leaf && !this.activeSelf(leaf)) {
-          const file = (leaf.view as MarkdownView).file;
+        const file = item1 instanceof TFile ? item1 : null;
+        const leaf = item2 instanceof WorkspaceLeaf ? item2 : null;
+        
+        if (leaf && file) {
           this.app.workspace.revealLeaf(leaf);
           this.related.update(file);
         }
@@ -204,7 +216,7 @@ export class RelatednotesView extends BasesView implements HoverParent {
      
     // const file = (leaf.view as MarkdownView).file;
     // const viewType = leaf.view.getViewType(); // viewType === 'bases'
-    const element = leaf.containerEl.querySelector(`.${this.areas.containerDescr}`);
+    const element = leaf.containerEl.querySelector(`.${RELATED_NOTES_VIEW_TYPE}`);
     if (element) return true;
     return false
   }
@@ -336,19 +348,6 @@ export class RelatednotesView extends BasesView implements HoverParent {
     this.areas.center.appendChild(popup);
   }
 
-  private displayBasesToolbar(parentEl: HTMLElement, displayHeader: boolean) {
-    
-    const basesHeader = parentEl.parentElement?.parentElement
-      ?.getElementsByClassName("bases-header")[0]
-    if (displayHeader) {
-      basesHeader?.removeAttribute('bases-header-collapsible')
-      basesHeader?.setAttribute("class", 'bases-header');
-    } else {
-      basesHeader?.setAttribute("class", 'bases-header-collapsible')
-    }
-      
-  }
-
   private registerWorkspaceChanges() {
 
     // Register workspace resize
@@ -388,63 +387,91 @@ export class RelatednotesView extends BasesView implements HoverParent {
    * @param filename - string
    * @returns [The matching TFile, or null and WorkspaceLeaf or null].
    */
+  /*
   private revealSomeLeafAndFile(): [TFile | null, WorkspaceLeaf | null] {
     
-    const mdLeaves2 = this.app.workspace.getLeavesOfType('markdown');
-    
-    const lastOpenFiles2 = this.app.workspace.getLastOpenFiles();
-    for (const filePath of lastOpenFiles2) {
-			console.log('filepath', filePath);
-			for (const mdLeaf of mdLeaves2) {
-				console.log('filename', (mdLeaf.view as MarkdownView).file?.name);
-				const file = (mdLeaf.view as MarkdownView).file
-				const filename = file?.name;
-				if (filename == filePath) {
-					this.app.workspace.revealLeaf(mdLeaf);
-					return [file, mdLeaf]
-				}
-			}
-		}
-/*			
-		
-		
-			const file = this.getFile(filePath);
-      if (file) {
-        const targetLeaf = this.findLeafWithFile(file);
-        console.log('lastOpenFiles', (file.basename));
-      }
-    }
-    
-
-
     const mdLeaves = this.app.workspace.getLeavesOfType('markdown');
-    for (const mdLeaf of mdLeaves) {
-      console.log('mdLeaves', mdLeaves.length)
-      if (mdLeaf instanceof MarkdownView) {
-        const activeFile = mdLeaf.file;
-        console.log('mdLeaves', activeFile?.basename)
-      }
-    }
-    for (const mdLeaf of mdLeaves) {
-      if (mdLeaf instanceof MarkdownView &&  mdLeaf.file?.extension !='base') {
-        const activeFile = mdLeaf.file;
-        return [activeFile, mdLeaf];
+    
+    // 1. this is the only opened leaf/file -> use it
+    if (mdLeaves.length == 1) {
+      const mdLeaf = mdLeaves.first();
+      if (mdLeaf) {
+        const leafFile = (mdLeaf.view as MarkdownView).file;
+        if (leafFile) return [leafFile, mdLeaf];
       }
     }
 
-    const lastOpenFiles = this.app.workspace.getLastOpenFiles();
-    for (const filePath of lastOpenFiles) {
-      if (!filePath.endsWith('.base')) {
-        const file = this.getFile(filePath);
-        if (file) {
-          const targetLeaf = this.findLeafWithFile(file);
-          return [this.getFile(filePath), targetLeaf];
-        }
+    const lastOpenedFilepaths = this.app.workspace.getLastOpenFiles();
+    
+    // 2. no markdown leaves, no last opened file? -> exit with [null, null]
+    if (mdLeaves.length == 0 && lastOpenedFilepaths.length == 0) {
+      console.log('no markdown leaves, no last opened file');
+      return [null, null];
+    }
+
+    // 3. No open markdown leaves? - return last used md file
+    if (mdLeaves.length == 0 && lastOpenedFilepaths.length > 0) {
+      const filepath = lastOpenedFilepaths.first();
+      if (filepath) {
+        const file = this.getFile(filepath);
+        if (file) return [file, null]
       }
-    }    
-*/
+    }
+
+    // 4. return the leaf with the file that is NOT in lastOpenedFilepaths (yet)
+    // most likely the active file?
+    if (mdLeaves.length > 1 && lastOpenedFilepaths.length > 0) {
+      for (const mdLeaf of mdLeaves) {
+				const leafFile = (mdLeaf.view as MarkdownView).file;
+        if (leafFile && !lastOpenedFilepaths.contains(leafFile.path)) {
+          return [leafFile, mdLeaf]
+        }
+			}
+    }
+
+    // 5. fallback 
     return [null, null];
   }
+    */
+
+  private revealSomeLeafAndFile(): [TFile | null, WorkspaceLeaf | null] {
+    const { workspace } = this.app;
+
+    // 1. Get the currently active view if it is a Markdown file
+    const activeView = workspace.getActiveViewOfType(MarkdownView);
+    
+    if (activeView && activeView.file) {
+        return [activeView.file, activeView.leaf];
+    }
+
+    // 2. Fallback: If focus is on a sidebar/plugin, find the most recently active markdown leaf
+    const mdLeaves = workspace.getLeavesOfType('markdown');
+    if (mdLeaves.length > 0) {
+        const fallbackLeaf = mdLeaves[0]; // Henter det første panelet
+        
+        // Sjekk eksplisitt at fallbackLeaf og view eksisterer for å tilfredsstille TypeScript
+        if (fallbackLeaf && fallbackLeaf.view instanceof MarkdownView) {
+            const leafFile = fallbackLeaf.view.file;
+            if (leafFile) {
+                return [leafFile, fallbackLeaf];
+            }
+        }
+    }
+
+    // 3. Last resort fallback: No markdown leaves are open at all
+    const lastOpenedFilepaths = workspace.getLastOpenFiles();
+    const firstPath = lastOpenedFilepaths[0]; // Dette blir string | undefined
+
+    if (firstPath) {
+        // Nå vet TypeScript at firstPath er en garantert string
+        const file = this.app.vault.getFileByPath(firstPath);
+        if (file) {
+            return [file, null];
+        }
+    }
+
+    return [null, null];
+}
 
   setupMobileSafeguards() {
     if (!Platform.isMobile) return;
@@ -504,21 +531,25 @@ export class RelatednotesView extends BasesView implements HoverParent {
     // 2. SAFEGUARD: Catch when focus shoots back and forth after selecting a file
     this.registerEvent(
 
-        this.app.workspace.on('active-leaf-change', (leaf: WorkspaceLeaf | null) => {
-          this.updateHub('activeLeafChanged', leaf)
-            // When a new file opens, clear any stale tracking data
-            this.areas.draw.offBy = { x: 0, y: 0 };
-            
-            // If our panel happens to still be visible, queue a safe redraw
-            if (this.areas.containerEl.isShown()) {
-                setTimeout(() => {
-                    this.areas.draw.updateOffBy();
-                    this.redrawMyContainer();
-                }, 150);
-            }
-        })
+      this.app.workspace.on('active-leaf-change', (leaf: WorkspaceLeaf | null) => {
+        if (leaf && leaf.view instanceof MarkdownView) {
+
+          // When a new file opens, clear any stale tracking data
+          this.areas.draw.offBy = { x: 0, y: 0 };
+          
+          // If our panel happens to still be visible, queue a safe redraw
+          if (this.areas.containerEl.isShown()) {
+              setTimeout(() => {
+                  this.areas.draw.updateOffBy();
+                  this.redrawMyContainer();
+              }, 150);
+          }
+          const activeFile = leaf.view.file;
+          this.updateHub('activeLeafChanged', activeFile, leaf)
+        }
+      })
     );
-}
+  }
 
   setupSplitterTracking() {
 

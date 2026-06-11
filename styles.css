@@ -216,7 +216,7 @@
 }
 .related-groups:not(.expanded) {
   background-color: inherit;
-  break-inside: inherit;
+  break-inside: avoid; /*inherit;*/
 }
 
 .related-linkDiv {

@@ -1,25 +1,12 @@
-import {App, Modal, Plugin, BasesOptions, TFile, Notice, MarkdownView, WorkspaceLeaf} from 'obsidian';
-import {DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab} from "./settings.js";
+import { Plugin, Notice, WorkspaceLeaf } from 'obsidian';
+import { DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab } from "./settings.js";
 import { RelatednotesView } from './view.js';
-import { BaseSidebarView, VIEW_TYPE_BASE_PANEL } from "./sidebar-view.js";
+import { SidebarView, VIEW_TYPE_RELATED_SIDEBAR_PANEL } from "./sidebar-view.js";
+
+export const RELATED_NOTES_VIEW_TYPE = 'relatednotes-view';
 
 export const relatednodesID = 'relatednotesViewType';
 export const superChargedLinkAttribs = 'internal-link data-link-icon data-link-icon-after data-link-text';
-
-
-const separatorOptions: BasesOptions = {
-		type: 'text', //'text', 'property'
-		displayName: 'separate values',
-		key: 'separator',
-		default: ' - ',
-}
-// neighbour notes  containing these tags are considered 'parents'
-const parentAttributesOptions: BasesOptions = {
-		type: 'text', //'text', 'property'
-		displayName: 'attributes (comma separated)',
-		key: 'attributes',
-		default: 'tilhører',
-}
 
 export default class RelatednotesPlugin extends Plugin {
 
@@ -27,69 +14,59 @@ export default class RelatednotesPlugin extends Plugin {
 	
 	async onload() {
 		
-		await this.loadSettings();      // ← Main call
-		// This adds a settings tab so the user can configure various aspects of the plugin
+		await this.loadSettings();
 		this.addSettingTab(new SampleSettingTab(this.app, this));
 	
-		// 1. Register the view creator
+		// Register the sidebar/container view
 		this.registerView(
-			VIEW_TYPE_BASE_PANEL,	
-			(leaf) => new BaseSidebarView(leaf,this.app)
+			VIEW_TYPE_RELATED_SIDEBAR_PANEL,
+			(leaf) => new SidebarView(leaf, this.app)
 		);
 
-		// 2. Add a ribbon icon to open the sidebar tab
-		this.addRibbonIcon("apple", "Open Relatednotes", () => {
-			this.activateViewForBase('bases/minBrain.base');
+		// Register your main related notes view (the one that receives parentEl)
+		this.registerView(
+			RELATED_NOTES_VIEW_TYPE,
+			(leaf) => new RelatednotesView(leaf, this)   // ← pass plugin if needed
+		);
+
+		// Ribbon icon to open your view
+		this.addRibbonIcon("apple", "Open Related Notes", () => {
+			this.activateRelatedNotesView();
 		});
 
-		// Tell Obsidian about the new view type that this plugin provides.
-		
-		this.registerBasesView(relatednodesID, {
-			name: 'Relatert',
-			icon: 'lucide-apple',
-			factory: (controller, containerEl) => 
-				new RelatednotesView(controller, containerEl, this),
-			options: () => ([
-				parentAttributesOptions,
-				separatorOptions
-			]),
-		});
+		// Optional: Add a command
+		this.addCommand({
+			id: 'open-related-notes',
+			name: 'Open Related Notes View',
+			callback: () => this.activateRelatedNotesView(),
+		});		
 	};
 
-	async activateViewForBase(path: string) {
-		const file = this.app.vault.getAbstractFileByPath(path);
-		if (!(file instanceof TFile) || file.extension !== 'base') {
-			new Notice("Not a valid .base file");
-			return;
-		}
-		await this.openBaseInLeftSidebar(file);
-	}
+	async activateRelatedNotesView() {
+    const { workspace } = this.app;
+    
+    // Check if the view already exists
+    let leaf = workspace.getLeavesOfType(RELATED_NOTES_VIEW_TYPE)[0];
+    
+    if (leaf) {
+        workspace.revealLeaf(leaf);
+        return;
+    }
 
-	async openBaseInLeftSidebar(baseFile: TFile) {
-		const { workspace } = this.app;
+    let newLeaf: WorkspaceLeaf | null | undefined = workspace.getLeftLeaf(false);
 
-		let leaf = workspace.getLeavesOfType(VIEW_TYPE_BASE_PANEL)[0];
-
-		if (leaf) {
-				this.app.workspace.revealLeaf(leaf);
-				return;
-		} else {
-			let leftLeaf = workspace.getLeftLeaf(false);
-			if (leftLeaf) {
-				leaf = leftLeaf;
-			};
-			
-		};
-		if (!(typeof leaf === 'undefined')) {
-
-			await leaf.openFile(baseFile, { active: true });
-
-			// Optional: reveal/make sure sidebar is visible
-			this.app.workspace.revealLeaf(leaf);
-			this.app.workspace.leftSplit?.expand();
-		}
-
-	};
+    if (newLeaf) {
+        await newLeaf.setViewState({
+            type: RELATED_NOTES_VIEW_TYPE,
+            active: true,
+        });
+        
+        workspace.revealLeaf(newLeaf);
+        workspace.leftSplit?.expand();
+    } else {
+        new Notice("Could not create view leaf");
+    }
+}
 	
 	onunload() {
 	}
@@ -101,21 +78,5 @@ export default class RelatednotesPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-	}
-}
-
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
-
-	onOpen() {
-		let {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
 	}
 }
