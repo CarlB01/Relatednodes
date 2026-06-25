@@ -3,31 +3,6 @@ import {App, PluginSettingTab, Setting} from "obsidian";
 
 type settingsParamsTypes = "text" | "textArea";
 
-export interface LeftTop {
-	left: string
-	top: string
-}
-
-export const GATE_LEFT: LeftTop = {
-	left: '0%',
-	top: '50%'
-}
-
-export const GATE_RIGHT: LeftTop = {
-	left: '100%',
-	top: '50%'
-}
-
-export const GATE_UP: LeftTop = {
-	left: 'calc(50% - 8px * var(--scaleFactor))',
-	top: '0%'
-}
-
-export const GATE_DOWN: LeftTop = {
-	left: 'calc(50% + 8px * var(--scaleFactor))',
-	top: 'calc(100% + 1px)'
-}
-
 export interface KeyPair {
 	key: string;
 	value: string;
@@ -301,5 +276,21 @@ export class SampleSettingTab extends PluginSettingTab {
 			// Initial resize
 			setTimeout(autoResize, 10);
     });
+	}
+	async hide() {
+		// 1. Hent verdiene fra input-feltene dine (hvis du ikke gjør det i sanntid)
+		// f.eks.: this.plugin.settings.ignoreTags = this.ignoreTagsInputEl.value;
+
+		// 2. Lagre alt til disk og trigg vaskingen av listene (prepareOptimizedFilters kjører inni her!)
+		await this.plugin.saveSettings();
+
+		// 3. Gi beskjed til graf-visningen din om å tegne seg på nytt med de nye filtrene
+		// (Slik at brukeren ser endringen med en gang de går tilbake til notatene sine)
+		const view = this.app.workspace.getLeavesOfType("related-nodes-view")[0]?.view as any;
+		if (view && typeof view.update === "function") {
+				view.update(this.app.workspace.getActiveFile());
+		}
+
+		super.hide();
 	}
 }

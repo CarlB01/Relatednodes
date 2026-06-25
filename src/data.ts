@@ -1,10 +1,8 @@
-import { BasesEntry, MetadataCache, parseFrontMatterAliases, parseFrontMatterTags, TFile, Vault } from "obsidian";
 import RelatednotesPlugin from "./main.js";
-import { updateMessage } from "./view.js";
-
-type Notetype = "file" | "other";
-export type Relation = "center" | "parent" | "child" | "friend"| "sibling" | "undefined" | "ignored";
-export type Direction = "up" | "down" | "left" | "right";
+import { BasesEntry, MetadataCache, parseFrontMatterStringArray, TFile, Vault } from "obsidian";
+import { NoteClass, Relation } from "./NoteClass.js";
+import { GateProperties } from "./GateClass.js";
+import { StringUtils } from "./StringUtils.js";
 
 const relationOrder: Record<Relation, number> = {
   "center": 0,
@@ -16,238 +14,233 @@ const relationOrder: Record<Relation, number> = {
   "ignored": 6,
 }
 
-const DEFAULT_GATE: Gate = {
-  direction: undefined,
-  svg: undefined,
-  connections: [],
-  unspecified: []
-}
-
 export interface RelatedNoteGroup {
 	key: string;
 	isDefined: boolean;
 	entries: BasesEntry[];
 }
 
-export interface Gate {
-	direction: Direction | undefined;
-	svg: SVGSVGElement | undefined;
-	connections: NoteProperties[];
-	unspecified: NoteProperties[];
-};
-
-export interface NoteProperties {
-  filename: string;
-  basename: string;
-  aliases?: string[];
-  tags?: string[];
-  properties: [string, any][];
-  connectionCount: number;
-  sharedLinksWithStart: number;
-  degree: 'zero' | 'first' | 'second';
-  file: TFile;
-  type?: Notetype;
-	relation?: Relation;
-	div?: HTMLElement;
-	info?: string;
-	ignored?: NoteProperties[];
-	upperGate?: Gate;
-	lowerGate?: Gate;
-	friendGate?: Gate;
-}
-
 export interface GroupedNotes {
   tag: string;
-  notes: NoteProperties[];
-}
-
-interface GateGroups {
-  connections: GroupedNotes[];
-  unspecified: GroupedNotes[];
+  notes: NoteClass[];
 }
 
 export class RelatedData {
-  private readonly displayAliases;
-  private readonly parentProperties;
-  private readonly parentTags;
-  private readonly childProperties;
-  private readonly childTags;
-  private readonly friendProperties;
-  private readonly friendTags;
-  private readonly ignoreFragments;
-  private readonly ignoreTags;
-    // Main cache
-  private noteCache = new Map<string, NoteProperties>(); // basename → note. Source of truth.
-
-  centerNote: NoteProperties | undefined;
-  siblings: NoteProperties[] = [];
-
-  mostRecentActiveFile: TFile | null = null;
-
+  
+  noteCache = new Map<string, NoteClass>(); // basename → note. Source of truth.
+  allGates: GateProperties[] = []; 
+  
+  centerNote: NoteClass | null = null;
+  siblings: NoteClass[] = [];
+  
   constructor(
-    private app: {
-      workspace: any; metadataCache: MetadataCache; vault: Vault},
-      public plugin: RelatednotesPlugin,
-      private callback: (callId: updateMessage) => void
+    private app: {workspace: any; metadataCache: MetadataCache; vault: Vault},
+    public plugin: RelatednotesPlugin,
+    private modelReady: () => void
   ) {
-      this.displayAliases = this.plugin.settings!.displayAliases;
-      this.parentProperties = this.itemsOf(this.plugin.settings!.parentProperties);
-      this.parentTags = this.itemsOf(this.plugin.settings!.parentTags);
-      this.childProperties = this.itemsOf(this.plugin.settings!.childProperties);
-      this.childTags = this.itemsOf(this.plugin.settings!.childTags);
-      this.friendProperties = this.itemsOf(this.plugin.settings!.friendProperties);
-      this.friendTags = this.itemsOf(this.plugin.settings!.friendTags);
-      this.ignoreFragments = this.itemsOf(this.plugin.settings!.ignoreNameFragments);
-      this.ignoreTags = this.itemsOf(this.plugin.settings!.ignoreTags);
   }
 
   async update(activeFile: TFile | null) {
     if (!activeFile) return;
 
-    this.mostRecentActiveFile = activeFile;
+    // 1. reset used flag and relations
+    for (const note of this.noteCache.values()) {
+      note.used = false;
+      note.relation = 'undefined';
+      note.upperGate.connections = []; 
+      note.lowerGate.connections = []; 
+      note.friendGate.connections = [];
+    }
 
-    // Clear previous data
-    this.siblings.length = 0;
-    this.noteCache.clear();
+    // 2. get center note. Reuse if it exists.
+    this.centerNote = this.getNote(activeFile);
+    if (!this.centerNote) return;
 
-    // Create center note
-    this.centerNote = this.getNoteProperties(activeFile, 'center');
-    this.noteCache.set(this.centerNote.basename, this.centerNote);
-
-    // Process all related notes
-    await this.updateNotesRelatedTo(this.centerNote!, 'center');
+    this.centerNote.relation = 'center';
     
-    await this.buildSiblingNotes();
-
-    this.callback('dataModelReady');
-}
-
-    // Helper method (recommended)
-  getFirstTag(note: NoteProperties): string | undefined {
-    if (!note.tags) return undefined;
-    if (Array.isArray(note.tags)) {
-        return note.tags[0];                    // first tag
+    // 3. get relatives
+    await this.determineFirstDegreeNotes(this.centerNote);
+    await this.determineSiblings(this.centerNote);
+    
+    // 4. erase notes not being reused
+    for (const [basename, note] of this.noteCache.entries()) {
+      if (!note.used) {
+        this.noteCache.delete(basename); // Fjern fra minne-cachen
+      }
     }
-    if (typeof note.tags === 'string') {
-        return note.tags;
-    }
-    return undefined;
+    
+    // 5. update gates
+    this.fetchAllGates();
+
+    // 6. report back
+    this.modelReady();
   }
 
-  // ===================== Update notestree data =====================
+  private getNote(file: TFile): NoteClass | null {
+    const path = file.path;
+    const useAlias = this.plugin.settings.displayAliases;
+    let note = this.noteCache.get(path);
+    if (note) {
+      if (note.used && note.relation != 'undefined') return null; // used in a more central relation 
+      note.used = true;
+    } else {
+      const noteCache = this.app.metadataCache.getFileCache(file);
+      if (!noteCache) return null;
+      note = new NoteClass(useAlias, file, noteCache)
+      note.used = true
+      this.noteCache.set(path, note);
+    }
+    return note;
+  }
+
+  private fetchAllGates() {
+    this.allGates = [];
+    for (const note of this.noteCache.values()) {
+      this.allGates.push(note.upperGate);
+      this.allGates.push(note.lowerGate);
+      this.allGates.push(note.friendGate);
+    }
+  }
   
-  private setCenterNoteRelation(
-    centerNote: NoteProperties, 
-    newNote: NoteProperties
-  ){
-    switch (newNote.relation) {
+  private setCenterNoteRelations(centerNote: NoteClass, newNote: NoteClass){
+    const { relation } = newNote;
+
+    if (relation !== "ignored") {
+      const targetGate = relation === "parent" ? newNote.lowerGate : 
+                         relation === "friend" ? newNote.friendGate : newNote.upperGate; // undefined/child bruker upperGate.
+      
+      targetGate.connections.length = 0; // Tømmer lynraskt uten å kaste arrayen i minnet
+      targetGate.connections.push(centerNote);
+    }
+
+    switch (relation) {
       case "ignored":
-        centerNote.ignored!.push(newNote) ;
+        centerNote.ignored.push(newNote);
         break;
+      
       case "parent": 
-        newNote.lowerGate!.connections = [centerNote];
-        centerNote.upperGate!.connections.push(newNote); 
+        centerNote.upperGate.connections.push(newNote); 
         break;
+        
+      case "friend": 
+        // Vennen (som ligger i venstre kvadrant) har sin port på HØYRE side (peker inn mot center)
+        newNote.friendGate.direction = 'right';
+        newNote.friendGate.connections = [centerNote]; // Etablerer toveis-koblingen
+                
+        // Senternoten har sin venneport på VENSTRE side (peker mot venstre kvadrant)
+        centerNote.friendGate.direction = 'left';
+        centerNote.friendGate.connections.push(newNote); 
+        break;
+
       case "child": 
-        newNote.upperGate!.connections = [centerNote];
-        centerNote.lowerGate!.connections.push(newNote); 
+      case "undefined":
+        centerNote.lowerGate.connections.push(newNote); 
         break;
-        case "friend": 
-        newNote.friendGate!.connections = [centerNote];
-        newNote.friendGate!.direction = 'right';
-        centerNote.friendGate!.connections.push(newNote); 
-        break;
-      default: 
-        newNote.upperGate!.connections = [centerNote];
-        centerNote.lowerGate!.unspecified.push(newNote); break;
     }
   };
 
-  private async buildSiblingNotes() {
-    const parents = this.getNotesByRelationFromCache('parent');
+  private async determineSiblings(centerNote: NoteClass) {
+    const parents = centerNote.upperGate.connections;
+    if (parents.length === 0) return;
 
-    for (const parent of parents) {
-        await this.updateNotesRelatedTo(parent, "parent");
+    // 1. Fullfør link- og backlink-analyse for alle foreldre
+    for (const parentNote of parents) {
+        await this.determineFirstDegreeNotes(parentNote);
     }
 
-    this.siblings = this.getNotesByRelationFromCache('sibling');
-}
+    // 2. Samle noder fra foreldrenes porter
+    const siblingCandidates = new Set<NoteClass>();
 
-  private async updateNotesRelatedTo(primaryNote: NoteProperties, relation: Relation) {
-    const secondaries = await this.getSecondariesFrom(primaryNote);
+    for (const parentNote of parents) {
+        // Hent alle noder som er koblet til denne forelderen (både dens barn og dens undefined)
+        const parentConnections = parentNote.lowerGate.connections;
 
-    for (const secondaryNote of secondaries) {
-        if (this.noteCache.has(secondaryNote.basename)) continue;
-
-        secondaryNote.relation = this.findRelation(primaryNote, secondaryNote);
-
-        if (relation === 'parent') {
-            this.setSiblingNoteRelation(primaryNote, secondaryNote);
-        } else if (relation === 'center') {
-            this.setCenterNoteRelation(primaryNote, secondaryNote);
+        for (const connectedNote of parentConnections) {
+            // Unngå sirkelkobling: Senternoten kan ikke være sitt eget søsken!
+            if (connectedNote.basename !== centerNote.basename) {
+                siblingCandidates.add(connectedNote);
+            }
         }
-
-        this.noteCache.set(secondaryNote.basename, secondaryNote);
     }
-}
 
-  /** All notes of a specific relation */
-  getNotesByRelationFromCache(relation: Relation): NoteProperties[] {
-    return Array.from(this.noteCache.values())
-      .filter(note => note.relation === relation);
-  }
+    // --- 3. Ruting til Høyre Kvadrant ---
+    // Tøm listen først for å unngå duplikater ved re-tegning
+    centerNote.siblings.length = 0; 
 
-  private setSiblingNoteRelation(
-    primaryNote: NoteProperties, 
-    newNote: NoteProperties
-  ) {
-      if (this.noteCache.has(newNote.basename)) return;
-
-      this.noteCache.set(newNote.basename, newNote);
-
-      if (newNote.relation! == 'ignored') {
-        primaryNote.ignored!.push(newNote);
-        return;
+    for (const note of siblingCandidates) {
+      // Hvis noden allerede er en 'friend' eller 'parent' av senternoten, lar vi den stå i sin opprinnelige kvadrant
+      if (note.relation === "friend" || note.relation === "parent") {
+          continue; 
       }
 
-      if (!['child', 'undefined'].includes(newNote.relation!)) {
-        return;
+      // Hvis den var "child" eller "undefined" fra før, flytter vi den til høyre kvadrant
+      if (note.relation === "child" || note.relation === "undefined") {
+          
+          // Siden centerNote ikke har en siblingGate, lagrer vi den i den rene listen!
+          centerNote.siblings.push(note);
       }
-      
-      newNote.relation = 'sibling';
-      this.noteCache.set(newNote.basename!, newNote);
-      
-      newNote.upperGate!.connections = [primaryNote];
-      primaryNote.lowerGate?.connections.push(newNote);
+    }
   }
 
-  private async getSecondariesFrom(primaryNote: NoteProperties): Promise<NoteProperties[]> {
-    const filesSet = await this.getFirstDegreeFiles(primaryNote.file);
-
-    const secondaries: NoteProperties[] = [];
+  /**
+   * Returns a unique, sorted set of all linked + backlinked note properties
+   * of the primaryNote. Reuses noteProperties if they exist in noteCache.
+   * @param primaryNote 
+   * @returns 
+   */
+  private async determineFirstDegreeNotes(ofNote: NoteClass): Promise<void> {
+    // Hent alle unike filer (koblinger og bakkoblinger)
+    const filesSet = await this.getFirstDegreeFiles(ofNote.file);
 
     for (const file of filesSet) {
-        if (file.path === primaryNote.file.path) continue; // skip self
+        if (file.path === ofNote.file.path) continue; // Hopp over seg selv
 
-        const noteProps = this.getNoteProperties(file, 'undefined');
-        secondaries.push(noteProps);
-    }
+        const relatedNote = this.getNote(file); // get an unused and unrelated note.
+        if (relatedNote) {
+          // Kalkuler relasjonen relativt til 'ofNote'
+          relatedNote.relation = this.findRelation(ofNote, relatedNote);
 
-    // Sort: first by tag, then by connection count
-    return secondaries.sort((a, b) => {
-        const tagA = this.getFirstTag(a);
-        const tagB = this.getFirstTag(b);
-
-        if (tagA !== tagB) {
-            if (!tagA) return 1;
-            if (!tagB) return -1;
-            return tagA.localeCompare(tagB);
+          // Koble nodene sammen i de fysiske portene (upperGate, lowerGate, etc.)
+          this.setCenterNoteRelations(ofNote, relatedNote);
         }
-        return (b.connectionCount ?? 0) - (a.connectionCount ?? 0);
-    });
-}
+    }
+  }
 
-  // ===================== helper functions =====================
+  /**
+   * Hjelpefunksjon som sorterer og returnerer noder for en spesifikk port/kvadrant.
+  */
+  getSortedNotesForQuadrant(connections: NoteClass[], isSiblingQuadrant = false): NoteClass[] {
+    if (!connections || connections.length === 0) return [];
+    // Vi tar en kopi av matrisen (.slice()) for å unngå uforutsigbare sideeffekter under mutering
+    return connections.slice().sort((a, b) => {
+      // 1. Primærsortering kun for HØYRE kvadrant: Etter relasjonstype
+      if (isSiblingQuadrant) {
+          const orderA = relationOrder[a.relation] ?? 999;
+          const orderB = relationOrder[b.relation] ?? 999;
+          if (orderA !== orderB) return orderA - orderB;
+      }
+
+      // 2. Sekundærsortering (Primær for de andre): Første tag (Alfabetisk)
+      // Obsidians .first() fungerer på deres interne samlinger, men på en vanlig JS-array
+      // bruker vi indeks [0] for maksimal hastighet og typesikkerhet.
+      const tagA = a.tags && a.tags.length > 0 ? a.tags[0] : null;
+      const tagB = b.tags && b.tags.length > 0 ? b.tags[0] : null;
+
+      if (tagA !== tagB) {
+        if (!tagA) return 1;  // Notater uten tagger havner nederst
+        if (!tagB) return -1;
+        return tagA.localeCompare(tagB);
+      }
+
+      // 3. Tertiærsortering: Etter relevans (Antall koblinger i hvelvet)
+      const countA = a.connectionCount ?? 0;
+      const countB = b.connectionCount ?? 0;
+      if (countA !== countB) return countB - countA;
+
+      // 4. Siste fallback: Rent alfabetisk på navn
+      return a.basename.localeCompare(b.basename);
+    });
+  }
 
   /**
    * Helper to safely get backlinks, with optional Backlink Cache plugin support.
@@ -284,7 +277,6 @@ export class RelatedData {
 
     return backlinkSources;
   }
-
 
   private async getBacklinks(file: TFile): Promise<any> {
     const mc = this.app.metadataCache;
@@ -376,262 +368,44 @@ export class RelatedData {
     connections.delete(file);
 
     return connections;
-}
-
-  private getNoteProperties(
-    file: TFile,
-    relation: Relation,
-    type: Notetype = 'file',
-    degree: 'zero' |'first' | 'second' = 'zero',
-    connectionCount: number = 0,
-    sharedLinksWithStart: number = 0
-  ): NoteProperties {
-    const cache = this.app.metadataCache.getFileCache(file);
-    const frontmatter = cache?.frontmatter ?? {};
-
-    return {
-      filename: file.name,
-      basename: file.basename,
-      aliases: parseFrontMatterAliases(cache?.frontmatter) ?? [],
-      tags: parseFrontMatterTags(cache?.frontmatter) ?? [],
-      properties: Object.entries(frontmatter)
-          .filter(([key]) => !['aliases', 'tags'].includes(key)),
-      connectionCount,
-      sharedLinksWithStart,
-      degree,
-      relation,
-      type,
-      file,
-      ignored: [],
-      upperGate: {
-        ...DEFAULT_GATE,
-        connections: [],
-        unspecified: []
-      },
-      lowerGate: {
-        ...DEFAULT_GATE,
-        connections: [],
-        unspecified: []
-      },
-      friendGate: {
-        ...DEFAULT_GATE,
-        connections: [],
-        unspecified: []
-      }
-    };
   }
   
-  private getPropertyAsArray(node: NoteProperties, key: string): string[] {
-    const value = node.properties.find(([k]) => k === key)?.[1];
+  private findRelation(centerNote: NoteClass, otherNote: NoteClass): Relation {
+    const otherPath = otherNote.file.path;
+    const otherTags = otherNote.tags ?? [];
 
-    if (Array.isArray(value)) {
-        return value.filter((v): v is string => typeof v === 'string');
-    }
-    if (typeof value === 'string') return [value];
-    return [];
-  }
-
-  private findRelation(
-    noteA: NoteProperties,
-    noteB: NoteProperties,
-  ): Relation {
-
-    const aName = noteA.basename; 
-    const bName = noteB.basename;
-    const bPath = noteB.file.path;
-    const bTags = noteB.tags ?? [];
-
-    // Early ignore check
-    if (this.foundPart(bPath, this.ignoreFragments) || 
-        this.checkTags(bTags, this.ignoreTags)) {
-        return "ignored";
+    // --- LAG 1: TIDLIG SJEKK (Ignore) ---
+    if (StringUtils.foundPart(otherPath, this.plugin.optIgnoreFragments) || 
+      StringUtils.hasAnyOf(otherTags, this.plugin.optIgnoreTags)) {
+      return "ignored";
     }
 
-    // Parent relationship (A links to B as parent OR B links to A as child)
-    if (this.linksTo(noteA, noteB, bName, this.parentProperties) ||
-        this.linksTo(noteB, noteA, aName, this.childProperties)) {
-        return "parent";
+    // --- LAG 2: FRONTMATTER EGENSKAPER ---
+    if (centerNote.linksTo(otherNote, this.plugin.optParentProperties) ||
+      otherNote.linksTo(centerNote, this.plugin.optChildProperties)) {
+      return "parent";
     }
 
-    // Child relationship
-    if (this.linksTo(noteA, noteB, bName, this.childProperties) ||
-        this.linksTo(noteB, noteA, aName, this.parentProperties)) {
-        return "child";
+    if (centerNote.linksTo(otherNote, this.plugin.optChildProperties) ||
+      otherNote.linksTo(centerNote, this.plugin.optParentProperties)) {
+      return "child";
     }
 
-    // Friend relationship
-    if (this.linksTo(noteA, noteB, bName, this.friendProperties) ||
-        this.linksTo(noteB, noteA, aName, this.friendProperties)) {
-        return "friend";
+    if (centerNote.linksTo(otherNote, this.plugin.optFriendProperties) ||
+      otherNote.linksTo(centerNote, this.plugin.optFriendProperties)) {
+      return "friend";
     }
 
-    // Tag-based fallbacks
-    if (this.checkTags(bTags, this.parentTags)) return "parent";
-    if (this.checkTags(bTags, this.childTags)) return "child";
-    if (this.checkTags(bTags, this.friendTags)) return "friend";
+    // --- LAG 3: TAG-BASERT FALLBACK ---
+    if (StringUtils.hasAnyOf(otherTags, this.plugin.optParentTags)) return "parent";
+    if (StringUtils.hasAnyOf(otherTags, this.plugin.optChildTags)) return "child";
+    if (StringUtils.hasAnyOf(otherTags, this.plugin.optFriendTags)) return "friend";
 
     return "undefined";
   }
-
-  private linksTo(
-    noteA: NoteProperties,
-    noteB: NoteProperties,
-    basename: string,
-    propertiesToLookFor: string[]
-  ): boolean {  
-
-    if (!propertiesToLookFor?.length) return false;
-
-    return propertiesToLookFor.some(attrib => {
-        if (!attrib) return false;
-
-        const values = this.getPropertyAsArray(noteA, attrib);
-        return this.foundInlinks(values, basename);
-    });
-  }
-
-  /**
- * Checks if the given values contain a link to the target basename
- * (handles wikilinks, pipes, commas, etc.)
- */
-  private foundInlinks(values: unknown[] | unknown, basename: string): boolean {
-    if (values == null) return false;
-
-    const normalized = this.normalizeToStringArray(values);
     
-    // Fast early exit - cheap string check
-    if (!normalized.some(v => v.includes(basename))) {
-        return false;
-    }
-
-    // More precise check after cleaning wikilinks
-    return normalized
-        .map(this.cleanLink)
-        .includes(basename);
-  }
-
-  /**
-   * Normalizes any input (string, array, null, etc.) into a clean string array
-   */
-  private normalizeToStringArray(input: unknown): string[] {
-      if (input == null) return [];
-
-      // If it's already an array, process each item
-      if (Array.isArray(input)) {
-          return input
-              .flatMap(item => this.splitAndClean(item))
-              .filter(Boolean);
-      }
-
-      // Single value (string, number, etc.)
-      return this.splitAndClean(input);
-  }
-
-  /**
-   * Splits by comma and cleans each part (handles wikilinks with | )
-   */
-  private splitAndClean(value: unknown): string[] {
-    if (value == null) return [];
-
-    const str = String(value).trim();
-    if (!str) return [];
-
-    return str.split(',')
-        .flatMap(part => this.extractLinkTargets(part))
-        .filter(Boolean);
-  }
-
-  /**
-   * Handles both [[Link]] and [[Link|Display Text]] → returns clean link targets
-   */
-  private extractLinkTargets(text: string): string[] {
-      const trimmed = text.trim();
-      if (!trimmed) return [];
-
-      // Split on pipe (|) and take the first part (the actual link target)
-      const segments = trimmed.split('|').map(s => s.trim());
-
-      return segments.map(segment => this.trimWikilinks(segment));
-  }
-
-  /**
-   * Removes [[ and ]] from both sides
-   */
-  private trimWikilinks(str: string): string {
-      if (typeof str !== 'string' || !str) return '';
-
-      return str
-          .trim()
-          .replace(/^\[+/, '')   // remove one or more [ at start
-          .replace(/\]+$/, '')   // remove one or more ] at end
-          .trim();
-  }
-
-  /**
-   * Optional: Cleaner alias for trimWikilinks if you prefer the name
-   */
-  private cleanLink = (str: string): string => this.trimWikilinks(str);
-
-
-  
-  private checkTags(taggedWith: string[],
-                wantedTags: string[]): boolean {
-    //tagged with any of the wanted tags
-    const taggedWithSet = new Set(taggedWith ?? []);
-    if (wantedTags.some(tag => taggedWithSet.has(tag))) {
-      return true;
-    }
-    return false;
-  };
-    
-  private foundPart(text: string, wantedParts: string | string[]): boolean {
-    if (!text) return false;
-    const lowerText = text.toLowerCase();
-
-    const parts = Array.isArray(wantedParts) ? wantedParts : [wantedParts];
-
-    return parts.some(part => 
-        part && lowerText.includes(part.toLowerCase())
-    );
-  }
-    
-  //return an array 
-  public itemsOf(value: unknown): string[] {
-    if (value == null) return [];
-
-    const str = String(value).trim();
-    if (!str) return [];
-
-    return str.split(',')
-      .flatMap(part => part.trim())
-      .filter(Boolean);
-  }
-
-  sortedSiblings(): NoteProperties[] {
-    return [...this.siblings].sort((a, b) => {
-        // 1. Primary sort: by relation
-        const orderA = relationOrder[a.relation as Relation] ?? 999;
-        const orderB = relationOrder[b.relation as Relation] ?? 999;
-
-        if (orderA !== orderB) {
-            return orderA - orderB;
-        }
-
-        // 2. Secondary sort: by first tag (alphabetically)
-        const tagA = this.getFirstTag(a);
-        const tagB = this.getFirstTag(b);
-
-        if (tagA && tagB) {
-            return tagA.localeCompare(tagB);
-        }
-        if (tagA) return -1;   // notes with tags come first
-        if (tagB) return 1;
-        return 0;
-    });
-  }
-
-  groupByFirstTag(notes: NoteProperties[]): GroupedNotes[] {
-    const groups = notes.reduce((acc: Map<string, NoteProperties[]>, note) => {
+  groupByFirstTag(notes: NoteClass[]): GroupedNotes[] {
+    const groups = notes.reduce((acc: Map<string, NoteClass[]>, note) => {
       const firstTag = note.tags?.[0]?.trim();
       const groupKey = firstTag ? firstTag : "untagged";
 

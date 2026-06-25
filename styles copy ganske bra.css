@@ -6,16 +6,16 @@
   width: 100%;
   height: 100%;
   background-color: transparent;
-  
+
   display: grid;
   /* 3 kolonner: Venstre side (1fr), Senter-ryggraden (max-content), Høyre side (1fr) */
   grid-template-columns: 1fr minmax(25%, 33%) 1fr;
-  
+
   /* 5 rader for perfekt vertikal balansering:
     Rad 1: Fleksibel luft på topp (1fr)
     Rad 2, 3 og 4 styres av innholdets naturlige maks-høyde
     Rad 5: Fleksibel luft i bunn (1fr) */
-  grid-template-rows: 1fr auto auto auto 1fr;  
+  grid-template-rows: 1fr auto auto auto 1fr;
   box-sizing: border-box;
 }
 
@@ -23,63 +23,70 @@
 .related-center-area {
   grid-column: 2;
   grid-row: 3;
-  
-  anchor-name: --center-area; /* Beholdes for venstre boks */
-  
+
+  anchor-name: --center-area;
+  /* Beholdes for venstre boks */
+
   min-width: 33%;
   padding: 50px 20px 50px 20px;
-  align-self:center;
+  align-self: center;
   justify-self: center;
-  width:auto;
+  width: auto;
 }
 
 /* UPPER AREA (Deltar i ryggraden, ligger i rad 2) */
 .related-upper-area {
   grid-column: 2;
   grid-row: 2;
-  margin-bottom: 5px; /* Skaper avstand til senter */
-  
+  margin-bottom: 5px;
+  /* Skaper avstand til senter */
+
   width: 100%;
   min-width: 150px;
   padding: 5px;
-  
-  anchor-name: --upper-area; 
+
+  anchor-name: --upper-area;
 
   /* Krav 7: Hvis det er trangt, la elementer "blø" ut i stedet for å skjules */
-  overflow: visible !important; 
-  align-self:last baseline;
+  overflow: visible !important;
+  align-self: last baseline;
 }
 
 /* LEFT AREA (Standard: Sentrert i rad 3, klar for dynamisk JS-kontroll) */
 .related-left-area {
-  grid-column: 1; 
-  grid-row: 3; /* Låst til KUN center-notatets etasje */
-  
+  grid-column: 1;
+  grid-row: 3;
+  /* Låst til KUN center-notatets etasje */
+
   justify-self: stretch;
-  align-self: center; /* Dette garanterer at 1 eller 2 items starter DØNN side-om-side med senter! */
-  
+  align-self: center;
+  /* Dette garanterer at 1 eller 2 items starter DØNN side-om-side med senter! */
+
   margin-right: 10px;
   padding: 5px;
   box-sizing: border-box;
-  
+
   height: auto;
   overflow-y: auto !important;
-  border: 1px solid yellow; /* Behold for testing */
+  border: 1px solid yellow;
+  /* Behold for testing */
 }
 
 
 /* Sibling/RIGHT AREA (NY: Flyttet inn i Griddet for å kunne dytte på Lower) */
 .related-right-area {
-  
+
   grid-column: 3;
-  grid-row: 2 / span 2; /* Strekker seg over både rad 2 (upper) og rad 3 (center) */
-  
+  grid-row: 2 / span 2;
+  /* Strekker seg over både rad 2 (upper) og rad 3 (center) */
+
   justify-self: stretch;
-  align-self: center; /* Sørger for at den er sentrert vertikalt med midten */
-  
+  align-self: center;
+  /* Sørger for at den er sentrert vertikalt med midten */
+
   margin-left: 5px;
   padding: 5px;
-  
+
   /* Siden den deler rad med center, setter vi en trygg default makshøyde */
   max-height: 40vh;
   display: flex;
@@ -94,18 +101,21 @@
   grid-row: 4;
   margin-top: 5px;
   padding: 5px;
-  grid-column: 1 / span 3; 
+  grid-column: 1 / span 3;
   width: 100%;
-  
-  align-self: start; /* cloce to center area */
+
+  align-self: start;
+  /* cloce to center area */
 
   /* ==========================================================================
      STRØMLINJEFORMET: Gjøres om til en Flex-sentrerer for kolonnene
      ========================================================================== */
   display: flex !important;
   flex-direction: column;
-  align-items: center;      /* Dønn perfekt horisontal sentrering av wrapperen på X-aksen */  
-  justify-content: center; /* x-axis */
+  align-items: center;
+  /* Dønn perfekt horisontal sentrering av wrapperen på X-aksen */
+  justify-content: center;
+  /* x-axis */
 
   max-height: min(250px, 35vh);
   overflow-y: auto !important;
@@ -115,13 +125,15 @@
 /* MAGIEN: Hvis hovedcontaineren har fått merket [data-right-tall="true"] av JS,
    så tvinger vi bunnen til å vike, og lar høyre side strekke seg helt ned! */
 .related-view-container[data-right-tall="true"] {
-  
+
   & .related-lower-area {
-    grid-column: 1 / span 2; /* Gi fra deg kolonne 3 */
+    grid-column: 1 / span 2;
+    /* Gi fra deg kolonne 3 */
   }
 
   & .related-right-area {
-    grid-row: 2 / span 3;    /* Høyre side okkuperer hele den vertikale veggen */
+    grid-row: 2 / span 3;
+    /* Høyre side okkuperer hele den vertikale veggen */
     max-height: 60vh;
   }
 }
@@ -135,24 +147,26 @@
   display: flex !important;
   flex-direction: column;
   gap: 15px;
-  
+
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  
-  height: auto; /* La høyden leve med innholdet slik at rullefeltet i lower-area trigges */
-  overflow: visible; /* La plus/minus-knapper blø hvis nødvendig */
+
+  height: auto;
+  /* La høyden leve med innholdet slik at rullefeltet i lower-area trigges */
+  overflow: visible;
+  /* La plus/minus-knapper blø hvis nødvendig */
   /* border: 1px solid green; /* Behold for testing */
 }
 
 /* Genererer kolonnene for ALT innhold samlet */
 .related-columns-wrapper {
   display: block !important;
-  
+
   /* Her styres kolonnebredden for hele regionen under ett! */
-  columns: 100px; 
-  column-gap: 12px; 
-  
+  columns: 100px;
+  column-gap: 12px;
+
   width: 100%;
   max-width: 100%;
   height: fit-content;
@@ -164,7 +178,7 @@
 /* Fjern alle auto-marginer på innsiden slik at de ikke forstyrrer */
 .related-left-area .related-columns-wrapper {
   display: block !important;
-  columns: 100px 1; 
+  columns: 100px 1;
   width: 100%;
   box-sizing: border-box;
   height: auto;
@@ -173,17 +187,17 @@
 
 .related-right-area .related-columns-wrapper {
   display: block !important;
-  columns: 100px 1; 
+  columns: 100px 1;
   width: 100%;
   box-sizing: border-box;
-  max-height: 55vh; 
-  overflow-y: auto !important; 
-  
+  max-height: 55vh;
+  overflow-y: auto !important;
+
   /* Sentrerings-magien for høyre side også */
-  margin-top: auto; 
-  margin-bottom: auto; 
-  
-  border: 1px solid yellow; 
+  margin-top: auto;
+  margin-bottom: auto;
+
+  border: 1px solid yellow;
 }
 
 /* KOLONNE-WRAPPER SPESIFIKT FOR LOWER AREA */
@@ -194,7 +208,7 @@
   column-gap: 12px;
   box-sizing: border-box;
   width: 100%;
-  max-width: 100%; 
+  max-width: 100%;
   border: 1px solid orange;
 }
 
@@ -207,18 +221,21 @@
   display: flex !important;
   justify-content: center !important;
   align-items: center !important;
-  columns: none !important; /* Skru av kolonneflyten helt */
-    border: 1px solid brown;
+  columns: none !important;
+  /* Skru av kolonneflyten helt */
+  border: 1px solid brown;
 
 }
 
 /* Hvis wrapperen inneholder maksimalt 3 elementer (2-3 items) */
 .related-lower-area .related-columns-wrapper:has(.related-linkDiv:nth-child(2)):not(:has(.related-linkDiv:nth-child(4))) {
   display: flex !important;
-  flex-flow: row wrap !important; /* Legg dem ved siden av hverandre horisontalt */
+  flex-flow: row wrap !important;
+  /* Legg dem ved siden av hverandre horisontalt */
   justify-content: center !important;
   gap: 12px !important;
-  columns: none !important; /* Skru av kolonneflyten helt */
+  columns: none !important;
+  /* Skru av kolonneflyten helt */
   border: 1px solid blue;
 
 }
@@ -228,7 +245,7 @@
   /* display: contents gjør at denne div-en blir "usynlig" for kolonne-motoren, 
      slik at alle .related-linkDiv på innsiden flyter og balanseres 
      perfekt i de samme kolonnene på tvers av grupper! */
-  display: contents; 
+  display: contents;
 }
 
 /* Siden .related-groups har display: contents, kan vi ikke sette bakgrunnsfarge 
@@ -245,20 +262,20 @@
 /* LINK CONTAINER (Fortsatt en horisontal Flexbox for side-portene) */
 .related-linkDiv {
   width: fit-content !important;
-  max-width: 120px; 
+  max-width: 120px;
 
   /* MAGIEN: margin: 0 auto sørger for at Flexbox-rammen sentreres horisontalt 
      i midten av kolonne-cellen sin, uansett om det er 1 eller 3 kolonner! */
   margin: 0 auto 12px auto;
   break-inside: avoid;
-  
+
   display: flex !important;
-  flex-direction: row; 
-  align-items: center; 
+  flex-direction: row;
+  align-items: center;
   justify-content: center !important;
-  
+
   /* Etablerer (0,0) for øvre og nedre absolutt-port */
-  position: relative !important;  
+  position: relative !important;
   background-color: color-mix(in srgb, var(--background-primary), transparent 50%);
 }
 
@@ -266,85 +283,47 @@
    LINK CONTAINER SPECIFIC FOR LEFT AREA (Fikser den interne sentreringen)
    ========================================================================== */
 .related-left-area .related-linkDiv {
-  margin: 0 !important; /* Nullstill marginene helt, gap-en over styrer luften! */
-  
+  margin: 0 !important;
+  /* Nullstill marginene helt, gap-en over styrer luften! */
+
   width: fit-content !important;
-  max-width: 120px; 
-  flex: 0 0 auto; /* Hindrer at boksene strekker seg skjevt i høyden */
-  
+  max-width: 120px;
+  flex: 0 0 auto;
+  /* Hindrer at boksene strekker seg skjevt i høyden */
+
   /* Tvinger innholdet (tekst og porter) til å være dønn horisontalt sentrert 
      inni sin egen kolonne, i stedet for å bli høyrejustert! */
-  justify-content: center !important; 
+  justify-content: center !important;
   justify-self: center !important;
 }
 
-/* ??? display: inline-block; /* makes the info 'i' appear normally */
-/*
-.related-linkDiv.hidden {
-  display: none !important;
-}
-*/
 /* SELVE NOTAT-LENKEN */
-.related-link {  
+.related-link {
   display: block;
-  white-space: normal; 
-  word-break: break-word; 
-  hyphens: auto; 
-  padding: 8px 12px; 
-  flex: 1; /* La teksten ta den plassen den trenger */
-  text-align: center !important;   /* Sentrerer ordene horisontalt på hver linje */
-  text-wrap: balance !important;   /* NYTT: Balanserer ordene for å eliminere tomrom på sidene! */
+  white-space: normal;
+  word-break: break-word;
+  hyphens: auto;
+  padding: 8px 12px;
+  flex: 1;
+  /* La teksten ta den plassen den trenger */
+  text-align: center !important;
+  /* Sentrerer ordene horisontalt på hver linje */
+  text-wrap: balance !important;
+  /* NYTT: Balanserer ordene for å eliminere tomrom på sidene! */
 }
-
-.related-info-button,
-.related-plusminus {
-  position: absolute;
-  white-space: nowrap;
-  background-color: rgb(from var(--background-primary) r g b);
-  box-shadow: 0 1px calc(4px * var(--scaleFactor)) #0008;  
-  border: 1px solid gray;
-  border-radius: calc(8px * var(--scaleFactor));
-  padding: calc(3px * var(--scaleFactor));
-  font-size: calc(10px * var(--scaleFactor));
-  font-weight: 900;
-  /* borderColor = '#068ef6' */
-  left: calc(100% - 5px);
-  top: calc(100% - 5px);
-  z-index: 101;
-  overflow: visible;
-}
-
-.related-plusminus {
-  left: calc(100% - 15px);
-}
-
-
-.related-info-hover {
-  /* width: 150px;
-  position: absolute;
-  top: anchor(top);
-  right: anchor(left);
-  background-color: rgb(from var(--background-primary) r g b);     
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 12px; 
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15);
-   z-index: 1102; */
-}
-/* ==========================================================================
-   SVG area for line drawing
-   ========================================================================== */
 
 
 .related-svg-layer {
-  position: absolute !important; 
+  position: absolute !important;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  
+
   z-index: -10;
-  
-  pointer-events: none; /* Sørg for at linjene ikke blokkerer klikk! */
+
+  pointer-events: none;
+  /* Sørg for at linjene ikke blokkerer klikk! */
 }
 
 /* ==========================================================================
@@ -362,31 +341,31 @@
 .related-gate-node.direction-up {
   position: absolute !important;
   z-index: 6;
-  
+
   /* Plasser den rett over boksen (-4px eller negative em) */
-  top: 0; 
-  
-  left: calc(50% - 10px); 
+  top: 0;
+
+  left: calc(50% - 10px);
 }
 
 /* NEDRE PORT: Legges RETT UNDER teksten, litt forskjøvet til høyre */
 .related-gate-node.direction-down {
   position: absolute !important;
   z-index: 6;
-  
+
   /* Plasser den rett under boksen */
-  bottom: -4px; 
-  
-  left: calc(50% + 10px); 
+  bottom: -4px;
+
+  left: calc(50% + 10px);
 }
 
 
 /* SIDE-PORTER (Disse skal FORTSETTE å være Flex-partnere som klistrer seg til tekstkanten) */
 .related-gate-node.direction-right,
 .related-gate-node.direction-left {
-  position: relative !important; 
+  position: relative !important;
   display: block !important;
-  flex: 0 0 5px; 
+  flex: 0 0 5px;
 }
 
 .related-gate-node.direction-left {
@@ -395,11 +374,4 @@
 
 .related-gate-node.direction-right {
   margin-left: 4px;
-}
-
-/* Dynamisk fontstørrelse basert på total containerhøyde (Krav 6/Trangt) */
-@container main (min-height: 1px) {
-  .related-view-container {
-    font-size: clamp(4px, 2.5cqh, 12px);
-  }
 }
