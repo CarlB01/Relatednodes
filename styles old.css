@@ -1,9 +1,7 @@
 /* ==========================================================================
    SPECIFIC REGIONS (CSS Grid Ryggrad + Absolute Ankre)
    ========================================================================== */
-.rv-container {
-  container-name: main;
-
+.related-view-container {
   position: absolute;
   width: 100%;
   height: 100%;
@@ -12,24 +10,17 @@
   display: grid;
   /* 3 kolonner: Venstre side (1fr), Senter-ryggraden (max-content), Høyre side (1fr) */
   grid-template-columns: 1fr minmax(25%, 33%) 1fr;
-
+  
   /* 5 rader for perfekt vertikal balansering:
-     Rad 1: Fleksibel luft på topp (1fr)
-     Rad 2: Upper area (auto-høyde)
-     Rad 3: Center area (auto-høyde)
-     Rad 4: Lower area (auto-høyde)
-     Rad 5: Fleksibel luft i bunn (1fr) */
+    Rad 1: Fleksibel luft på topp (1fr)
+    Rad 2, 3 og 4 styres av innholdets naturlige maks-høyde
+    Rad 5: Fleksibel luft i bunn (1fr) */
   grid-template-rows: 1fr auto auto auto 1fr;  
+  box-sizing: border-box;
 }
 
-/* Dynamisk fontstørrelse basert på total containerhøyde (Krav 6/Trangt) */
-@container main (min-height: 1px) {
-  .rv-view-container {
-    font-size: clamp(4px, 2.5cqh, 12px);
-  }
-}
-
-.rv-center-area {
+/* CENTER AREA (Sentrum av ryggraden, ligger i rad 3) */
+.related-center-area {
   grid-column: 2;
   grid-row: 3;
   
@@ -42,7 +33,8 @@
   width:auto;
 }
 
-.rv-upper-area {
+/* UPPER AREA (Deltar i ryggraden, ligger i rad 2) */
+.related-upper-area {
   grid-column: 2;
   grid-row: 2;
   margin-bottom: 5px; /* Skaper avstand til senter */
@@ -58,25 +50,29 @@
   align-self:last baseline;
 }
 
-.rv-left-area {
-  grid-column: 1;
-  grid-row: 3;
-
+/* LEFT AREA (Standard: Sentrert i rad 3, klar for dynamisk JS-kontroll) */
+.related-left-area {
+  grid-column: 1; 
+  grid-row: 3; /* Låst til KUN center-notatets etasje */
+  
   justify-self: stretch;
-  align-self: center; /* Sørger for at den er sentrert vertikalt med midten */
+  align-self: center; /* Dette garanterer at 1 eller 2 items starter DØNN side-om-side med senter! */
   
-  margin-right: 5px;
+  margin-right: 10px;
   padding: 5px;
+  box-sizing: border-box;
   
-  max-height: 40vh;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto !important; 
+  height: auto;
+  overflow-y: auto !important;
+  border: 1px solid yellow; /* Behold for testing */
 }
 
-.rv-right-area {
+
+/* Sibling/RIGHT AREA (NY: Flyttet inn i Griddet for å kunne dytte på Lower) */
+.related-right-area {
+  
   grid-column: 3;
-  grid-row: 2 / span 2; 
+  grid-row: 2 / span 2; /* Strekker seg over både rad 2 (upper) og rad 3 (center) */
   
   justify-self: stretch;
   align-self: center; /* Sørger for at den er sentrert vertikalt med midten */
@@ -93,7 +89,7 @@
 }
 
 /* LOWER AREA (Deltar i ryggraden, men viker unna rad 3 automatisk) */
-.rv-lower-area {
+.related-lower-area {
   /* Default: Strekk seg over alle 3 kolonnene (full bredde i bunn) */
   grid-row: 4;
   margin-top: 5px;
@@ -103,48 +99,39 @@
   
   align-self: start; /* cloce to center area */
 
+  /* ==========================================================================
+     STRØMLINJEFORMET: Gjøres om til en Flex-sentrerer for kolonnene
+     ========================================================================== */
   display: flex !important;
   flex-direction: column;
   align-items: center;      /* Dønn perfekt horisontal sentrering av wrapperen på X-aksen */  
-  justify-content: flex-start; /* x-axis */
+  justify-content: center; /* x-axis */
 
   max-height: min(250px, 35vh);
   overflow-y: auto !important;
   box-sizing: border-box;
 }
 
-.rv-container[data-left-tall="true"] {
+/* MAGIEN: Hvis hovedcontaineren har fått merket [data-right-tall="true"] av JS,
+   så tvinger vi bunnen til å vike, og lar høyre side strekke seg helt ned! */
+.related-view-container[data-right-tall="true"] {
   
-  & .rv-upper-area {
-    grid-column: 2; /* yield left upper area */
-  }
-
-  & .rv-left-area {
-    grid-row: 2 / span 2; /* left area takes over */
-    max-height: 40vh;
-    align-self: last baseline;
-  }
-}
-
-.rv-container[data-right-tall="true"] {
-  
-  & .rv-lower-area {
+  & .related-lower-area {
     grid-column: 1 / span 2; /* Gi fra deg kolonne 3 */
   }
 
-  & .rv-right-area {
+  & .related-right-area {
     grid-row: 2 / span 3;    /* Høyre side okkuperer hele den vertikale veggen */
     max-height: 60vh;
   }
 }
-
 
 /* ==========================================================================
    4. GROUPS & ITEMS INTERNT (Automatisk kolonne-grid på maks 120px)
    ========================================================================== */
 
 /* Etasje-stableren: Skal KUN stable gruppene vertikalt! */
-.rv-area-collections {
+.related-area-collections {
   display: flex !important;
   flex-direction: column;
   gap: 15px;
@@ -156,14 +143,10 @@
   height: auto; /* La høyden leve med innholdet slik at rullefeltet i lower-area trigges */
   overflow: visible; /* La plus/minus-knapper blø hvis nødvendig */
   /* border: 1px solid green; /* Behold for testing */
-  .rv-lower-area & {
-    /* NYTT: Sikrer at innholdet starter helt i overkant, rett under delelinjen til center */
-    margin-top: 0; 
-  }
 }
 
 /* Genererer kolonnene for ALT innhold samlet */
-.rv-columns-wrapper {
+.related-columns-wrapper {
   display: block !important;
   
   /* Her styres kolonnebredden for hele regionen under ett! */
@@ -174,17 +157,45 @@
   max-width: 100%;
   height: fit-content;
   box-sizing: border-box;
+  border: 1px solid yellow;
+
+}
+
+/* Fjern alle auto-marginer på innsiden slik at de ikke forstyrrer */
+.related-left-area .related-columns-wrapper {
+  display: block !important;
+  columns: 100px 1; 
+  width: 100%;
+  box-sizing: border-box;
+  height: auto;
+  margin: 0;
+}
+
+.related-right-area .related-columns-wrapper {
+  display: block !important;
+  columns: 100px 1; 
+  width: 100%;
+  box-sizing: border-box;
+  max-height: 55vh; 
+  overflow-y: auto !important; 
+  
+  /* Sentrerings-magien for høyre side også */
+  margin-top: auto; 
+  margin-bottom: auto; 
+  
+  border: 1px solid yellow; 
 }
 
 /* KOLONNE-WRAPPER SPESIFIKT FOR LOWER AREA */
-/* Vi overstyrer den generelle .rv-columns-wrapper KUN når den bor i bunnen */
-.rv-lower-area .rv-columns-wrapper {
+/* Vi overstyrer den generelle .related-columns-wrapper KUN når den bor i bunnen */
+.related-lower-area .related-columns-wrapper {
   display: block !important;
   columns: 100px;
   column-gap: 12px;
   box-sizing: border-box;
   width: 100%;
   max-width: 100%; 
+  border: 1px solid white;
 }
 
 /* ==========================================================================
@@ -192,35 +203,39 @@
    ========================================================================== */
 
 /* Hvis wrapperen inneholder kun ett enslig element (1 item) */
-.rv-lower-area .rv-columns-wrapper:not(:has(.rv-linkDiv:nth-child(2))) {
+.related-lower-area .related-columns-wrapper:not(:has(.related-linkDiv:nth-child(2))) {
   display: flex !important;
   justify-content: center !important;
   align-items: center !important;
   columns: none !important; /* Skru av kolonneflyten helt */
+    border: 1px solid brown;
+
 }
 
 /* Hvis wrapperen inneholder maksimalt 3 elementer (2-3 items) */
-.rv-lower-area .rv-columns-wrapper:has(.rv-linkDiv:nth-child(2)):not(:has(.rv-linkDiv:nth-child(4))) {
+.related-lower-area .related-columns-wrapper:has(.related-linkDiv:nth-child(2)):not(:has(.related-linkDiv:nth-child(4))) {
   display: flex !important;
   flex-flow: row wrap !important; /* Legg dem ved siden av hverandre horisontalt */
   justify-content: center !important;
   gap: 12px !important;
   columns: none !important; /* Skru av kolonneflyten helt */
+  border: 1px solid blue;
+
 }
 
 /* GRUPPEN: Gjennomskinnelig for kolonneflyten, men beholder styling */
-.rv-groups {
+.related-groups {
   /* display: contents gjør at denne div-en blir "usynlig" for kolonne-motoren, 
-     slik at alle .rv-linkDiv på innsiden flyter og balanseres 
+     slik at alle .related-linkDiv på innsiden flyter og balanseres 
      perfekt i de samme kolonnene på tvers av grupper! */
   display: contents; 
 }
 
-/* Siden .rv-groups har display: contents, kan vi ikke sette bakgrunnsfarge 
+/* Siden .related-groups har display: contents, kan vi ikke sette bakgrunnsfarge 
    direkte på den (siden den ikke har en fysisk boks lenger). Hvis du vil at 
    en gruppe skal ha en visuell ramme eller bakgrunn, styler vi heller linkene 
    som tilhører den utvidede gruppen: */
-.rv-groups.expanded .rv-link {
+.related-groups.expanded .related-link {
   background: rgba(183, 183, 183, 0.15);
   box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.05);
   /* box-shadow: inset 0 0 20px 20px var(--background-secondary); */
@@ -228,7 +243,7 @@
 }
 
 /* LINK CONTAINER (Fortsatt en horisontal Flexbox for side-portene) */
-.rv-linkDiv {
+.related-linkDiv {
   width: fit-content !important;
   max-width: 120px; 
 
@@ -240,32 +255,49 @@
   display: flex !important;
   flex-direction: row; 
   align-items: center; 
-  justify-content: center;
+  justify-content: center !important;
   
   /* Etablerer (0,0) for øvre og nedre absolutt-port */
-  position: relative !important;
-  padding: 1px;
+  position: relative !important;  
   background-color: color-mix(in srgb, var(--background-primary), transparent 50%);
 }
 
-/* ??? display: inline-block; /* makes the info 'i' appear normally */
-
-.rv-linkDiv.hidden {
-  display: none !important;
+/* ==========================================================================
+   LINK CONTAINER SPECIFIC FOR LEFT AREA (Fikser den interne sentreringen)
+   ========================================================================== */
+.related-left-area .related-linkDiv {
+  margin: 0 !important; /* Nullstill marginene helt, gap-en over styrer luften! */
+  
+  width: fit-content !important;
+  max-width: 120px; 
+  flex: 0 0 auto; /* Hindrer at boksene strekker seg skjevt i høyden */
+  
+  /* Tvinger innholdet (tekst og porter) til å være dønn horisontalt sentrert 
+     inni sin egen kolonne, i stedet for å bli høyrejustert! */
+  justify-content: center !important; 
+  justify-self: center !important;
 }
 
+/* ??? display: inline-block; /* makes the info 'i' appear normally */
+/*
+.related-linkDiv.hidden {
+  display: none !important;
+}
+*/
 /* SELVE NOTAT-LENKEN */
-.rv-link {  
+.related-link {  
   display: block;
   white-space: normal; 
   word-break: break-word; 
   hyphens: auto; 
   padding: 8px 12px; 
   flex: 1; /* La teksten ta den plassen den trenger */
+  text-align: center !important;   /* Sentrerer ordene horisontalt på hver linje */
+  text-wrap: balance !important;   /* NYTT: Balanserer ordene for å eliminere tomrom på sidene! */
 }
 
-.rv-info-button,
-.rv-plusminus {
+.related-info-button,
+.related-plusminus {
   position: absolute;
   white-space: nowrap;
   background-color: rgb(from var(--background-primary) r g b);
@@ -282,12 +314,12 @@
   overflow: visible;
 }
 
-.rv-plusminus {
+.related-plusminus {
   left: calc(100% - 15px);
 }
 
 
-.rv-info-hover {
+.related-info-hover {
   /* width: 150px;
   position: absolute;
   top: anchor(top);
@@ -303,7 +335,7 @@
    ========================================================================== */
 
 
-.rv-svg-layer {
+.related-svg-layer {
   position: absolute !important; 
   top: 0;
   left: 0;
@@ -320,38 +352,54 @@
    ========================================================================== */
 
 /* GLOBAL GATE-STYLING (Felles for alle retninger) */
-.rv-gate-node {
+.related-gate-node {
   width: 5px;
   height: 5px;
   overflow: visible;
 }
 
-.rv-gate-node.direction-up {
+/* ØVRE PORT: Legges RETT OVER teksten, litt forskjøvet til venstre */
+.related-gate-node.direction-up {
   position: absolute !important;
   z-index: 6;
+  
+  /* Plasser den rett over boksen (-4px eller negative em) */
   top: 0; 
+  
   left: calc(50% - 10px); 
 }
 
-.rv-gate-node.direction-down {
+/* NEDRE PORT: Legges RETT UNDER teksten, litt forskjøvet til høyre */
+.related-gate-node.direction-down {
   position: absolute !important;
   z-index: 6;
-  bottom: -4px;   
+  
+  /* Plasser den rett under boksen */
+  bottom: -4px; 
+  
   left: calc(50% + 10px); 
 }
 
-.rv-gate-node.direction-right,
-.rv-gate-node.direction-left {
+
+/* SIDE-PORTER (Disse skal FORTSETTE å være Flex-partnere som klistrer seg til tekstkanten) */
+.related-gate-node.direction-right,
+.related-gate-node.direction-left {
   position: relative !important; 
   display: block !important;
   flex: 0 0 5px; 
 }
 
-.rv-gate-node.direction-left {
+.related-gate-node.direction-left {
   margin-right: 4px;
 }
 
-.rv-gate-node.direction-right {
+.related-gate-node.direction-right {
   margin-left: 4px;
 }
 
+/* Dynamisk fontstørrelse basert på total containerhøyde (Krav 6/Trangt) */
+@container main (min-height: 1px) {
+  .related-view-container {
+    font-size: clamp(4px, 2.5cqh, 12px);
+  }
+}

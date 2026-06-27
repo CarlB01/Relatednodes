@@ -17,7 +17,7 @@ export type Relation = "center" | "parent" | "child" | "friend"| "sibling" | "un
 type Notetype = "file" | "other";
 
 export class NoteClass {
-  private readonly linkDivDescr = 'related-linkDiv';
+  private readonly linkDivDescr = 'rv-linkDiv';
   
   // characteristics
 

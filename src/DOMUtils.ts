@@ -4,9 +4,9 @@ import RelatednotesPlugin, { relatednodesID } from "./main.js";
 import { NoteClass } from "./NoteClass.js";
 
 export class DOMUtils {
-  static infobuttonDescr = 'related-info-button';
-  static INFO_HOVER_DESCR = 'related-info-hover';
-  static plusMinusBtnDescr = 'related-plusminus';
+  static infobuttonDescr = 'rv-info-button';
+  static INFO_HOVER_DESCR = 'rv-info-hover';
+  static plusMinusBtnDescr = 'rv-plusminus';
   private readonly superChargedLinkSimple = 'internal-link data-link-text';
 
 

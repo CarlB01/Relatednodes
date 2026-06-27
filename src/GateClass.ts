@@ -51,7 +51,7 @@ export class GateProperties {
       attr: {
         width: radius * 2,
         height: radius * 2,
-        class: `related-gate-node direction-${direction}`,
+        class: `rv-gate-node direction-${direction}`,
         style: "position: absolute; z-index: 5; overflow: visible;"
       }
     });

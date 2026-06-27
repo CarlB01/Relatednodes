@@ -61,6 +61,7 @@ export class RelatedData {
     // 3. get relatives
     await this.determineFirstDegreeNotes(this.centerNote);
     await this.determineSiblings(this.centerNote);
+    await this.determineFriendConnections(this.centerNote)
     
     // 4. erase notes not being reused
     for (const [basename, note] of this.noteCache.entries()) {
@@ -181,6 +182,53 @@ export class RelatedData {
       }
     }
   }
+
+  private async determineFriendConnections(centerNote: NoteClass) {
+    const friends = centerNote.friendGate.connections;
+    if (friends.length === 0) return;
+
+    for (const friend of friends) {
+      // all links and backlinks for this friend
+      const filesSet = await this.getFirstDegreeFiles(friend.file);
+
+      // check if any of the linked files already exists in cache for each of the friends
+      // Targets would be any of the parents or children or siblings of main node.
+      for (const relatedFile of filesSet) {
+
+        if (relatedFile.path === friend.file.path) continue; // skip friend itself
+        
+        const relatedNote = this.noteCache.get(relatedFile.path);
+        if (relatedNote && relatedNote.used) { // only notes that exists in view already are relevant 
+        
+          const relation = this.findRelation(friend, relatedNote);
+          // Koble nodene sammen i de fysiske portene (upperGate, lowerGate, etc.)
+          switch (relation) {
+            case 'child':
+              friend.lowerGate.connections.push(relatedNote);
+              relatedNote.upperGate.connections.push(friend);
+              break;
+            
+            case 'parent':        
+              friend.upperGate.connections.push(relatedNote);
+              relatedNote.lowerGate.connections.push(friend);
+              break;
+            
+            case 'friend':
+              if (relatedNote.basename === centerNote.basename) break;
+              friend.friendGate.connections.push(relatedNote);
+              relatedNote.friendGate.connections.push(friend);
+              break;
+            
+            case 'undefined':
+            default:
+              break;
+          }
+        }
+      }
+    }
+  } 
+
+  
 
   /**
    * Returns a unique, sorted set of all linked + backlinked note properties

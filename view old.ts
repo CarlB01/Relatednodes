@@ -1,7 +1,7 @@
 import RelatednotesPlugin, { RELATED_NOTES_VIEW_TYPE, relatednodesID } from './main.js';
 import { HoverPopover, TFile, WorkspaceLeaf, HoverParent, MarkdownView, FileView, Platform, ItemView} from 'obsidian';
-import { RelatedData} from './data.js';
-import { AreaManager } from './AreaManager.js';
+import { RelatedData} from './src/data.js';
+import { AreaManager } from './src/AreaManager.js';
 
 export class RelatednotesView extends ItemView implements HoverParent {
 
@@ -49,11 +49,48 @@ export class RelatednotesView extends ItemView implements HoverParent {
     // Planlegg en ny, frisk tegning synkronisert med skjermens oppdatering (60Hz)
     this.animationFrameId = requestAnimationFrame(() => {
 
-      // check heights of lef/right areas - make upper/lower yield
-      this.areaManager.yieldIfLeftTall();
-      this.areaManager.yieldIfRightTall();
+      const viewContainer = this.containerEl.querySelector('.related-view-container') || this.containerEl;
 
-      // Draw new lines based on recent coords.
+      // ==========================================================================
+        // ASYMMETRISK KOLLISJONS-FYSIKK FOR VENSTRE SIDE (JavaScript-styrt)
+        // ==========================================================================
+        const leftArea = viewContainer.querySelector('.related-left-area') as HTMLElement;
+        const centerArea = viewContainer.querySelector('.related-center-area') as HTMLElement;
+
+        if (leftArea && centerArea) {
+            const centerRect = centerArea.getBoundingClientRect();
+            const containerRect = viewContainer.getBoundingClientRect();
+
+            // 1. Finn den absolutte bunn-veggen (bunnkanten av senternotatet)
+            // Siden vi vil at venstre side ALDRI skal presses lavere enn dette, er dette vårt faste nullpunkt.
+            const spaceToTop = centerRect.bottom - containerRect.top;
+
+            // 2. Sjekk den EKTE naturlige innholdshøyden til venstre boks (scrollHeight)
+            const leftContentHeight = leftArea.scrollHeight;
+            const centerHeight = centerRect.height;
+
+            if (leftContentHeight > centerHeight) {
+                // Hvis listen blir høyere enn senternotatet:
+                // Tving den ut av grid-stivheten ved å gjøre den absolutt inni sin kolonne
+                leftArea.style.position = 'absolute';
+                leftArea.style.bottom = `${containerRect.bottom - centerRect.bottom + 5}px`; // Lås bunnen 5px over lower-area
+                leftArea.style.top = 'auto'; // La toppen være helt fri til å klatre oppover
+                
+                // Sett makshøyden slik at den stopper nøyaktig når den treffer toppen av vinduet!
+                leftArea.style.maxHeight = `${spaceToTop - 20}px`; 
+            } else {
+                // Hvis den har få elementer: La den falle tilbake til ren CSS-sentrering i rad 3
+                leftArea.style.position = '';
+                leftArea.style.bottom = '';
+                leftArea.style.top = '';
+                leftArea.style.maxHeight = '45vh'; // Standard trygg default
+            }
+        }
+
+      // 1. Gjør det automatiske Yield-byttet i JavaScript (data-right-tall)
+      const rightWrapper = viewContainer.querySelector('.related-right-area .related-columns-wrapper') as HTMLElement;
+
+      // 2. Tegn linjene på nytt basert på de ferskeste drag-koordinatene!
       if (this.related?.centerNote) {
         this.areaManager.drawAllGraphLinks(this.related.centerNote);
       }
@@ -61,6 +98,9 @@ export class RelatednotesView extends ItemView implements HoverParent {
       this.animationFrameId = null;
     });
   }
+  // #endregion
+
+  // #region ACTIONS
   
   /**
    * Helper function.
@@ -293,9 +333,12 @@ export class RelatednotesView extends ItemView implements HoverParent {
    * onDataUpdated is called by Obsidian whenever there is a configuration
    * or data change in the vault which may affect your view.
    */
-  public onDataUpdated(): void {    
-    this.areaManager.renderGraph();
-    this.requestRedraw()
+  public onDataUpdated(): void {
+    
+    console.log('onDataUpdated', this.related.centerNote?.basename)
+    
+    this.areaManager.updateGraph();
+
   }
 
   private onActiveLeafChanged(leaf: WorkspaceLeaf | null) {
@@ -339,7 +382,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
         // Fyr av Obsidians offisielle Page Preview-event
         this.app.workspace.trigger('hover-link', {
           event: event,
-          source: "rv-nodes-view", // ID for din plugin-visning
+          source: "related-nodes-view", // ID for din plugin-visning
           targetEl: targetBox,
           linktext: linktext,
           sourcePath: sourcePath || linktext,
@@ -355,7 +398,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
     const plus = '+';
 
     const containerDiv = target.parentElement?.parentElement?.parentElement;
-    const divs = containerDiv?.findAll('.rv-linkDiv');
+    const divs = containerDiv?.findAll('.related-linkDiv');
     const textParts = target.textContent.split(" ");
 
     if (textParts[1] == plus) {
@@ -590,7 +633,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
   }
 
   private setupPlusMinusBtnHandler() {
-    this.contentEl.on("click", ".rv-plusminus", (event, target) => {
+    this.contentEl.on("click", ".related-plusminus", (event, target) => {
       event.preventDefault();
       if (!target || !(target instanceof HTMLElement)) return;
 

@@ -3,23 +3,28 @@ import { NoteClass } from "./NoteClass.js";
 import { Platform, Point } from "obsidian";
 import { DrawingUtils } from "./DrawingUtils.js";
 import { DOMUtils } from "./DOMUtils.js";
-import { GateProperties } from "./GateClass.js";
+import { Direction, GateProperties } from "./GateClass.js";
 
 export class AreaManager {
 
-  private readonly RELATED_VIEW_CONTAINER = 'related-view-container';
-  private readonly svgLayerDescr = 'related-svg-layer';
+  private readonly RELATED_VIEW_CONTAINER = 'rv-container';
+  private readonly svgLayerDescr = 'rv-svg-layer';
   
-  private readonly centerAreaDescr = 'related-center-area';
-  private readonly leftAreaDescr = 'related-left-area';
-  private readonly rightAreaDescr = 'related-right-area';
-  private readonly topAreaDescr = 'related-upper-area';
-  private readonly bottomAreaDescr = 'related-lower-area';
+  private readonly centerAreaDescr = 'rv-center-area';
+  private readonly leftAreaDescr = 'rv-left-area';
+  private readonly rightAreaDescr = 'rv-right-area';
+  private readonly topAreaDescr = 'rv-upper-area';
+  private readonly bottomAreaDescr = 'rv-lower-area';
   
-  private readonly areaCollectionDescr = 'related-area-collections';
-  private readonly colWrapDescr = 'related-columns-wrapper';
+  private readonly areaCollectionDescr = 'rv-area-collections';
+  private readonly colWrapDescr = 'rv-columns-wrapper';
+  private readonly leftWrapDescr = `.${this.leftAreaDescr} .${this.colWrapDescr}`;
+  private readonly rightWrapDescr = `.${this.rightAreaDescr} .${this.colWrapDescr}`;
 
-  private readonly groupDivDescr = 'related-groups';
+  private readonly groupDivDescr = 'rv-groups';
+
+  private readonly leftTallDescr = 'data-left-tall';
+  private readonly rightTallDescr = 'data-right-tall';
   
   containerEl: HTMLElement;
   backContainerSVG!: SVGSVGElement;
@@ -55,7 +60,48 @@ export class AreaManager {
     
     this.backContainerSVG = el.createSvg("svg", this.svgLayerDescr);
   }
+
+  /**
+   * JS update to CSS if (data-left-tall)
+   * Is called after graph is updated but before lines are drawn.
+   * Makes upper area yield left upper corner to left area.
+   */
+  yieldIfLeftTall() {
+    const vc = this.containerEl;
+    const leftWrapper = vc.querySelector(this.leftWrapDescr) as HTMLElement;
+    if (!leftWrapper) return;
+    
+    const currentValue = vc.getAttribute(this.leftTallDescr);
+    const isLeftTall = leftWrapper.scrollHeight > this.center.offsetHeight;
+    const newValue = isLeftTall ? "true" : "false";
+
+    if (currentValue !== newValue) {
+        vc.setAttribute('data-left-tall', newValue);
+    }
+  }
+
+  /**
+   * JS update to CSS if (data-right-tall)
+   * As above - Makes lower area yield right lower corner to right area.
+   */
+  yieldIfRightTall() {
+    const vc = this.containerEl;
+    const rightWrapper = vc.querySelector(this.rightWrapDescr) as HTMLElement;
+    if (!rightWrapper) return;
+    
+    const currentValue = vc.getAttribute(this.rightTallDescr);
+    const isRightTall = rightWrapper.scrollHeight > (this.center.offsetHeight + this.upper.offsetHeight);
+    const newValue = isRightTall ? "true" : "false";
+
+    if (currentValue !== newValue) {
+      vc.setAttribute('data-right-tall', newValue);
+    }
+  }
   
+  /**
+   * Check how much backContainerSVG is off related to future container measures.
+   * @returns amount of pixels the drawing routine must adjust coords
+   */
   private offBy(): Point | null{
     const isMobile = Platform.isMobile;
     
@@ -84,15 +130,6 @@ export class AreaManager {
     return { x: x, y: y };
   }
 
-  updateGraph() {
-    const centerNote = this.related.centerNote;
-    console.log('updateGraph', centerNote?.basename)
-    
-    //this.resetScaleFactor();
-    this.renderGraph();
-    this.drawAllGraphLinks(centerNote);
-  }
-
 /*
   allConnect() {
     
@@ -112,7 +149,7 @@ export class AreaManager {
     this.updateGraphLines()
   };
 */
-  private renderGraph() {
+  renderGraph() {
     let centerNote = this.related.centerNote;
     if (!centerNote) return;
 
@@ -122,7 +159,8 @@ export class AreaManager {
 
     const viewContainer = this.containerEl;
     if (viewContainer) {
-        viewContainer.setAttribute('data-right-tall', 'false');
+        viewContainer.setAttribute(this.rightTallDescr, 'false');
+        viewContainer.setAttribute(this.leftTallDescr, 'false');
     }
 
     // 0. Center
@@ -131,8 +169,7 @@ export class AreaManager {
     // 1. Upper (Parents)
     const sortedParents = related.getSortedNotesForQuadrant(upperGate.connections, false);
     this.renderQuadrant(upper, [sortedParents]);
-    console.log('render parents', sortedParents.length)
-
+    
     // 2. Lower (Children + Runde 1 Undefined)
     const allLowerConnections = lowerGate.connections;    
     const childrenOnly = related.getSortedNotesForQuadrant(
@@ -221,58 +258,32 @@ export class AreaManager {
     for (const link of links.values()) {
         link.used = false; 
     }
-
+    
     // HJELPEFUNKSJON: Sjekker om linjen i det hele tatt kan tegnes før vi prøver
     const canDraw = (from: GateProperties, to: GateProperties) => {
         // Begge portene MÅ eksistere, og begge MÅ ha en sirkel tilstede i DOM-en
         return from && to && from.svg && to.svg;
     };
 
-    // 2. TEGNE-FASE: Gå gjennom alle de fire relasjonsstrømmene
-
-    // A. Foreldre-linjer (Fra Center til Parents)
-    for (const parent of centerNote.upperGate.connections) {
-      if (canDraw(centerNote.upperGate, parent.lowerGate)) {
-        // Gjenbruker eller oppretter linjen, og markerer den som used = true internt
-        DrawingUtils.drawLink(centerNote.upperGate, parent.lowerGate, links, offBy, canvas);
+    // HELPER: Decide type of Gate to return
+    const theOther = (dir: Direction, other: NoteClass) => {
+      switch (dir) {
+        case 'down': return other.upperGate;
+        case 'up': return other.lowerGate;
+        default: return other.friendGate;
       }
     }
 
-    // B. Barn-linjer (Fra Center til Children/Undefined fra runde 1)
-    for (const child of centerNote.lowerGate.connections) {
-      if (canDraw(centerNote.lowerGate, child.upperGate)) {
-        DrawingUtils.drawLink(centerNote.lowerGate, child.upperGate, links, offBy, canvas);
+    // 2. TEGNE-FASE
+    for (const gate of this.related.allGates) {
+      for (const note of gate.connections) {
+        const otherGate = theOther(gate.direction, note);
+        if (canDraw(gate, otherGate)) {
+          // Gjenbruker eller oppretter linjen, og markerer den som used = true internt  
+          DrawingUtils.drawLink(gate, otherGate, links, offBy, canvas);
+        }  
       }
-    }
-
-    // C. Venne-linjer (Fra Center til Friends - asymmetrisk koblet)
-    for (const friend of centerNote.friendGate.connections) {
-      if (canDraw(centerNote.friendGate, friend.friendGate)) {
-        DrawingUtils.drawLink(centerNote.friendGate, friend.friendGate, links, offBy, canvas);
-      }
-    }
-
-    // D. Søsken-linjer (Går fra Parent til Sibling, ikke fra Center!)
-    const parents = centerNote.upperGate.connections;
-    for (const sibling of centerNote.siblings) {
-        // Finn hvilken forelder som eier dette søskenet basert på datagrunnlaget
-        const sharedParent = parents.find(p => 
-            p.lowerGate.connections.some(c => c.basename === sibling.basename)
-        );
-
-        if (sharedParent) {
-          if (canDraw(sharedParent.lowerGate, sibling.upperGate)) {
-            // Slektsskaps-linje: Tegnes fra forelderens bunnport til søskenets toppport
-            DrawingUtils.drawLink(sharedParent.lowerGate, sibling.upperGate, links, offBy, canvas);
-          }
-        } else if (parents.length > 0 && parents[0]) {
-          if (canDraw(parents[0].lowerGate, sibling.upperGate)) {
-            // Fallback for undefined-noder i runde 2: Koble til første tilgjengelige forelder
-            DrawingUtils.drawLink(parents[0].lowerGate, sibling.upperGate, links, offBy, canvas);
-          }
-        }
-    }
-
+    }  
     // 3. OPPRYDDINGS-FASE: Slett alle linjer i cachen som ikke ble gjenbrukt i denne runden
     for (const [key, link] of this.linkCache.entries()) {
         if (!link.used) {
