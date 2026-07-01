@@ -1,12 +1,9 @@
 import { Point } from "obsidian";
 import { GateProperties } from "./GateClass";
+import { RV_CLASSES } from "./constants";
 
 export class DrawingUtils {
   
-  static GATE_COLOR = 'var(--bases-table-header-color)';
-  static GATE_RADIUS = 2.5;
-  static FACTOR = 1;
-
   // Liten hjelpemetode for å beregne p1 minus p2
   static sub = (p1: Point, p2: Point): Point => ({ x: p1.x - p2.x, y: p1.y - p2.y });
 
@@ -69,8 +66,8 @@ export class DrawingUtils {
         pathEl = svgContainer.createSvg("path", {
             attr: {
                 id: lineId,
-                stroke: this.GATE_COLOR,
-                "stroke-width": 0.5 * this.FACTOR,
+                stroke: RV_CLASSES.GATE_COLOR,
+                "stroke-width": 0.5 * RV_CLASSES.FACTOR,
                 fill: "none"
             }
         });

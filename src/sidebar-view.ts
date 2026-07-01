@@ -1,6 +1,5 @@
 import { App, ItemView, WorkspaceLeaf } from 'obsidian';
-
-export const VIEW_TYPE_RELATED_SIDEBAR_PANEL = 'related-sidebar-view';
+import { RV_CLASSES } from './constants';
 
 export class SidebarView extends ItemView {
     constructor(leaf: WorkspaceLeaf, app: App) {
@@ -9,7 +8,7 @@ export class SidebarView extends ItemView {
     }
 
     getViewType() {
-        return VIEW_TYPE_RELATED_SIDEBAR_PANEL;
+        return RV_CLASSES.RELATED_SIDEBAR_PANEL_TYPE;
     }
 
     getDisplayText() {

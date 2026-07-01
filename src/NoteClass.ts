@@ -1,8 +1,8 @@
 import { CachedMetadata, parseFrontMatterAliases, parseFrontMatterStringArray, parseFrontMatterTags, TFile } from "obsidian";
 import { GateProperties } from "./GateClass";
 import { StringUtils } from "./StringUtils";
-import { DOMUtils } from "./DOMUtils";
-import { superChargedLinkAttribs } from "./main";
+import { BaitClass } from "./BaitClass";
+import { RV_CLASSES } from "./constants";
 
 /**
  * UNDEFINED: fungerer i praksis som en elastisk "sekkerelasjon" 
@@ -14,104 +14,90 @@ import { superChargedLinkAttribs } from "./main";
  *     -> Plasseres til høyre (siblingGate) sammen med søsken (siblings).
  */
 export type Relation = "center" | "parent" | "child" | "friend"| "sibling" | "undefined" | "ignored";
-type Notetype = "file" | "other";
 
-export class NoteClass {
-  private readonly linkDivDescr = 'rv-linkDiv';
-  
-  // characteristics
-
-  used: boolean = false; // flag for re-use
-
+export class NoteClass {  
   connectionCount: number = 0;
   sharedLinksWithStart: number = 0;
-  degree: 'zero' | 'first' | 'second' = 'zero';
-  type: Notetype = 'file';
-	relation: Relation = 'undefined';
-  displayText: string;
 	info: string = "";
-  
-  // link to created element
-  div?: HTMLElement;
-  
-  // file properties
-  file: TFile;
-  filename: string;
+  path: string;
   basename: string;
-  aliases: string[];
-  tags: string[];
-  properties: Record<string, any> = {};
-	
-  // connections
-	ignored: NoteClass[] = [];
-  siblings: NoteClass[] = []; // En ren liste for ruting til høyre kvadrant
-	upperGate: GateProperties = new GateProperties(this, 'up');
-	lowerGate: GateProperties = new GateProperties(this, 'down');
-	friendGate: GateProperties = new GateProperties(this,'left');
+  displayText: string;
+  readonly aliases: string[];
+  readonly tags: string[]; // Ferdig vasket i lowercase for lynrask matching!  
+  readonly isInitiallyIgnored: boolean
+  readonly rawFrontmatter: any;
   
-  constructor(useAlias: boolean, file: TFile, cached: CachedMetadata) {
+  isUsed: boolean = false; // flag for re-use
 
-    const frontmatter = cached.frontmatter ?? {};
+  // Stemplene som bestemmer ruting og kolleksjoner
+	relation: Relation = "undefined";
+  discoverySource: "frontmatter-kriterium" | "frontmatter-udefinert" | "bodytext" = "bodytext";
+  assignedArea: "upper" | "lower" | "left" | "right" | "center" | "ignored" = "lower";
 
-    this.file = file;
-    this.filename = file.name;
-    this.basename = file.basename;
-    this.properties = frontmatter,
-    this.aliases = parseFrontMatterAliases(frontmatter) ?? [],
-    this.tags = parseFrontMatterTags(frontmatter) ?? [],
-    this.displayText = useAlias
-      ? this.aliases?.[0] ?? this.basename
-      : this.basename
+  // connections
+  crossingBaits = new Set<BaitClass>();
+  
+  // De 3 faste portene
+  upperGate: GateProperties;
+  lowerGate: GateProperties;
+  friendGate: GateProperties;
+  
+  div: HTMLElement | null = null;
+  // De fysiske portene på selve Note-DIV-en
+
+  // Relations-sets
+  relations = {
+    parents: new Set<NoteClass>(),
+    children: new Set<NoteClass>(),
+    friends: new Set<NoteClass>(),
+    siblings: new Set<NoteClass>(),
+    ignored: new Set<NoteClass>()
+  };
+
+  constructor(
+    path: string, 
+    basename: string, 
+    displayText: string, 
+    aliases: string[], 
+    tags: string[], 
+    isIgnored: boolean,
+    frontmatter: any
+  ) {
+    this.path = path;
+    this.basename = basename;
+    this.displayText = displayText;
+    this.aliases = aliases;
+    this.tags = tags;
+    this.isInitiallyIgnored = isIgnored;
+    this.rawFrontmatter = frontmatter;
+
+    // 'friend' starter som 'left' som standard, men overstyres i render() basert på kvadrant
+    this.upperGate  = new GateProperties(this, 'up');
+    this.lowerGate  = new GateProperties(this, 'down');
+    this.friendGate = new GateProperties(this, 'left');
   }
 
-  /** Determine if a link to another note exists in its frontmatter.
-   * @param otherNote 
-   * @param propertiesToLookFor The user defined properties of interest.
-   * @returns true if a link to otherNote is found in own properties.
-   */
-  linksTo(otherNote: NoteClass, propertiesToLookFor: string[]): boolean {  
-    if (!propertiesToLookFor?.length || !otherNote) return false;
+  public static createFromObsidian(
+    file: TFile, 
+    cache: CachedMetadata, 
+    useAlias: boolean,
+    optIgnoreFragments: string[],
+    optIgnoreTags: string[]
+  ): NoteClass {
+    const path = file.path;
+    const basename = file.basename;
+    const frontmatter = cache.frontmatter || null;
 
-    const targetName = otherNote.basename;
+    const nativeAliases = parseFrontMatterAliases(frontmatter) ?? [];
+    const nativeTags = parseFrontMatterTags(frontmatter) ?? [];
+    const cleanLowercaseTags = nativeTags.map(tag => tag.trim().toLowerCase());
 
-    for (const attrib of propertiesToLookFor) {
-        if (!attrib) continue; 
+    const displayText = useAlias ? (nativeAliases?.[0] ?? basename) : basename;
 
-        // Hent arrayen (returnerer [] hvis egenskapen ikke finnes)
-        const values = parseFrontMatterStringArray(this.properties, attrib) ?? [];
-        
-        // Hvis vi finner en kobling, avbryter vi løkken umiddelbart
-        if (values.length > 0 && this.foundInProperty(targetName, values)) {
-            return true; 
-        }
-    }
-    return false;
-  }
+    const isIgnored = StringUtils.foundPart(path, optIgnoreFragments) || 
+                      StringUtils.hasAnyOf(cleanLowercaseTags, optIgnoreTags);
 
-  /** Checks if a file link exists in this property
-   * (handles wikilinks, pipes, commas, etc.)
-   * @param itemToFind 
-   * @param propertyToSearch 
-   * @returns true if the given property contains an itemString
-   */
-  private foundInProperty(itemToFind: string, propertyToSearch: unknown[] | unknown): boolean {
-    if (propertyToSearch == null) return false;
-
-    const normalizedStringArray = StringUtils.normalizeToStringArray(propertyToSearch);
-    
-    // Fast early exit - cheap string check
-    if (!normalizedStringArray.some(v => v.includes(itemToFind))) {
-        return false;
-    }
-
-    // More precise check after cleaning wikilinks
-    return normalizedStringArray
-        .map(StringUtils.cleanLink)
-        .includes(itemToFind);
-  }
-
-  private uniqueAnchor(basename: string): string {
-    return `--${basename.replace(/[^a-zA-Z0-9]/g, '').trim()}`;
+    return new NoteClass(path, basename, displayText, nativeAliases, cleanLowercaseTags, isIgnored, frontmatter);
   }
 
   /**
@@ -124,27 +110,36 @@ export class NoteClass {
       
     // 1. REUSE or CREATE?
     if (div) {
-      // REUSE: Tøm den for gamle knapper/tekst slik at vi kan bygge innholdet friskt
       div.innerHTML = "";
-      div.className = this.linkDivDescr;
+      div.className = "item"; //  this.linkDivDescr;
     } else {
-      // CREATE: Hvis den ikke finnes i cachen i det hele tatt, oppretter vi den
-      div = createDiv({ cls: this.linkDivDescr});
+      div = createDiv({ cls: "item"}); // this.linkDivDescr});
       this.div = div;
     }
 
-    // 2. Bygg a.link
-    const el = createEl('a', { 
+    // 2. BUILD INSIDE
+    const linkWrapper = createDiv({ cls: RV_CLASSES.LINK });
+
+    const nativeLink = createEl('a', { 
         text: this.displayText,
-        cls: `focusable-note-link internal-link relatednotes-text ${superChargedLinkAttribs}`,
+        cls: `${RV_CLASSES.A} ${RV_CLASSES.SUPERCHARGED_ATTRIB}`,
         attr: {
-            'data-href': this.filename,
+            'data-href': this.path,
             'draggable': 'true',
             'data-link-tags': this.tags ? this.tags.join(' ') : "",
-            'data-link-path': this.filename
+            'data-link-path': this.path
         }
     });
     
+    linkWrapper.appendChild(nativeLink);
+
+    // 3. FRIENDGATE DIRECTION
+    if (this.assignedArea === "left") {
+      this.friendGate.direction = 'right'; // Vennen peker inn mot høyre (mot center)
+    } else {
+      this.friendGate.direction = 'left';  // Topp, bunn og senter peker mot venstre flanke standard
+    }
+
     // 3. Info-knapp logikk
     /*const ignored = this.ignored?.length ?? 0;
     if (ignored > 0) {
@@ -156,27 +151,29 @@ export class NoteClass {
     
     */
 
-    // 3. GENERER ALLE PORTER (Alltid klar for fremtidige koblinger!)
-    this.upperGate.svg = this.upperGate.render();
-    this.lowerGate.svg = this.lowerGate.render();
-    this.friendGate.svg = this.friendGate.render();
+    // 4. GENERER 3 PORTER
+    const topSVG    = this.upperGate.render();
+    const bottomSVG = this.lowerGate.render();
+    const friendSVG = this.friendGate.render();
 
-    // 4. STRUKTURER INNSIDEN AV FLEXBOXEN
-    // Øvre og nedre port har position: absolute, så rekkefølgen deres i appendChild 
-    // betyr ingenting for layouten. Vi legger dem inn først som et bunnlag.
-    div.appendChild(this.upperGate.svg);
-    div.appendChild(this.lowerGate.svg);
+    this.upperGate.svg  = topSVG;
+    this.lowerGate.svg  = bottomSVG;
+    this.friendGate.svg = friendSVG;
 
-    const friendSVG = this.friendGate.svg;
+    // 5. STRUKTURER INNSIDEN (FLEXBOX-REKKEFØLGE)
+    // De to absolutt posisjonerte portene legges i bunnen
+    div.appendChild(topSVG);
+    div.appendChild(bottomSVG);
+
     const isLeftFriend = this.friendGate.direction === 'left'
     
     if (isLeftFriend) {
       // Venstre side: [ FriendGate ] [ Tekst-lenke ]
       div.appendChild(friendSVG); 
-      div.appendChild(el);
+      div.appendChild(linkWrapper);
     } else {
       // Høyre side (og topp/bunn): [ Tekst-lenke ] [ FriendGate ]
-      div.appendChild(el);
+      div.appendChild(linkWrapper);
       div.appendChild(friendSVG);
     }
 

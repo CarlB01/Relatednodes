@@ -1,81 +1,29 @@
-import RelatednotesPlugin, { RELATED_NOTES_VIEW_TYPE, relatednodesID } from './main.js';
-import { HoverPopover, TFile, WorkspaceLeaf, HoverParent, MarkdownView, FileView, Platform, ItemView} from 'obsidian';
-import { RelatedData} from './data.js';
+import RelatednotesPlugin, { relatednodesID } from './main.js';
+import { HoverPopover, TFile, WorkspaceLeaf, HoverParent, MarkdownView, FileView, Platform, ItemView, TAbstractFile, App} from 'obsidian';
 import { AreaManager } from './AreaManager.js';
+import { RV_CLASSES } from './constants.js';
 
 export class RelatednotesView extends ItemView implements HoverParent {
 
-  readonly type = relatednodesID;
-  private readonly displayWelcomeText = 'to view related notes, please open one of your notes first';
-      
-  private related: RelatedData;
-  private areaManager: AreaManager;
+  readonly type = relatednodesID;      
   private plugin: RelatednotesPlugin;
-  private mostRecentActiveFile: TFile | null = null;
-    
+  app: App;
+  
+  public areaManager!: AreaManager;
+  
   hoverPopover: HoverPopover | null = null;
-  private animationFrameId: number | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: RelatednotesPlugin) {
     super(leaf);
     this.plugin = plugin;
-    
-    // handling of data
-    this.related = new RelatedData(this.app, this.plugin, () => this.onDataUpdated());
-
-    // handling of graph layout    
-    this.areaManager = new AreaManager(this.related, this.contentEl);
+    this.app = plugin.app;
   }
 
-  
   // #region SUPPORT & FUNCTIONS
   
-  getViewType(): string { return RELATED_NOTES_VIEW_TYPE }
+  getViewType(): string { return RV_CLASSES.RELATED_NOTES_VIEW_TYPE }
   getDisplayText(): string { return "Related Notes" }
-  getIcon(): string { return "lucide-apple" }
-
-  /**
-   * Den oppdaterte dørvakten som sikrer silkemyk linjeoppdatering 
-   * BÅDE under scrolling og når brukeren drar i skillevegger!
-   */
-  public requestRedraw() {
-    // Hvis det allerede er planlagt en tegning i denne framen, 
-    // avbryter vi det FORRIGE varselet slik at vi kan planlegge et nytt 
-    // med de aller nyeste piksel-målene fra drag-bevegelsen!
-    if (this.animationFrameId !== null) {
-        cancelAnimationFrame(this.animationFrameId);
-    }
-
-    // Planlegg en ny, frisk tegning synkronisert med skjermens oppdatering (60Hz)
-    this.animationFrameId = requestAnimationFrame(() => {
-
-      // check heights of lef/right areas - make upper/lower yield
-      this.areaManager.yieldIfLeftTall();
-      this.areaManager.yieldIfRightTall();
-
-      // Draw new lines based on recent coords.
-      if (this.related?.centerNote) {
-        this.areaManager.drawAllGraphLinks(this.related.centerNote);
-      }
-      // Nullstill ID-en så neste frame kan kjøre fritt
-      this.animationFrameId = null;
-    });
-  }
   
-  /**
-   * Helper function.
-   * @param leaf 
-   * @returns true if leaf is relatedview itself.
-   */
-  private activeSelf(leaf?: WorkspaceLeaf): boolean | null {
-    if (!leaf) return null;
-     
-    // const file = (leaf.view as MarkdownView).file;
-    // const viewType = leaf.view.getViewType(); // viewType === 'bases'
-    const element = leaf.containerEl.querySelector(`.${RELATED_NOTES_VIEW_TYPE}`);
-    if (element) return true;
-    return false
-  }
 
   /**
    * Robust file resolver with multiple fallback strategies.
@@ -137,9 +85,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
     let found: WorkspaceLeaf | null = null;
 
     this.app.workspace.iterateAllLeaves((leaf) => {
-      // 1. Ensure leaf.view is loaded and is an instance of FileView
       if (leaf.view instanceof FileView) {
-        // 2. TypeScript now safely recognizes the .file property
         if (leaf.view.file?.path === targetFile.path) {
           found = leaf;
         }
@@ -153,20 +99,25 @@ export class RelatednotesView extends ItemView implements HoverParent {
    * @param filename 
    * @returns 
    */
-  async openLinkInAdjacentPane(filename: string) {
+  private async openLinkInAdjacentPane(filename: string) {
     const file = this.getFile(filename);
     if (!file) return;
 
-    if (!this.mostRecentActiveFile) return;
-
+    // SIKRING: Sjekk om det i det hele tatt finnes en aktiv senternote i minnet
+    const centerNote = this.plugin.relatedData.centerNote;
+    if (!centerNote) return;
+    
+    // Hent den fysiske TFile-referansen til den "gamle" senternoten fra stien i minnet [dan]
+    const oldCenterFile = this.app.vault.getFileByPath(centerNote.path);
+    if (!oldCenterFile) return;
+    
     //1. target the leaf that contains "old" centered link 
-    let targetLeaf = this.findLeafWithFile(this.mostRecentActiveFile);
+    let targetLeaf = this.findLeafWithFile(oldCenterFile);
 
     //2. alternatively replace most recent view
     if (!targetLeaf) {
       const recentLeaf = this.app.workspace.getMostRecentLeaf();
-      if (recentLeaf && ['empty', 'markdown'].contains(recentLeaf.view.getViewType())
-      ){
+      if (recentLeaf && ['empty', 'markdown'].contains(recentLeaf.view.getViewType())){
         targetLeaf = recentLeaf;
       }
     }
@@ -180,24 +131,51 @@ export class RelatednotesView extends ItemView implements HoverParent {
     await targetLeaf.openFile(file);
     await this.app.workspace.revealLeaf(targetLeaf);
     this.setFocusOnSelf();    
-}
+  }
 
   private async setFocusOnSelf() {
-    
-    /*this.app.workspace.iterateAllLeaves((leaf: WorkspaceLeaf) => {
-      console.log(' - - ',leaf.getViewState().type);
-    })*/
-    const leaves = this.app.workspace.getLeavesOfType('bases'); //it was NOT relatednodesID
+    const { workspace } = this.app;
+
+    // Hent bladet basert på din GJELDENDE visnings-ID (relatednodesID) [dan]
+    // Dette sørger for at systemet finner nøyaktig din Related Notes-fane på Mac eller iPad!
+  
+    const leaves = this.app.workspace.getLeavesOfType(relatednodesID); 
     const targetLeaf = leaves[0];
+
     if (targetLeaf === undefined) return;
     
     // Bring the leaf to the foreground (and expand the sidebar if docked there)
-    await this.app.workspace.revealLeaf(targetLeaf);
+    await workspace.revealLeaf(targetLeaf);
   
     // Set the leaf as active/focused
-    this.app.workspace.setActiveLeaf(targetLeaf);
+    workspace.setActiveLeaf(targetLeaf);
   }
-  
+
+  /**
+   * Henter den markdown-filen som for øyeblikket er åpen og mest nylig aktiv på skjermen.
+   * Returnerer 'null' dersom det ikke finnes noen åpne markdown-faner.
+   */
+  private getMostRecentMarkdownFile(): TFile | null {
+    const { workspace } = this.app;
+    const mdLeaves = workspace.getLeavesOfType('markdown');
+    
+    if (mdLeaves.length === 0) return null;
+
+    // Sorter bladene etter hvelvets interne tidsstempel (activeTime)
+    mdLeaves.sort((a, b) => {
+      const timeA = (a as any).activeTime ?? 0;
+      const timeB = (b as any).activeTime ?? 0;
+      return timeB - timeA;
+    });
+
+    const mostRecentLeaf = mdLeaves[0];
+    if (mostRecentLeaf && mostRecentLeaf.view instanceof MarkdownView) {
+      return mostRecentLeaf.view.file; // Returnerer filen, eller null hvis viewet mangler fil
+    }
+
+    return null;
+  }
+
   private displayWelcome() {
     const containerEl = this.areaManager.containerEl;
     const center = this.areaManager.center;
@@ -205,81 +183,37 @@ export class RelatednotesView extends ItemView implements HoverParent {
     console.log('displayed welcome');
   }
 
-  private revealSomeLeafAndFile(): [TFile | null, WorkspaceLeaf | null] {
-    const { workspace } = this.app;
-
-    // 0. Get the currently active file
-    const currentFile = this.app.workspace.getActiveFile();
-    if (currentFile) return [currentFile, null];
-  
-    // 1. Get the currently active view if it is a Markdown file
-    const activeView = workspace.getActiveViewOfType(MarkdownView);
-    
-    if (activeView && activeView.file) {
-        return [activeView.file, activeView.leaf];
-    }
-
-    // 2. Fallback: If focus is on a sidebar/plugin, find the most recently active markdown leaf
-    const mdLeaves = workspace.getLeavesOfType('markdown');
-    if (mdLeaves.length > 0) {
-        const fallbackLeaf = mdLeaves[0]; // Henter det første panelet
-        
-        // Sjekk eksplisitt at fallbackLeaf og view eksisterer for å tilfredsstille TypeScript
-        if (fallbackLeaf && fallbackLeaf.view instanceof MarkdownView) {
-            const leafFile = fallbackLeaf.view.file;
-            if (leafFile) {
-                return [leafFile, fallbackLeaf];
-            }
-        }
-    }
-
-    // 3. Last resort fallback: No markdown leaves are open at all
-    const lastOpenedFilepaths = workspace.getLastOpenFiles();
-    const firstPath = lastOpenedFilepaths[0]; // Dette blir string | undefined
-
-    if (firstPath) {
-        // Nå vet TypeScript at firstPath er en garantert string
-        const file = this.app.vault.getFileByPath(firstPath);
-        if (file) {
-            return [file, null];
-        }
-    }
-
-    return [null, null];
-  }
-
   // #endregion
 
   // #region ACTION RECEIVERS
 
    async onOpen() {
-
-    // 1. set up areas
     this.contentEl.empty();
-    this.areaManager.initiate()
+    this.areaManager = new AreaManager(this.plugin.relatedData, this.contentEl, this.plugin);
+    this.areaManager.initiate();
 
-    // 2. set up various monitors
-    this.registerFileOpenListener()
+    // 2. set up various monitors:
+    // registerHoverLinkSource - the obsidian way.
+    // registerDomEvent        - the obsidian way - not 'addEventListener'
+    // (unregisters automatically)
+  
     this.registerWorkspaceLayoutChanges();
-    this.registerContainerScrolled();
-    this.registerRightAreaScrolled();
-    this.registerLowerAreaScrolled();
     this.registerHoverLinkSource();
     this.setupMobileSafeguards();
     this.setupVisibilitySafeguards();
-    
     this.setupInternalLinkHandler();
     this.setupPlusMinusBtnHandler();
+  
     
-    // 3. Fetch a file - or display welcome
-    requestAnimationFrame(() => { //  When browser CSS is ready
-      const [initialFile, initialLeaf] = this.revealSomeLeafAndFile();
+    // 3. ÅPNINGSSEKVENS: Kjør når nettleseren er klar
+    requestAnimationFrame(async () => {
+      // Hent filen som faktisk er åpen på skjermen akkurat nå
+      const activeFile = this.getMostRecentMarkdownFile();
 
-      if (initialFile) { 
-        this.mostRecentActiveFile = initialFile;
-        this.related.update(initialFile);
+      if (activeFile) { 
+        await this.plugin.relatedData.update(activeFile);
+        this.areaManager.renderGraph();
       } else {
-        this.onActiveLeafChanged(initialLeaf);
         this.displayWelcome();
       }
     });
@@ -289,27 +223,17 @@ export class RelatednotesView extends ItemView implements HoverParent {
   async onClose() {
   }
 
-  /**
-   * onDataUpdated is called by Obsidian whenever there is a configuration
-   * or data change in the vault which may affect your view.
-   */
-  public onDataUpdated(): void {    
-    this.areaManager.renderGraph();
-    this.requestRedraw()
-  }
-
   private onActiveLeafChanged(leaf: WorkspaceLeaf | null) {
-
-    console.log('onActiveLeafChanged', this.related.centerNote?.basename)
-    
     // 2. SAFEGUARD: Catch when focus shoots back and forth after selecting a file
     if (leaf && leaf.view instanceof MarkdownView) {
+      
       // If our panel happens to still be visible, queue a safe redraw
       if (this.areaManager.containerEl.isShown()) {
         setTimeout(() => {
-          this.onVisibilityChange();
-        }, 150);
+          this.areaManager.requestRedraw();
+        }, 150); // 150ms timeout gir Obsidian tid til å fullføre animasjonen [dan]
       }
+      // Sørg for at notat-bladet forblir synlig
       this.app.workspace.revealLeaf(leaf);
     }
   }
@@ -320,174 +244,96 @@ export class RelatednotesView extends ItemView implements HoverParent {
    * @param internalLink 
    */
   private onInternalLinkClicked(internalLink: string): void {
-
     const selectedFile = this.getFile(internalLink);
     
     if (selectedFile) {
-      console.log('onActiveLeafChanged', selectedFile.basename)
-      this.mostRecentActiveFile = selectedFile;
-      this.related.update(selectedFile)
+      this.plugin.relatedData.update(selectedFile)
       this.openLinkInAdjacentPane(internalLink);
     }
   }
 
-  private onMouseOverLink(targetBox: HTMLElement) {
-    const linktext = targetBox.getAttribute("data-basename");
-      const sourcePath = targetBox.getAttribute("data-path");
+  private onMouseOverLink(event: MouseEvent, targetBox: HTMLElement) {
+    const linktext = targetBox.getAttribute("data-link-path") || targetBox.getAttribute("data-href");
+    const sourcePath = targetBox.getAttribute("data-link-path");
 
-      if (linktext) {
-        // Fyr av Obsidians offisielle Page Preview-event
-        this.app.workspace.trigger('hover-link', {
-          event: event,
-          source: "rv-nodes-view", // ID for din plugin-visning
-          targetEl: targetBox,
-          linktext: linktext,
-          sourcePath: sourcePath || linktext,
-          hoverParent: { hoverPopover: null, containerEl: this.containerEl }
-        });
-        
-        targetBox.addClass('is-hovered');
-      }
+    if (linktext) {
+      // Fyr av Obsidians offisielle Page Preview-event
+      this.app.workspace.trigger('hover-link', {
+        event: event,
+        source: relatednodesID,
+        targetEl: targetBox,
+        linktext: linktext,
+        sourcePath: sourcePath || linktext,
+        hoverParent: this
+      });
+      
+      targetBox.addClass('is-hovered');
+    }
   }
 
   private onPlusMinusBtnClicked(target: HTMLElement) {
-    const minus = '−';
-    const plus = '+';
+    
+    // 1. KORRIGERT: Finn den nærmeste tag-gruppen (.rv-groups) som denne knappen tilhører.
+    // .closest() klatrer oppover i HTML-treet til den finner riktig boks, uansett antall wrappers!
+    const groupDiv = target.closest(`.${RV_CLASSES.GROUPS}`) as HTMLElement;
+    if (!groupDiv) return;
+    
+    // 2. KORRIGERT: Hent alle de individuelle note-knappene (.item) inni denne spesifikke gruppen.
+    // Vi bruker querySelectorAll for maksimal nettleser-hastighet.
+    const items = Array.from(groupDiv.querySelectorAll('.item')) as HTMLElement[];
+    if (items.length <= 1) return; // Ingenting å skjule hvis det bare er 1 note
 
-    const containerDiv = target.parentElement?.parentElement?.parentElement;
-    const divs = containerDiv?.findAll('.rv-linkDiv');
-    const textParts = target.textContent.split(" ");
+    const textContent = target.textContent || "";
+    const textParts = textContent.split(" ");
+    const label = textParts[0] || "";
 
-    if (textParts[1] == plus) {
-      containerDiv!.classList.add('expanded');
-      divs!.slice(1).forEach(d => d.classList.remove('hidden'));
-      target.textContent = `${textParts[0]} ${minus}`;
+    // Sjekk om knappen akkurat nå viser pluss-tegnet
+    if (textParts[1] === RV_CLASSES.PLUS) {
+      // === APNE GRUPPEN (EXPAND) ===
+      groupDiv.classList.add('expanded');
+      
+      // Vis absolutt alle notene fra indeks 1 og utover (beholder den første synlig)
+      items.slice(1).forEach(item => item.classList.remove('hidden'));
+      
+      // Oppdater teksten på knappen til å vise minus-tegnet
+      target.textContent = `${label} ${RV_CLASSES.MINUS}`;
     } else {
-      containerDiv!.classList.remove('expanded');
-      divs!.slice(1).forEach(d => d.classList.add('hidden'));
-      target.textContent = `${textParts[0]} ${plus}`;
-    };
-  }
-  
-  async onExternalSettingsChange() {
-    console.log('onExternalSettingsChange', this.mostRecentActiveFile?.basename)
-    this.related.update(this.mostRecentActiveFile)
-	};
-
-  private onWorkspaceLayoutChanged() {
-    console.log('workspaceLayoutChanged', this.related.centerNote?.basename)
-    this.areaManager.drawAllGraphLinks(this.related.centerNote);
+      // === LUKK GRUPPEN (COLLAPSE) ===
+      groupDiv.classList.remove('expanded');
+      
+      // Skjul alle notene bortsett fra den aller første
+      items.slice(1).forEach(item => item.classList.add('hidden'));
+      
+      // Oppdater teksten på knappen tilbake til pluss-tegnet
+      target.textContent = `${label} ${RV_CLASSES.PLUS}`;
+    }
+    
+    // Siden boksene på skjermen akkurat endret høyde/form, MÅ vi be AreaManager 
+    // om å beregne de nye piksel-koordinatene og flytte SVG-linjene live!
+    this.areaManager.requestRedraw();
   }
 
   override onResize() {
     super.onResize();
 
-    console.log('onResize', this.related.centerNote?.basename)
-    this.requestRedraw()
-  }
-
-  private onVisibilityChange() {
-    console.log('onVisibilityChange', this.related.centerNote?.basename)
-    this.requestRedraw()
-  }
-
-  private onTransformWidthEnded() {
-    console.log('onTransformWidthEnded', this.related.centerNote?.basename)
-    this.requestRedraw()  
-  }
-
-  private onOrientationChanged() {
-    this.requestRedraw()  
-  }
-
-  private onContainerScrolled() {
-    console.log('onContainerScrolled', this.related.centerNote?.basename)
-    this.requestRedraw()  
-  }
-
-  private onRightAreaScrolled() {
-    console.log('onRightAreaScrolled', this.related.centerNote?.basename)
-    this.requestRedraw()  
+    this.areaManager.requestRedraw();
   }
 
   // #endregion
   
   // #region REGISTER & SETUP
   
-  /** Event som lytter på ALL fremtidig navigasjon
-   * 'file-open' er mer robust enn 'active-leaf-change' fordi det garanterer 
-   * at vi får et TFile-objekt med en gang brukeren bytter fane eller notat.
+  /**
+   * Lytter på strukturelle endringer i Obsidians grensesnitt (splits, draging i sidepaneler osv.)
+   * og oppdaterer linjene live basert på de splitter nye piksel-koordinatene!
    */
-  private registerFileOpenListener() {
-    this.registerEvent(
-      this.app.workspace.on('file-open', (file: TFile | null) => {
-        if (file) {
-          this.mostRecentActiveFile = file;
-          this.related.update(file);
-        }
-      })
-    );
-  }
-
   private registerWorkspaceLayoutChanges() {
-
-    // 'layout-change' fires when a structural layout shift occurs, 
-    // including: 
-    // 
-    // Opening or closing tabs/leaves (e.g., 
-    // - clicking a note, opening a new split pane, closing a sidebar tab
-    // Moving leaves around 
-    // - dragging a tab from the main workspace into the sidebar, 
-    // - re-arranging split panels
-    // Toggling view modes 
-    // - switching a note leaf from Editing view to Reading view
-    // Collapsing or expanding sidebars
-    // - hiding or exposing the file tree
     this.registerEvent(
       this.app.workspace.on('layout-change', () => {
-        this.onWorkspaceLayoutChanged()
+        // Siden koordinatene akkurat flyttet på seg, ber vi tegneren om en umiddelbar frame-oppdatering
+        this.areaManager.requestRedraw();
       })
     );
-  }
-
-  private registerContainerScrolled() {
-    // Main container scroll
-    let containerEl = this.containerEl;
-    let plugin = this.plugin;
-    
-    if (!containerEl) return;
-    
-    plugin.registerDomEvent(containerEl, 'scroll', () => {
-       this.onContainerScrolled();
-    }, { 
-      passive: true 
-    });
-
-  }
-
-  private registerRightAreaScrolled() {
-    // Main container scroll
-    let containerEl = this.containerEl;
-    let plugin = this.plugin;
-    
-    // Right Area scroll
-    plugin.registerDomEvent(this.areaManager.right, 'scroll', () => {
-      this.onRightAreaScrolled() 
-    },{ 
-      passive: true 
-    });
-  }
-
-  private registerLowerAreaScrolled() {
-    let plugin = this.plugin;
-
-    if (this.areaManager.lower) {
-      plugin.registerDomEvent(this.areaManager.lower, 'scroll', () => {
-        this.requestRedraw() 
-      },{ 
-        passive: true 
-      });
-    }
   }
   
   private registerHoverLinkSource() {
@@ -508,7 +354,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
       this.registerDomEvent(leftSplit, 'transitionend', (e: TransitionEvent) => {
         // Only trigger if the width transition finished changing the layout
         if (e.propertyName === 'transform' || e.propertyName === 'width') {
-          this.onTransformWidthEnded(); // Final clean redraw at rest
+          this.areaManager.requestRedraw(); // Final clean redraw at rest
         }
       });
     }
@@ -516,7 +362,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
     // SAFEGUARD 4: Fallback for orientation changes (turning iPhone landscape/portrait)
     this.registerDomEvent(window, 'orientationchange', () => {
       setTimeout(() => {
-          this.onOrientationChanged();
+          this.areaManager.requestRedraw();
       }, 200); // 200ms delay gives iOS time to complete the rotation layout
     });
   }
@@ -527,16 +373,18 @@ export class RelatednotesView extends ItemView implements HoverParent {
       for (let entry of entries) {
         // isIntersecting is true the exact moment the panel slides into view
         if (entry.isIntersecting) {
-          // 1. Wait for the initial layout timeout
+          
+          // Vent 150ms til iPhonens slide-in animasjon har roet seg fullstendig [dan]
           setTimeout(() => {
-            // 2. Wait until the browser thread is completely idle (finished rendering complex UI)
+            
+            // Wait until the browser thread is completely idle (finished rendering complex UI)
             if ('requestIdleCallback' in window) {
                 window.requestIdleCallback(() => {
-                  this.onVisibilityChange();
+                  this.areaManager.requestRedraw();
                 }, { timeout: 200 }); // Timeout forces execution after 200ms maximum if busy
             } else {
                 // Fallback for environments without idle callback support
-                this.onVisibilityChange();
+                this.areaManager.requestRedraw();
             }
           }, 150); 
         }
@@ -562,110 +410,104 @@ export class RelatednotesView extends ItemView implements HoverParent {
     this.contentEl.on("click", ".focusable-note-link", (event, target) => {
       event.preventDefault();
 
-      const basename = target.getAttribute("data-link-path");
-      if (basename) {
-        this.onInternalLinkClicked(basename);
+      // Henter stien (path) direkte fra attributten vi la på <a>-elementet
+      const path = target.getAttribute("data-link-path");
+      if (path) {
+        this.onInternalLinkClicked(path);
       }
     });
 
-    // 2. LINK HOVERED
-    this.contentEl.on("mouseover", ".focusable-note-link", (event) => {
-      // Check if Mouse is over a linkDiv
-      //const targetBox = (event.target as HTMLElement).closest(".focusable-note-link") as HTMLElement | null;
-      const targetBox = event.target as HTMLElement;
-      if (!targetBox) return;
+    // 2. LINK HOVERED (Vekker Obsidians offisielle Page Preview!)
+    // SIKRING: Vi legger til 'target' i parameterlisten slik at Obsidians .on() 
+    // garanterer at 'target' ALLTID er det ekte .focusable-note-link (<a>) elementet!
+    this.contentEl.on("mouseover", ".focusable-note-link", (event, target) => {
+      if (!target) return;
 
-      this.onMouseOverLink(targetBox);
-      targetBox.addClass('is-hovered');
-    });
-
-    // 3. LINK HOVER ENDED
-    this.contentEl.on("mouseout", ".focusable-note-link", (event) => {
-      const targetBox = event.target as HTMLElement;
-      if (!targetBox) return;
+      // Videresender både event (for mus-koordinater) og target (for data-href) [dan]
+      this.onMouseOverLink(event, target);
       
-      targetBox.removeClass('is-hovered');
+      // Legger til din hover-klasse for CSS-effekter
+      target.addClass('is-hovered');
     });
+
+    // 3. LINK HOVER ENDED (Fjerner popup og visuelle effekter safely)
+    this.contentEl.on("mouseout", ".focusable-note-link", (event, target) => {
+    if (target) {
+      target.removeClass('is-hovered');
+    }
+  });
 
   }
 
   private setupPlusMinusBtnHandler() {
+    // 1. EVENT: Brukeren KLIKKER på pluss/minus-knappen (Kollapser/ekspanderer gruppen)
     this.contentEl.on("click", ".rv-plusminus", (event, target) => {
       event.preventDefault();
       if (!target || !(target instanceof HTMLElement)) return;
 
       this.onPlusMinusBtnClicked(target);
     });
-    /*
-    // prepare the popup
-    const title = 'Hidden';
-    const count = group.notes.length;
-    const text = `<ul><li>click to show ${count} notes</li></ul>`;
-    const popup = createDiv(`${DOMUtils.INFO_HOVER_DESCR}`);
-    popup.innerHTML = `<p>${title}</p><p>${text}</p>`;
-    popup.style.positionAnchor = anchor;
 
+    // En felles, flyktig popup-referanse for denne fanen
+    let activePopup: HTMLElement | null = null;
 
-        //events
-    this.plugin.registerDomEvent(button, 'mouseover', (evt: MouseEvent) => {
-      containerDiv?.appendChild(popup);
+    // 2. EVENT: Brukeren HOVRER over pluss/minus-knappen (Viser popup-boble live!)
+    this.contentEl.on("mouseover", ".rv-plusminus", (event, target) => {
+      if (!target || !(target instanceof HTMLElement)) return;
+
+      // Hvis det mot formodning henger igjen en gammel popup, fjern den først
+      if (activePopup) {
+        activePopup.remove();
+        activePopup = null;
+      }
+
+      // Vi henter ut hvor mange notater denne gruppen inneholder.
+      // (Forutsetter at din DOMUtils dytter inn f.eks. button.setAttribute('data-count', group.notes.length.toString()) når den lages!)
+      const count = target.getAttribute("data-count") || "?";
+      
+      // Sjekk om gruppen allerede er utvidet (hvis den har minus-tegn, er den expanded)
+      const isExpanded = target.textContent?.includes('−') ?? false;
+      const hoverText = isExpanded 
+        ? `Klikk for å skjule ${count} notater` 
+        : `Klikk for å vise ${count} skjulte notater`;
+
+      // Bygg den lekre popupen ferskt i minnet (Bruker dine egne beskrivende klasser fra DOMUtils!)
+      activePopup = createDiv({ cls: "rv-info-hover bordered-div rounded-div" });
+      
+      // Strukturer innholdet nøyaktig slik du opprinnelig designet det
+      activePopup.createEl("p", { text: "Skjulte data", cls: "popup-title" });
+      const ul = activePopup.createEl("ul");
+      ul.createEl("li", { text: hoverText });
+
+      // CSS-Styling for å plassere popupen rett over eller ved siden av pluss/minus-knappen:
+      activePopup.style.position = "absolute";
+      activePopup.style.zIndex = "var(--layer-menu)"; // Obsidians offisielle z-indeks for menyer
+      activePopup.style.pointerEvents = "none";       // Sørger for at den ikke blokkerer musen
+      activePopup.style.background = "var(--background-secondary-alt)";
+      activePopup.style.border = "1px solid var(--border-color)";
+      activePopup.style.padding = "6px 10px";
+      activePopup.style.borderRadius = "4px";
+
+      // Finn ut nøyaktig hvor knappen er på skjermen relativt til fanens container
+      const viewRect = this.contentEl.getBoundingClientRect();
+      const btnRect = target.getBoundingClientRect();
+
+      // Plasser popupen dønn perfekt rett OVER pluss/minus-knappen! [dan]
+      activePopup.style.left = `${btnRect.left - viewRect.left}px`;
+      activePopup.style.top = `${btnRect.top - viewRect.top - 55}px`; // Skyver den 55 piksler opp
+
+      // Dytt popupen synlig inn i fanen din
+      this.contentEl.appendChild(activePopup);
     });
-    this.plugin.registerDomEvent(button, 'mouseout', (evt: MouseEvent) => {
-      containerDiv?.removeChild(popup);
+
+    // 3. EVENT: Brukeren flytter musen BORT fra pluss/minus-knappen (Sletter popupen øyeblikkelig)
+    this.contentEl.on("mouseout", ".rv-plusminus", (event, target) => {
+      if (activePopup) {
+        activePopup.remove(); // Sletter fysisk fra DOM-treet for å unngå minneforurensning! [dan]
+        activePopup = null;
+      }
     });
-    */
   }
   
-  // #endregion
-  
-  // #region LEFTOVERS
-
-  /*
-  private revealSomeLeafAndFile(): [TFile | null, WorkspaceLeaf | null] {
-    
-    const mdLeaves = this.app.workspace.getLeavesOfType('markdown');
-    
-    // 1. this is the only opened leaf/file -> use it
-    if (mdLeaves.length == 1) {
-      const mdLeaf = mdLeaves.first();
-      if (mdLeaf) {
-        const leafFile = (mdLeaf.view as MarkdownView).file;
-        if (leafFile) return [leafFile, mdLeaf];
-      }
-    }
-
-    const lastOpenedFilepaths = this.app.workspace.getLastOpenFiles();
-    
-    // 2. no markdown leaves, no last opened file? -> exit with [null, null]
-    if (mdLeaves.length == 0 && lastOpenedFilepaths.length == 0) {
-      console.log('no markdown leaves, no last opened file');
-      return [null, null];
-    }
-
-    // 3. No open markdown leaves? - return last used md file
-    if (mdLeaves.length == 0 && lastOpenedFilepaths.length > 0) {
-      const filepath = lastOpenedFilepaths.first();
-      if (filepath) {
-        const file = this.getFile(filepath);
-        if (file) return [file, null]
-      }
-    }
-
-    // 4. return the leaf with the file that is NOT in lastOpenedFilepaths (yet)
-    // most likely the active file?
-    if (mdLeaves.length > 1 && lastOpenedFilepaths.length > 0) {
-      for (const mdLeaf of mdLeaves) {
-				const leafFile = (mdLeaf.view as MarkdownView).file;
-        if (leafFile && !lastOpenedFilepaths.contains(leafFile.path)) {
-          return [leafFile, mdLeaf]
-        }
-			}
-    }
-
-    // 5. fallback 
-    return [null, null];
-  }
-    */
-
   // #endregion
 }

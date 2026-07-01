@@ -1,42 +1,12 @@
+
+// #region imports, types, const
+
+// 1. imports
 import RelatednotesPlugin from "./main.js";
 import {App, PluginSettingTab, Setting} from "obsidian";
 
+// 2. Types /interface
 type settingsParamsTypes = "text" | "textArea";
-
-export interface KeyPair {
-	key: string;
-	value: string;
-}
-
-export interface MyPluginSettings {
-	parentProperties: string;
-	parentTags: string;
-	childProperties: string;
-	childTags: string;
-	friendProperties: string;
-	friendTags: string;
-	ignoreNameFragments: string;
-	ignoreTags: string;
-	displayBasesToolbar: boolean;
-	displayAliases: boolean;
-	relatedNotesName: string;
-}
-
-export const DEFAULT_SETTINGS: MyPluginSettings = {
-	parentProperties: 'tilhører, nasjonalitet',
-	parentTags: '#samling, #👥gruppe',
-	childProperties: 'barn, medlemmer',
-	childTags: '#funn, #symptom, #behandling, #han, #hun, #kalender, #tekst, #clippings, #genetisk',
-	friendProperties: 'partner',
-	friendTags: '',
-	ignoreTags: '#excalidraw',
-	ignoreNameFragments:'@',
-	displayBasesToolbar: false,
-	displayAliases: false,
-	relatedNotesName: 'minBrain' // dormant - for future
-}
-
-/********* SETTINGS WINDOW */
 
 interface settingsParams {
 	name: string,
@@ -44,6 +14,8 @@ interface settingsParams {
 	type: settingsParamsTypes,
 	placeHolder: string,
 }
+
+// 3. Constants
 
 const SETTING_PARAMS_GENERAL: settingsParams = {
 	name: "",
@@ -92,6 +64,8 @@ const SETTING_IGNOREFRAGMENTS_TAGS: settingsParams = {... SETTING_PARAMS_GENERAL
 	name: "Ignore following file name fragments",
 	desc: "notes with these filename fragments will be ignored",
 }
+
+// #endregion
 
 export class SampleSettingTab extends PluginSettingTab {
 	plugin: RelatednotesPlugin;
@@ -179,33 +153,13 @@ export class SampleSettingTab extends PluginSettingTab {
 		});
 
 		new Setting(containerEl)
-			.setName('Show toolbar')
-			.setDesc('Toggle this option to yes or no')
-			.addToggle(toggle => toggle
-					.setValue(this.plugin.settings!.displayBasesToolbar)
-					.onChange(async (value) => {
-							this.plugin.settings!.displayBasesToolbar = value;
-							await this.plugin.saveSettings();
-				}));
-		new Setting(containerEl)
 			.setName('display first alias as name')
 			.setDesc('Toggle this option to yes or no')
 			.addToggle(toggle => toggle
-					.setValue(this.plugin.settings!.displayAliases)
+					.setValue(this.plugin.settings.displayAliases)
 					.onChange(async (value) => {
-							this.plugin.settings!.displayAliases = value;
+							this.plugin.settings.displayAliases = value;
 							await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
-			.setName('Related notes filename')
-			.setDesc('default path and name can be altered')
-			.addText(text => text
-				.setPlaceholder('minBrain')
-				.setValue(this.plugin.settings!.relatedNotesName)
-				.onChange(async (value) => {
-					this.plugin.settings!.relatedNotesName = value;
-					await this.plugin.saveSettings();
 				}));
 	}
 
@@ -270,8 +224,8 @@ export class SampleSettingTab extends PluginSettingTab {
 				el.style.height = `${el.scrollHeight}px`;
 			};
 
-			el.addEventListener("input", autoResize);
-			el.addEventListener("focus", autoResize);
+			this.plugin.registerDomEvent(el, "input", autoResize);
+	    this.plugin.registerDomEvent(el, "focus", autoResize);
 
 			// Initial resize
 			setTimeout(autoResize, 10);

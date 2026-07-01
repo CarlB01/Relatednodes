@@ -1,46 +1,34 @@
-import { Plugin, Notice, WorkspaceLeaf } from 'obsidian';
-import { DEFAULT_SETTINGS, MyPluginSettings, SampleSettingTab } from "./settings.js";
+import { Plugin, Notice, WorkspaceLeaf, EventRef, TFile, TAbstractFile } from 'obsidian';
+import { SampleSettingTab } from "./SettingTab.js";
 import { RelatednotesView } from './view.js';
-import { SidebarView, VIEW_TYPE_RELATED_SIDEBAR_PANEL } from "./sidebar-view.js";
-
-export const RELATED_NOTES_VIEW_TYPE = 'relatednotes-view';
+import { RV_CLASSES } from './constants.js';
+import { RelatedData } from './data.js';
+import { SettingsManager } from './SettingsManager.js';
 
 export const relatednodesID = 'relatednotesViewType';
-export const superChargedLinkAttribs = 'internal-link data-link-icon data-link-icon-after data-link-text';
 
 export default class RelatednotesPlugin extends Plugin {
-
-	declare settings: MyPluginSettings;
-
-	// Ferdig-optimaliserte lister for lynraskt oppslag i grafloopen
-	public optParentProperties: string[] = [];
-	public optChildProperties: string[] = [];
-	public optFriendProperties: string[] = [];
+	declare settings: SettingsManager;
+	public relatedData!: RelatedData;
 	
-	public optParentTags: string[] = [];
-	public optChildTags: string[] = [];
-	public optFriendTags: string[] = [];
-	public optIgnoreFragments: string[] = [];
-	public optIgnoreTags: string[] = [];
-	
+	private resolvedEventRef: EventRef | undefined;
+  
 	async onload() {
 		
 		await this.loadSettings();
-		this.prepareOptimizedFilters();
+
+		this.relatedData = new RelatedData(this, this.settings);
 
 		this.addSettingTab(new SampleSettingTab(this.app, this));
 	
-		// Register the sidebar/container view
-		this.registerView(
-			VIEW_TYPE_RELATED_SIDEBAR_PANEL,
-			(leaf) => new SidebarView(leaf, this.app)
-		);
+		// Registrer visningen din (Gjør det mulig å åpne både i sidebar og som stor tab!) [dan]
+    this.registerView(
+      RV_CLASSES.RELATED_NOTES_VIEW_TYPE,
+      (leaf) => new RelatednotesView(leaf, this) // Vi sender med 'this' (pluginen) [dan]
+    );
 
-		// Register your main related notes view (the one that receives parentEl)
-		this.registerView(
-			RELATED_NOTES_VIEW_TYPE,
-			(leaf) => new RelatednotesView(leaf, this)   // ← pass plugin if needed
-		);
+		// BIND OPP ALLE GLOBALE LYTTERE HER (file-open, rename, resolve)
+    this.registerGlobalEvents();
 
 		// Ribbon icon to open your view
 		this.addRibbonIcon("apple", "Open Related Notes", () => {
@@ -53,65 +41,137 @@ export default class RelatednotesPlugin extends Plugin {
 			name: 'Open Related Notes View',
 			callback: () => this.activateRelatedNotesView(),
 		});		
+
 	};
 
-	async activateRelatedNotesView() {
-    const { workspace } = this.app;
-    
-    // Check if the view already exists
-    let leaf = workspace.getLeavesOfType(RELATED_NOTES_VIEW_TYPE)[0];
-    
-    if (leaf) {
-        workspace.revealLeaf(leaf);
-        return;
-    }
-
-    let newLeaf: WorkspaceLeaf | null | undefined = workspace.getLeftLeaf(false);
-
-    if (newLeaf) {
-        await newLeaf.setViewState({
-            type: RELATED_NOTES_VIEW_TYPE,
-            active: true,
-        });
+	private registerGlobalEvents() {
+ 
+		// A. Når brukeren bytter fil i Obsidian, oppdaterer vi minne-cachen centralt [dan]
+    this.registerEvent(
+      this.app.workspace.on('file-open', async (file: TFile | null) => {
+        if (!file) return;
+        await this.relatedData.update(file);
         
-        workspace.revealLeaf(newLeaf);
-        workspace.leftSplit?.expand();
-    } else {
-        new Notice("Could not create view leaf");
-    }
+        // NYTT & MAGISK: Finn ALLE åpne instanser av grafen din (både i sidebar og store vinduer) 
+        // og be dem tegne seg på nytt basert på de ferske dataene! [dan]
+        this.app.workspace.getLeavesOfType(RV_CLASSES.RELATED_NOTES_VIEW_TYPE).forEach(leaf => {
+          if (leaf.view instanceof RelatednotesView) {
+            leaf.view.areaManager.renderGraph(); // Trigger 100% minne-utskrift live! [dan]
+          }
+        });
+      })
+    );
+
+    // B. register when user renames a file
+    this.registerEvent(
+      this.app.vault.on('rename', async (file: TAbstractFile, oldPath: string) => {
+        if (!(file instanceof TFile)) return;
+        this.relatedData.handleFileRename(file, oldPath);
+      })
+    );
+
+		// C: register when user updates/adds links to a relevant note
+    this.registerEvent(
+			this.app.metadataCache.on('resolve', async (file: TFile) => {
+				// 1. Be databasen fikse minnet asynkront
+				const dataBleOppdatert = await this.relatedData.handleFileResolve(file);
+				
+				// 2. Hvis dørvakten ga grønt lys og dataene ble endret: Oppdater skjermene!
+				if (dataBleOppdatert) {
+					this.app.workspace.getLeavesOfType(RV_CLASSES.RELATED_NOTES_VIEW_TYPE).forEach(leaf => {
+						if (leaf.view instanceof RelatednotesView) {
+							// Hvert unike vindu (sidebar/stor tab) tegner seg på nytt i minnet sitt
+							leaf.view.areaManager.renderGraph();
+						}
+					});
+				}
+			})
+		);
+  }
+
+	async activateRelatedNotesView() {
+		// 1. SIKRING: Hvis Obsidian ikke er ferdig indeksert ennå, vent på 'resolved'
+		const isCacheReady = (this.app.metadataCache as any).initialized === true;
+		if (!isCacheReady) {
+			if (!this.resolvedEventRef) {
+				this.resolvedEventRef = this.app.metadataCache.on('resolved', () => {
+					this.activateRelatedNotesView();
+					this.unregisterResolvedEvent(); // KORRIGERT: Lagt til () så funksjonen faktisk kjører!
+				});
+				this.registerEvent(this.resolvedEventRef);
+			}
+			return; // Avbryt og vent på eventet
+		}
+
+		const { workspace } = this.app;
+		
+		// 2. SIKRING: Sjekk om visningen allerede finnes (Unngå duplikate faner)
+		let leaf = workspace.getLeavesOfType(RV_CLASSES.RELATED_NOTES_VIEW_TYPE)[0];
+		
+		if (leaf) {
+			// Visningen finnes allerede! Bare flytt fokus dit
+			workspace.revealLeaf(leaf);
+			return;
+		}
+
+		// 3. OPPRETT NYTT PANEL: Siden ingen fane finnes, lager vi en ny i venstre sidefelt
+		// Hvis brukeren i stedet høyreklikker på ikonet og velger "Open in new tab", 
+		// vil Obsidian overstyre dette og åpne den i midten uansett, noe vår nye arkitektur takler perfekt!
+		let newLeaf: WorkspaceLeaf | null | undefined = workspace.getLeftLeaf(false);
+
+		if (newLeaf) {
+			await newLeaf.setViewState({
+				type: RV_CLASSES.RELATED_NOTES_VIEW_TYPE,
+				active: true,
+			});
+			
+			workspace.revealLeaf(newLeaf);
+			workspace.leftSplit?.expand(); // Brett ut venstre sidefelt i Obsidian
+
+			// FØRSTE DATA-FÔRING: Siden panelet akkurat ble åpnet ferskt, fôrer vi det 
+			// med den aktive filen brukeren står i akkurat nå med en gang!
+			const activeFile = this.app.workspace.getActiveFile();
+			if (activeFile) {
+				await this.relatedData.update(activeFile);
+				if (newLeaf.view instanceof RelatednotesView) {
+					newLeaf.view.areaManager.renderGraph(); // Tegn det første bildet
+				}
+			}
+		} else {
+			new Notice("Could not create view leaf");
+		}
 	}
 	
 	onunload() {
+		this.unregisterResolvedEvent();
 	}
 
-	/**
-	 * Knytt denne til onload() og i innstillingsfanen din når brukeren lagrer.
-	 * Splitter kommaseparerte strenger til rene, trimmede arrays.
-	 */
-	public prepareOptimizedFilters() {
-		// Hjelpefunksjon for å splitte komma-strenger trygt
-		const parseStr = (str: string) => str ? str.split(",").map(s => s.trim()).filter(Boolean) : [];
-
-		// 1. Properties (Beholder store/små bokstaver fordi Frontmatter-nøkler er sensitive for dette)
-		this.optParentProperties = parseStr(this.settings.parentProperties);
-		this.optChildProperties  = parseStr(this.settings.childProperties);
-		this.optFriendProperties = parseStr(this.settings.friendProperties);
-
-		// 2. Tags og Fragmenter (Gjøres ALLTID om til lowercase for case-insensitiv matching)
-		this.optParentTags      = parseStr(this.settings.parentTags).map(t => t.toLowerCase());
-		this.optChildTags       = parseStr(this.settings.childTags).map(t => t.toLowerCase());
-		this.optFriendTags      = parseStr(this.settings.friendTags).map(t => t.toLowerCase());
-		this.optIgnoreFragments = parseStr(this.settings.ignoreNameFragments).map(f => f.toLowerCase());
-		this.optIgnoreTags      = parseStr(this.settings.ignoreTags).map(t => t.toLowerCase());
+	// Hjelpefunksjon for å vaske og fjerne eventet manuelt
+	private unregisterResolvedEvent() {
+		if (this.resolvedEventRef) {
+			this.app.metadataCache.offref(this.resolvedEventRef);
+			this.resolvedEventRef = undefined; // Nullstill slik at den kan registreres igjen ved behov
+			console.log("Avregistrerte 'resolved'-lytteren safely.");
+		}
 	}
 
 	async loadSettings() {
-		const loadedData = await this.loadData();
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+	// Fød en fersk SettingsManager (den setter opp alle standardverdier i constructor) [dan]
+    this.settings = new SettingsManager();
+    
+    // Hent lagrede rådata fra Obsidian-disken
+    const loadedData = await this.loadData();
+    
+    // Flett de lagrede dataene inn over standardverdiene i klassen [dan]
+    Object.assign(this.settings, loadedData);
+    
+    // Siden dataene akkurat ble flettet, ber vi settings om å vaske seg selv!
+    // Ingen parametere trengs, fordi den leser sine egne variabler (this.parentProperties osv.) [dan]
+    this.settings.prepare();
 	}
 
 	async saveSettings() {
-		this.prepareOptimizedFilters();
-		await this.saveData(this.settings);
+		this.settings.prepare();
+    await this.saveData(this.settings);
 	}
 }

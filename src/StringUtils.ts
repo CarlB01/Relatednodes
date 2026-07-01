@@ -81,22 +81,7 @@ export class StringUtils {
         return false;
     }
 
-    /**
-   * Normalizes any input (string, array, null, etc.) into a clean string array
-   */
-  static normalizeToStringArray(input: unknown): string[] {
-    if (input == null) return [];
 
-    // If it's already an array, process each item
-    if (Array.isArray(input)) {
-        return input
-            .flatMap(item => StringUtils.splitAndClean(item))
-            .filter(Boolean);
-    }
-
-    // Single value (string, number, etc.)
-    return StringUtils.splitAndClean(input);
-  }
 
   /**
 	 * Sjekker om noen av notens tagger matcher dine forhåndslagrede lowercase-tagger.

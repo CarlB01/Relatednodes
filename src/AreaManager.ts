@@ -3,32 +3,14 @@ import { NoteClass } from "./NoteClass.js";
 import { Platform, Point } from "obsidian";
 import { DrawingUtils } from "./DrawingUtils.js";
 import { DOMUtils } from "./DOMUtils.js";
-import { Direction, GateProperties } from "./GateClass.js";
+import { GateProperties } from "./GateClass.js";
+import { RV_CLASSES } from "./constants.js";
+import RelatednotesPlugin from "./main.js";
 
 export class AreaManager {
-
-  private readonly RELATED_VIEW_CONTAINER = 'rv-container';
-  private readonly svgLayerDescr = 'rv-svg-layer';
-  
-  private readonly centerAreaDescr = 'rv-center-area';
-  private readonly leftAreaDescr = 'rv-left-area';
-  private readonly rightAreaDescr = 'rv-right-area';
-  private readonly topAreaDescr = 'rv-upper-area';
-  private readonly bottomAreaDescr = 'rv-lower-area';
-  
-  private readonly areaCollectionDescr = 'rv-area-collections';
-  private readonly colWrapDescr = 'rv-columns-wrapper';
-  private readonly leftWrapDescr = `.${this.leftAreaDescr} .${this.colWrapDescr}`;
-  private readonly rightWrapDescr = `.${this.rightAreaDescr} .${this.colWrapDescr}`;
-
-  private readonly groupDivDescr = 'rv-groups';
-
-  private readonly leftTallDescr = 'data-left-tall';
-  private readonly rightTallDescr = 'data-right-tall';
-  
   containerEl: HTMLElement;
-  backContainerSVG!: SVGSVGElement;
 
+  backContainerSVG!: SVGSVGElement;
   center!: HTMLElement;
   left!: HTMLElement;
   right!: HTMLElement;
@@ -36,29 +18,74 @@ export class AreaManager {
   lower!: HTMLElement;
     
   private related: RelatedData;
+  private plugin: RelatednotesPlugin;
   
   // Den sentrale minne-cachen for SVG-linjene
   private linkCache = new Map<string, { svgElement: SVGPathElement; used: boolean }>();
     
+  private animationFrameId: number | null = null;
+
   constructor(
-    related: RelatedData,
+    related: RelatedData, 
     parentEl: HTMLElement,
+    plugin: RelatednotesPlugin
   ){
     this.related = related;
     this.containerEl = parentEl;
+    this.plugin = plugin;
   }
 
   initiate() {
-    const el = this.containerEl;
-    el.addClass(this.RELATED_VIEW_CONTAINER);
-    
-    this.center = el.createDiv(this.centerAreaDescr);
-    this.left  = el.createDiv(this.leftAreaDescr);
-    this.right = el.createDiv(this.rightAreaDescr);
-    this.upper = el.createDiv(this.topAreaDescr);
-    this.lower = el.createDiv(this.bottomAreaDescr);
-    
-    this.backContainerSVG = el.createSvg("svg", this.svgLayerDescr);
+    this.containerEl.addClass(RV_CLASSES.CONTAINER); 
+  }
+
+  /**
+   * Planlegger en ny, frisk opptegning synkronisert med skjermens oppdatering (60Hz).
+   * Kalles automatisk ved rulling, vindusendringer og etter den store dytten til skjermen.
+   */
+  public requestRedraw() {
+    // Hvis det allerede er planlagt en tegning, avbryt det forrige varselet
+    if (this.animationFrameId !== null) {
+        cancelAnimationFrame(this.animationFrameId);
+    }
+
+    // Planlegg en ny frame synkronisert med nettleseren/skjermen
+    this.animationFrameId = requestAnimationFrame(() => {
+
+      // check heights of lef/right areas - make upper/lower yield
+      this.yieldIfLeftTall();
+      this.yieldIfRightTall();
+
+      // Draw new lines based on recent coords.
+      if (this.related?.centerNote) {
+        this.drawAllGraphLinks();
+      }
+      // Nullstill ID-en så neste frame kan kjøre fritt
+      this.animationFrameId = null;
+    });
+  }
+
+  private setupScrollEventListeners() {
+    // En liste over alle områdene som har fått tildelt rulling i CSS-en din
+    const scrollableAreas = [this.upper, this.lower, this.left, this.right];
+
+    for (const area of scrollableAreas) {
+      if (!area) continue;
+
+      // Finn den faktiske samlingsboksen (.rv-area-collections) som ruller inni området
+      const scrollContainer = area.querySelector(`.${RV_CLASSES.COLLECTION}`) as HTMLElement;
+      
+      if (scrollContainer) {
+        this.plugin.registerDomEvent(
+          scrollContainer, 
+          'scroll', 
+          () => {
+            this.requestRedraw(); // Sørger for at Beziér-kurvene følger med live! [dan]
+          }, 
+          { passive: true }
+        );
+      }
+    }
   }
 
   /**
@@ -68,10 +95,11 @@ export class AreaManager {
    */
   yieldIfLeftTall() {
     const vc = this.containerEl;
-    const leftWrapper = vc.querySelector(this.leftWrapDescr) as HTMLElement;
+    const descr = `.${RV_CLASSES.LEFT_AREA} .${RV_CLASSES.COL_WRAPPER}`;
+    const leftWrapper = vc.querySelector(descr) as HTMLElement;
     if (!leftWrapper) return;
     
-    const currentValue = vc.getAttribute(this.leftTallDescr);
+    const currentValue = vc.getAttribute(RV_CLASSES.LEFT_TALL);
     const isLeftTall = leftWrapper.scrollHeight > this.center.offsetHeight;
     const newValue = isLeftTall ? "true" : "false";
 
@@ -86,10 +114,11 @@ export class AreaManager {
    */
   yieldIfRightTall() {
     const vc = this.containerEl;
-    const rightWrapper = vc.querySelector(this.rightWrapDescr) as HTMLElement;
+    const descr = `.${RV_CLASSES.RIGHT_AREA} .${RV_CLASSES.COL_WRAPPER}`;
+    const rightWrapper = vc.querySelector(descr) as HTMLElement;
     if (!rightWrapper) return;
     
-    const currentValue = vc.getAttribute(this.rightTallDescr);
+    const currentValue = vc.getAttribute(RV_CLASSES.RIGHT_TALL);
     const isRightTall = rightWrapper.scrollHeight > (this.center.offsetHeight + this.upper.offsetHeight);
     const newValue = isRightTall ? "true" : "false";
 
@@ -130,122 +159,147 @@ export class AreaManager {
     return { x: x, y: y };
   }
 
-/*
-  allConnect() {
+  public renderGraph() { 
+    const centerNote = this.related.centerNote;
+    if (!centerNote) return;
     
     const related = this.related;
-    const centerNote = related.centerNote;
-    if (!centerNote) return;
+    const memoryFragment = document.createDocumentFragment();
 
-    const svg = this.backContainerSVG;
-    svg.style.width = '100%';
-    svg.style.height = '100%';
+    // Klargjør .rv-container i minnet
+    const mainContainerEl = memoryFragment.createDiv({ cls: RV_CLASSES.CONTAINER });
+    mainContainerEl.setAttribute(RV_CLASSES.LEFT_TALL, 'false');
+    mainContainerEl.setAttribute(RV_CLASSES.RIGHT_TALL, 'false');
 
-    this.scrolledOffby = {
-      x: window.scrollX - this.offBy.x,
-      y: window.scrollY - this.offBy.y
-    };
-
-    this.updateGraphLines()
-  };
-*/
-  renderGraph() {
-    let centerNote = this.related.centerNote;
-    if (!centerNote) return;
-
-    const {upperGate, lowerGate, friendGate, siblings} = centerNote;
-    const {center, upper, lower, left, right} = this;
-    const related = this.related;
-
-    const viewContainer = this.containerEl;
-    if (viewContainer) {
-        viewContainer.setAttribute(this.rightTallDescr, 'false');
-        viewContainer.setAttribute(this.leftTallDescr, 'false');
-    }
-
-    // 0. Center
-    this.renderQuadrant(center, [[centerNote]]);
-
-    // 1. Upper (Parents)
-    const sortedParents = related.getSortedNotesForQuadrant(upperGate.connections, false);
-    this.renderQuadrant(upper, [sortedParents]);
+    this.center = mainContainerEl.createDiv({ cls: RV_CLASSES.CENTER_AREA });
+    this.left   = mainContainerEl.createDiv({ cls: RV_CLASSES.LEFT_AREA });
+    this.right  = mainContainerEl.createDiv({ cls: RV_CLASSES.RIGHT_AREA });
+    this.upper  = mainContainerEl.createDiv({ cls: RV_CLASSES.TOP_AREA });
+    this.lower  = mainContainerEl.createDiv({ cls: RV_CLASSES.BOTTOM_AREA });
     
-    // 2. Lower (Children + Runde 1 Undefined)
-    const allLowerConnections = lowerGate.connections;    
+    this.backContainerSVG = mainContainerEl.createSvg("svg", { cls: RV_CLASSES.SVG_LAYER });
+
+    // 0. CENTER
+    this.renderQuadrant(this.center, [ [centerNote] ], "center");
+
+    // 1. UPPER AREA (Kun 1 kolleksjon: Ekte parents. Undefined/Ignored holdes HELT utenfor)
+    const cleanParentsOnly = Array.from(centerNote.relations.parents).filter(n => n.relation === "parent"); 
+    const sortedParents = related.getSortedNotesForQuadrant(cleanParentsOnly, false);
+    this.renderQuadrant(this.upper, [ sortedParents ], "upper");
+  
+    // 2. LEFT AREA (Kun 1 kolleksjon: Ekte friends. Undefined/Ignored holdes HELT utenfor)
+    const cleanFriendsOnly = Array.from(centerNote.relations.friends).filter(n => n.relation === "friend"); 
+    const sortedFriends = related.getSortedNotesForQuadrant(cleanFriendsOnly, false);
+    this.renderQuadrant(this.left, [ sortedFriends ], "left");
+
+    // 3. LOWER AREA (Kolleksjon 1: Ekte barn. Kolleksjon 2: Senterets felles oppsamling av ALT udefinert)    
+    const allNotesInCache = Array.from(related.noteCache.values()).filter(n => n.isUsed);
+    
+    // Kolleksjon 1: Kun noder med den definerte relasjonen "child"
     const childrenOnly = related.getSortedNotesForQuadrant(
-      allLowerConnections.filter(n => n.relation === "child")
+      allNotesInCache.filter(n => n.relation === "child"), false
     );
-    const undefinedOnly = related.getSortedNotesForQuadrant(
-      allLowerConnections.filter(n => n.relation === "undefined")
+    // Kolleksjon 2: ALT udefinert i hele cachen (uansett om kilden var udefinert frontmatter eller bodytext!)
+    const totalUndefinedBucket = related.getSortedNotesForQuadrant(
+      allNotesInCache.filter(n => n.relation === "undefined"), false
     );
-    const lowerCollection = [childrenOnly, undefinedOnly].filter(c => c.length > 0);
-    this.renderQuadrant(lower, lowerCollection);
+    const lowerCollections = [childrenOnly, totalUndefinedBucket].filter(c => c.length > 0);
+    this.renderQuadrant(this.lower, lowerCollections, "lower");
 
-    // 3. Left (Friends)
-    const sortedFriends = related.getSortedNotesForQuadrant(friendGate.connections, false);
-    this.renderQuadrant(left, [sortedFriends]);
+    // 4. RIGHT AREA (Søsken-området: Skiller mellom kriterie-søsken og brødtekst/udefinerte søsken)
+    const rawSiblings = Array.from(centerNote.relations.siblings);
+    
+    // Kolleksjon 1: Solide søsken som ble oppdaget via de brukerstyrte frontmatter-kriteriene hos parent
+    const solidSiblings = related.getSortedNotesForQuadrant(
+      rawSiblings.filter(n => n.relation === "sibling" || n.discoverySource === "frontmatter-kriterium"), true
+    );
+    
+    // Kolleksjon 2: Søsken som ble funnet i parent/søskens brødtekst eller udefinerte frontmatter-egenskaper
+    const looseTextSiblings = related.getSortedNotesForQuadrant(
+      rawSiblings.filter(n => n.relation === "undefined" || n.discoverySource === "bodytext" || n.discoverySource === "frontmatter-udefinert"), true
+    );
+    const siblingCollections = [solidSiblings, looseTextSiblings].filter(c => c.length > 0);
+    this.renderQuadrant(this.right, siblingCollections, "right");
 
-    // 4. Right (Siblings + Runde 2 Undefined)
-    const siblingsOnly = related.getSortedNotesForQuadrant(
-      siblings.filter(n => n.relation === "sibling")
-    );
-    const undefinedSiblings = related.getSortedNotesForQuadrant(
-      siblings.filter(n => n.relation === "undefined")
-    );
-    const siblingCollection = [siblingsOnly, undefinedSiblings].filter(c => c.length > 0);
-    this.renderQuadrant(right, siblingCollection);
+    // ERSTATT SKJERMEN
+    this.containerEl.empty(); 
+    this.containerEl.appendChild(memoryFragment);
+
+    // NÅ er områdene fysisk tilstede, og vi kobler på lytterne og linjene i samme mikrosekund:
+    this.setupScrollEventListeners(); 
+    this.requestRedraw(); 
   }
 
-  /**
-   * Tar en liste med ferdigsorterte noder og sørger for at de tegnes i oppgitt kvadrant.
-   */
-  private renderQuadrant(area: HTMLElement, collections: NoteClass[][]) {
-    // 1. TØM GAMMEL SUB-STRUKTUR (Kritisk for ren DOM)
-    area.innerHTML = "";
-
+  private renderQuadrant(
+    area: HTMLElement, 
+    collections: NoteClass[][], // Tar imot de rå kolleksjonene (f.eks. [[children], [undefined]])
+    areaName: "upper" | "lower" | "left" | "right" | "center"
+  ) {
+    area.empty(); // Obsidians native, lynraske tømming
     const noteCount = collections.flat().length;
     if (noteCount === 0) return;
 
+    // 1. OPPRETT DET USYNLIGE FRAGMENTET I MINNET
+    const areaFragment = document.createDocumentFragment();
+    
+    // Vi looper gjennom de overordnede kolleksjonene (f.eks. maks 2 i lower area)
     collections.forEach(collection => {
-      const areaCollectionDiv = area.createDiv(this.areaCollectionDescr);
-      const colWrapDiv = areaCollectionDiv.createDiv(this.colWrapDescr)
-      
-      const groupedNotes = this.related.groupByFirstTag(collection);
-      groupedNotes.forEach(group => {
-        const groupDiv = colWrapDiv.createDiv(this.groupDivDescr);
-        
+      if (collection.length === 0) return;
+
+      // PRINSIPP: Hver kolleksjon får sin egen etasje-stabler (.rv-area-collections). 
+      // Siden disse stables vertikalt i CSS, vil Kolleksjon 2 legge seg vakkert UNDER Kolleksjon 1!
+      const areaCollectionDiv = areaFragment.createDiv({ cls: RV_CLASSES.COLLECTION });
+
+      // Hver kolleksjon får sin egen kolonneflyt (.rv-columns-wrapper)
+      const colWrapDiv = areaCollectionDiv.createDiv({ cls: RV_CLASSES.COL_WRAPPER});
+
+      // Vi grupperer notene i denne kolleksjonen etter tag!
+      const tagGroupedNotes = this.related.groupByFirstTag(collection);
+
+      tagGroupedNotes.forEach(group => {
+        // Hver unike tag-gruppe får sin egen "usynlige" gruppe-DIV (.rv-groups)
+        const groupDiv = colWrapDiv.createDiv({ cls: RV_CLASSES.GROUPS });
+
         group.notes.forEach(note => {
-          
-          groupDiv.appendChild(note.render());
+          // STEMPEL: Sikringen settes på nøyaktig riktig sted
+          note.assignedArea = areaName;
 
-          // Fortell portene hvilken region de bor i
-          if (note.upperGate) note.upperGate.areaElement = area;
-          if (note.lowerGate) note.lowerGate.areaElement = area;
+          // RENDRE: Bygg knappen, a-lenken og de 3 portene ferdig i minnet
+          const noteElement = note.render(); 
+          groupDiv.appendChild(noteElement);
+
+          // Region-referanser for portene
+          if (note.upperGate)  note.upperGate.areaElement = area;
+          if (note.lowerGate)  note.lowerGate.areaElement = area;
           if (note.friendGate) note.friendGate.areaElement = area;
-
         });
 
-        // 2. LOGIKK FOR PLUSS/MINUS-KNAPP
+        // Din pluss/minus-logikk
         if (group.notes.length > 4 && noteCount > 20) {
-          const firstNoteDiv = group.notes.first()?.div;
-          if (firstNoteDiv) {
-            DOMUtils.buildPlusMinusBtn(firstNoteDiv, group);
+          const firstNoteInstance = group.notes[0];
+          if (firstNoteInstance && firstNoteInstance.div) {
             
-            // Skjul de resterende notene i gruppen
+            // Sender med det ekte gruppe-objektet ({ tag, notes }) til din DOMUtils
+            DOMUtils.buildPlusMinusBtn(firstNoteInstance.div, group);
+            
+            // Skjul de resterende notene i denne spesifikke tag-gruppen
             group.notes.slice(1).forEach(note => {
-              // Siden vi akkurat la note.div inn i linkDiv, må vi skjule linkDiv (parentElement)
               note.div?.parentElement?.classList.add('hidden');
             });
           }
         } 
       });
     });
+
+    // 3. Den store dytten til skjermen
+    area.appendChild(areaFragment);
   }
 
   /**
    * Denne metoden kjøres når du skal tegne opp alle SVG-linjene på skjermen
    */
-  drawAllGraphLinks(centerNote: NoteClass | null) {
+  drawAllGraphLinks() {
+    const centerNote = this.related.centerNote;
     if (!centerNote) return;
     
     const offBy = this.offBy();
@@ -259,31 +313,65 @@ export class AreaManager {
         link.used = false; 
     }
     
-    // HJELPEFUNKSJON: Sjekker om linjen i det hele tatt kan tegnes før vi prøver
+    // SIKRINGSDØRVAKT: Sjekker om begge portene er fysisk tegnet ut og synlige i DOM-en
     const canDraw = (from: GateProperties, to: GateProperties) => {
-        // Begge portene MÅ eksistere, og begge MÅ ha en sirkel tilstede i DOM-en
-        return from && to && from.svg && to.svg;
+      return from && to && from.svg && to.svg && 
+             from.parentNote.div && to.parentNote.div;
     };
 
-    // HELPER: Decide type of Gate to return
-    const theOther = (dir: Direction, other: NoteClass) => {
-      switch (dir) {
-        case 'down': return other.upperGate;
-        case 'up': return other.lowerGate;
-        default: return other.friendGate;
+    // Hent ut kun de notene som faktisk overlevde Garbage Collection og er i bruk på skjermen
+    const visibleNotes = Array.from(this.related.noteCache.values())
+      .filter(n => n.isUsed && n.assignedArea !== "ignored");
+
+    // ==========================================================================
+    // 2. TEGNE-FASE: Vi parer notene i en dobbel-loop for å unngå duplikate linjer
+    // ==========================================================================
+    for (let i = 0; i < visibleNotes.length; i++) {
+      const nodeA = visibleNotes[i];
+      
+      if (!nodeA) continue;
+
+      for (let j = i + 1; j < visibleNotes.length; j++) {
+        const nodeB = visibleNotes[j];
+  
+        if (!nodeB) continue;
+
+        // --- KATEGORI A: VERTIKALE RELASJONER (Parents / Children / Siblings) ---
+      
+        // Sjekk 1: Er nodeB et barn av nodeA?
+        if (nodeA.relations.children.has(nodeB)) {
+          // Linjen går fra toppen av barnet (up) til bunnen av forelderen (down)
+          if (canDraw(nodeB.upperGate, nodeA.lowerGate)) {
+            DrawingUtils.drawLink(nodeB.upperGate, nodeA.lowerGate, links, offBy, canvas);
+          }
+        } 
+        // Sjekk 2: Er nodeA et barn av nodeB?
+        else if (nodeA.relations.parents.has(nodeB)) {
+          // Linjen går fra toppen av barnet (up) til bunnen av forelderen (down)
+          if (canDraw(nodeA.upperGate, nodeB.lowerGate)) {
+            DrawingUtils.drawLink(nodeA.upperGate, nodeB.lowerGate, links, offBy, canvas);
+          }
+        }
+
+        // --- KATEGORI B: HORISONTALE RELASJONER (Friends & Kryssende Baits) ---
+        
+        // Sjekk om disse to unike nodene deler et eller flere aktive baits (fra trinn 3c)
+        const delerBait = nodeA.crossingBaits.size > 0 && 
+                          Array.from(nodeA.crossingBaits).some(b => nodeB.crossingBaits.has(b));
+
+        // Hvis de er venner, søsken av samme center, eller deler et kryssende agn:
+        if (nodeA.relations.friends.has(nodeB) || nodeA.relations.siblings.has(nodeB) || delerBait) {
+          
+          // Siden friendGate dynamisk er plassert på enten venstre eller høyre flanke 
+          // av NoteClass.render() basert på kvadrant, kan vi trygt koble sammen 
+          // friendGate mot friendGate. Akse-regelen og CSS-en din sikrer at de møtes horisontalt!
+          if (canDraw(nodeA.friendGate, nodeB.friendGate)) {
+            DrawingUtils.drawLink(nodeA.friendGate, nodeB.friendGate, links, offBy, canvas);
+          }
+        }
       }
     }
 
-    // 2. TEGNE-FASE
-    for (const gate of this.related.allGates) {
-      for (const note of gate.connections) {
-        const otherGate = theOther(gate.direction, note);
-        if (canDraw(gate, otherGate)) {
-          // Gjenbruker eller oppretter linjen, og markerer den som used = true internt  
-          DrawingUtils.drawLink(gate, otherGate, links, offBy, canvas);
-        }  
-      }
-    }  
     // 3. OPPRYDDINGS-FASE: Slett alle linjer i cachen som ikke ble gjenbrukt i denne runden
     for (const [key, link] of this.linkCache.entries()) {
         if (!link.used) {

@@ -1,11 +1,9 @@
 import { Workspace } from "obsidian";
-import { GroupedNotes } from "./data.js";
 import RelatednotesPlugin, { relatednodesID } from "./main.js";
 import { NoteClass } from "./NoteClass.js";
+import { RV_CLASSES } from "./constants.js";
 
 export class DOMUtils {
-  static infobuttonDescr = 'rv-info-button';
-  static INFO_HOVER_DESCR = 'rv-info-hover';
   static plusMinusBtnDescr = 'rv-plusminus';
   private readonly superChargedLinkSimple = 'internal-link data-link-text';
 
@@ -14,18 +12,12 @@ export class DOMUtils {
     public plugin: RelatednotesPlugin,
   ) {}
 
-  // registerDomEvent - the obsidian way - not 'addEventListener'
-  // registerDomEvent - it unregisters itself automatically
-  // registerHoverLinkSource - the obsidian way.
   static uniqueAnchor(basename: string): string {
     return `--${basename.replace(/[^a-zA-Z0-9]/g, '').trim()}`;
   }
 
-  static buildPlusMinusBtn(firstNoteDiv: HTMLElement, group: GroupedNotes) {
+  static buildPlusMinusBtn(firstNoteDiv: HTMLElement, group: { tag: string, notes: NoteClass[] }) {
     
-    const minus = '−';
-    const plus = '+';
-
     // prepare a unique anchor
     const anchor = this.uniqueAnchor(group.notes.first()!.basename);
     const containerDiv = firstNoteDiv.parentElement?.parentElement?.parentElement;
@@ -34,13 +26,13 @@ export class DOMUtils {
     const title = 'Hidden';
     const count = group.notes.length;
     const text = `<ul><li>click to show ${count} notes</li></ul>`;
-    const popup = createDiv(`${DOMUtils.INFO_HOVER_DESCR}`);
+    const popup = createDiv(RV_CLASSES.INFO_HOVER);
     popup.innerHTML = `<p>${title}</p><p>${text}</p>`;
     popup.style.positionAnchor = anchor;
 
     // prepare the button
-    const button = firstNoteDiv.createDiv(`${this.plusMinusBtnDescr} bordered-div rounded-div`);
-    button.textContent = `${group.tag} ${plus}`;
+    const button = firstNoteDiv.createDiv(`${RV_CLASSES.PLUS_MINUS_BTN} ${RV_CLASSES.BORDERED} ${RV_CLASSES.ROUNDED}`);
+    button.textContent = `${group.tag} ${RV_CLASSES.PLUS}`;
     button.style.anchorName = anchor;
   }
 
@@ -69,7 +61,7 @@ export class DOMUtils {
     note: NoteClass,
   ){
     const title = 'Info';
-    const count = note.ignored?.length;
+    const count = note.relations.ignored.size;
     return `### ${title} ${'\n'} ignored ${count} notes`;
   }
 }

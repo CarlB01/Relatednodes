@@ -152,7 +152,7 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  
+  border: 1px solid greenyellow;
   height: auto; /* La høyden leve med innholdet slik at rullefeltet i lower-area trigges */
   overflow: visible; /* La plus/minus-knapper blø hvis nødvendig */
   /* border: 1px solid green; /* Behold for testing */
