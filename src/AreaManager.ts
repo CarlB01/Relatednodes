@@ -95,14 +95,11 @@ export class AreaManager {
     const vc = this.containerEl;
     const descr = '.rv-area.left';
     const leftWrapper = vc.querySelector(descr) as HTMLElement;
-    console.log('leftWrapper?')
-
     if (!leftWrapper) return;
     
     const currentValue = vc.getAttribute(RV_CLASSES.LEFT_TALL);
     const isLeftTall = leftWrapper.scrollHeight > this.center.offsetHeight;
     const newValue = isLeftTall ? "true" : "false";
-    console.log('isLeftTall:', newValue, leftWrapper.scrollHeight, ">", this.center.offsetHeight)
 
     if (currentValue !== newValue) {
         vc.setAttribute(RV_CLASSES.LEFT_TALL, newValue);
