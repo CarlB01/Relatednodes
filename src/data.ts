@@ -1,10 +1,8 @@
+import { App, BasesEntry, parseFrontMatterStringArray, TFile } from "obsidian";
 import RelatednotesPlugin from "./main.js";
-import { App, BasesEntry, MetadataCache, parseFrontMatterStringArray, sortSearchResults, TFile, Vault } from "obsidian";
 import { NoteClass, Relation } from "./NoteClass.js";
-import { GateProperties } from "./GateClass.js";
 import { StringUtils } from "./StringUtils.js";
 import { BaitClass } from "./BaitClass.js";
-import { RV_CLASSES } from "./constants.js";
 import { SettingsManager } from "./SettingsManager.js";
 
 const relationOrder: Record<Relation, number> = {
@@ -40,8 +38,6 @@ export class RelatedData {
   ignoredNotes = new Set<NoteClass>();
   centerNote: NoteClass | null = null;
 
-  allGates: GateProperties[] = []; 
-
   private app: App; 
   private plugin: RelatednotesPlugin;
   private settings: SettingsManager;
@@ -63,6 +59,7 @@ export class RelatedData {
     for (const note of this.noteCache.values()) {
       note.isUsed = false;
       note.relation = 'undefined';
+      note.discoverySource = 'bodytext';
       note.assignedArea = 'lower'; // Fallback-kvadrant
       note.relations.parents.clear();
       note.relations.children.clear();
@@ -73,8 +70,8 @@ export class RelatedData {
     }
 
     for (const bait of this.baitCache.values()) {
-     bait.isUsed = false;
-      bait.activeConnections.clear();
+      bait.isUsed = false;
+      bait.sources.clear(); // <--- KRITISK: Tømmer alle gamle kilder safely for denne runden! [dan]
     }
 
     // 2. SET CENTER
@@ -82,32 +79,59 @@ export class RelatedData {
     if (!this.centerNote) return;
     this.centerNote.relation = 'center';
     this.centerNote.assignedArea = 'center';
-    /*
-    // 3. FETCH 1st GRADE RELATIVES
+    
+    // ==========================================================================
+    // 3. FØRSTE-TRINN FOR NYE NODER: PRE-LOAD (Tvinger Obsidian til å hente fil-cacher)
+    // Siden denne loopen nå kjører aller først, garanterer vi at alle 1. grads filer 
+    // opprettes og får fylt opp sine 'rawFrontmatter' i noteCache NÅ! [dan]
+    // ==========================================================================
+    const firstDegreeFiles = this.getFirstDegreeFiles(this.centerNote.path);
+      // Sjekk at firstDegreeFiles faktisk er en gyldig samling før vi looper
+    for (const file of firstDegreeFiles) {
+      if (file.path !== this.centerNote.path) {
+        // getOrCreateNote vil internt kalle getFileCache() og fylle rawFrontmatter med en gang!
+        const preparedNote = this.getOrCreateNote(file);
+        if (preparedNote) {
+          preparedNote.isUsed = true; // Sørg for at den overlever indexAllBaits dørvakten [dan]
+        }
+      }
+    }
+     
+    // ==========================================================================
+    // 4. BEREGN AGN (BAITS) - NÅ ER DATAGRUNNLAGET GIGANTISK OG KOMPLETT!
+    // Siden PRE-LOAD loopen over akkurat fylte noteCache med alle noder, vil indexAllBaits() 
+    // nå klare å pakke ut agnene fra ALLE de 1. grads notene samtidig! baitCache blir fullstendig. [dan]
+    // ==========================================================================
+    this.indexAllBaits();    
+
+    // ==========================================================================
+    // 5. ETABLER RELASJONER (Nå som baitCache er komplett, vil findRelation() fungere feilfritt)
+    // ==========================================================================
+    
+    // Kjør 1. grads stempling (Nå treffer findRelation perfekt på første forsøk!) [dan]
     this.determineFirstDegreeNotes(this.centerNote);
 
-    // 3a. INDEX BAITS
-    this.indexAllBaits();
+    // Kjør asynkron søsken-beregning. Siden baitCache er proppfull av foreldrenes agn, 
+    // vil 'this.baitCache.get(siblingNote.basename)' finne parentBait MED EN GANG! [dan]
+    await this.determineParentConnectionsAndSiblings(this.centerNote); 
+    
+    // Synkrone ettersjekker
+    this.determineFriendConnections(this.centerNote);
     this.matchCrossingBaits();
 
-    // 3b. CALCULATE SIBLINGS and FRIENDS 
-    await this.determineParentConnectionsAndSiblings(this.centerNote); // asynchronous because of creating new nodes 
-    this.determineFriendConnections(this.centerNote);
-    
 
-    // 4. GARBAGE COLLECTION (Slett elementer som ikke ble gjenbrukt)
+    // ==========================================================================
+    // 6. GARBAGE COLLECTION & PORT-INNSAMLING
+    // ==========================================================================
     for (const [path, note] of this.noteCache.entries()) {
       if (!note.isUsed) this.noteCache.delete(path); 
     }
+
     for (const [path, bait] of this.baitCache.entries()) {
-      if (!bait.isUsed || bait.sourceNote === null) this.baitCache.delete(path);
+      if (!bait.isUsed || bait.sources.size === 0) {
+        this.baitCache.delete(path); // Slett safely fra minnet [dan]
+      }
     }
-    
-    // 5. UPDATE GATES (allGates samling for global tilgang)
-    this.fetchAllGates();
-*/
-    // 6. REPORT BACK
-    //this.modelReady();
   }
 
   public getOrCreateNote(file: TFile): NoteClass | null {
@@ -142,45 +166,49 @@ export class RelatedData {
    * og registrerer dem som aktive agn i baitCache.
    */
   private indexAllBaits() {
-    // Samle alle unike egenskaper brukeren har definert i innstillingene
+    // Samle filtrene fra din nye SettingsManager
     const parentProps = this.settings.optParentProperties;
-    const childProps = this.settings.optChildProperties;
+    const childProps  = this.settings.optChildProperties;
     const friendProps = this.settings.optFriendProperties;
 
+    // Slå sammen alle egenskapene til én felles liste som skal skannes
+    const allTargetProps = [...parentProps, ...childProps, ...friendProps];
+
+    // Loop over alle notater som er i bruk på skjermen akkurat nå
     for (const note of this.noteCache.values()) {
       if (!note.isUsed || note.isInitiallyIgnored) continue;
       if (!note.rawFrontmatter) continue;
 
-      // Hjelpefunksjon for å skanne spesifikke egenskaper for denne noten
-      const scanProperties = (properties: string[], typeGroup: string) => {
-        for (const attrib of properties) {
-          if (!attrib) continue;
-          
-          const cleanArray = parseFrontMatterStringArray(note.rawFrontmatter, attrib) ?? [];
+      // Skann gjennom hver enkelt egenskap brukeren har valgt i innstillingene
+      for (const attrib of allTargetProps) {
+        if (!attrib) continue;
+        
+        // Hent rå-verdien direkte ut fra YAML-objektet (Sikrer at [[wikilenker]] overlever!)
+        const rawValue = note.rawFrontmatter[attrib];
+        if (rawValue == null) continue;
 
-          const cleanTargets = cleanArray
-              .flatMap(item => StringUtils.splitAndClean(item))
-              .map(StringUtils.cleanLink);
+        // Tving og vask innholdet gjennom din nye, lynraske og optimaliserte StringUtils-pipeline
+        const cleanArray = StringUtils.normalizeToStringArray(rawValue) ?? [];
+
+        for (const targetName of cleanArray) {
+          if (!targetName) continue;
+
+          // Tving nøkkelen til lowercase for å fjerne absolutt alt av case-sensitivitet! [dan]
+          const lowercaseTarget = targetName.toLowerCase();
           
-          for (const targetName of cleanTargets) {
-            // Vi bruker targetName (basename) som nøkkel i baitCache!
-            let bait = this.baitCache.get(targetName);
-            if (!bait) {
-              bait = new BaitClass(targetName);
-              this.baitCache.set(targetName, bait);
-            }
-            
-            bait.isUsed = true;
-            bait.sourceNote = note;           // Noten som eier denne frontmatteren
-            bait.foundInProperty = attrib;     // Hvilken egenskap linken lå i
+          let bait = this.baitCache.get(lowercaseTarget);
+          if (!bait) {
+            bait = new BaitClass(targetName);
+            this.baitCache.set(lowercaseTarget, bait);
           }
+          
+          bait.isUsed = true;
+          
+          // BINGO: I stedet for å overskrive og slette gamle spor, legger vi til 
+          // dette notatet og den tilhørende egenskapen i det delte sources-kartet! [dan]
+          bait.sources.set(note, attrib); 
         }
-      };
-
-      // Skann frontmatter for denne noten mot alle tre bruker-kriterier
-      scanProperties(parentProps, "parent");
-      scanProperties(childProps, "child");
-      scanProperties(friendProps, "friend");
+      }
     }
   }
 
@@ -189,27 +217,26 @@ export class RelatedData {
    * Kobler sammen alle synlige noder som deler ett eller flere baits i minnet.
    */
   private matchCrossingBaits() {
+    // Loop igjennom alle agn som er aktive i denne runden
     for (const bait of this.baitCache.values()) {
-      if (!bait.isUsed) continue;
+      if (!bait.isUsed || bait.sources.size < 2) continue; // Kreves minst 2 kilder for at det skal krysse!
 
-      // Sjekk om dette spesifikke agnet (f.eks. et alias eller filnavn) 
-      // eksisterer som en aktiv, synlig note i noteCache!
-      const matchingNoteInGraph = this.noteCache.get(bait.path) || Array.from(this.noteCache.values()).find(n => n.basename === bait.basename);
+      // Hent ut alle de unike notatene som har lagt ut dette agnet
+      const nodesSharingThisBait = Array.from(bait.sources.keys());
 
-      if (matchingNoteInGraph && matchingNoteInGraph.isUsed) {
-        const source = bait.sourceNote;
-        
-        // Hvis kilden til baitet og den matchende noten i grafen er to forskjellige noder:
-        if (source && source !== matchingNoteInGraph) {
-          
-          // BINGO! Vi har funnet en reell kryssing i grafen.
-          // Vi lagrer denne koblingen direkte i minne-settene til begge notene:
-          source.crossingBaits.add(bait);
-          matchingNoteInGraph.crossingBaits.add(bait);
+      // Vi parer notatene mot hverandre i en dobbel-loop for å koble dem sammen i minnet
+      for (let i = 0; i < nodesSharingThisBait.length; i++) {
+        const nodeA = nodesSharingThisBait[i];
+        if (!nodeA) continue;
 
-          // Registrer dem også inni selve bait-objektet så agnet vet hvem som "bet på"
-          bait.activeConnections.add(source);
-          bait.activeConnections.add(matchingNoteInGraph);
+        for (let j = i + 1; j < nodesSharingThisBait.length; j++) {
+          const nodeB = nodesSharingThisBait[j];
+          if (!nodeB) continue;
+
+          // BINGO! Siden Node A og Node B deler dette agnet, stempler vi det 
+          // rett inn i settene til begge notene. Nå vet de om hverandre! [dan]
+          nodeA.crossingBaits.add(bait);
+          nodeB.crossingBaits.add(bait);
         }
       }
     }
@@ -218,37 +245,44 @@ export class RelatedData {
   private findRelation(centerNote: NoteClass, otherNote: NoteClass): "ignored" | "parent" | "child" | "friend" | "undefined" {
     if (otherNote.isInitiallyIgnored) return "ignored";
 
-    const targetName = otherNote.basename;
     const parentProps = this.settings.optParentProperties;
     const childProps = this.settings.optChildProperties;
     const friendProps = this.settings.optFriendProperties;
 
-    // --- LAG 1: SJEKK BRUKERSTYRTE FRONTMATTER-KRITERIER (To-veis) ---
-    const baitFromCenter = this.baitCache.get(targetName);
-    const baitFromOther = this.baitCache.get(centerNote.basename);
+    const lowercaseOtherName = otherNote.basename.toLowerCase();
+    const lowercaseCenterName = centerNote.basename.toLowerCase();
 
-    // Sjekk A: Center har en egenskap som peker på andre note
-    if (baitFromCenter && baitFromCenter.sourceNote === centerNote) {
-      const prop = baitFromCenter.foundInProperty;
-      otherNote.discoverySource = "frontmatter-kriterium"; // Funnet under en aktiv egenskap!
+    // Hent agnene fra cachen
+    const baitForOther = this.baitCache.get(lowercaseOtherName);
+    const baitForCenter = this.baitCache.get(lowercaseCenterName);
+
+    // ==========================================================================
+    // SJEKK A: Sjekk om centerNote har lagt ut en link til otherNote
+    // ==========================================================================
+    if (baitForOther && baitForOther.sources.has(centerNote)) {
+      // Hent ut nøyaktig hvilken egenskap centerNote brukte da den linket til otherNote [dan]
+      const prop = baitForOther.sources.get(centerNote)!;
+      otherNote.discoverySource = "frontmatter-kriterium";
 
       if (parentProps.includes(prop)) return "parent";
-      if (childProps.includes(prop)) return "child";
-      if (friendProps.includes(prop)) return "friend";
-    }
- 
-    // Sjekk B: Andre note har en egenskap som peker på center
-    if (baitFromOther && baitFromOther.sourceNote === otherNote) {
-      const prop = baitFromOther.foundInProperty;
-      otherNote.discoverySource = "frontmatter-kriterium"; // Funnet under en aktiv egenskap!
-
-      // Husk asymmetrien: Hvis andre peker på center via en parent-property, er andre parent til center
-      if (parentProps.includes(prop)) return "parent"; 
-      if (childProps.includes(prop)) return "child";
+      if (childProps.includes(prop))  return "child";
       if (friendProps.includes(prop)) return "friend";
     }
 
-    // --- LAG 2: SJEKK TAG-BASERTE FALLBACKS (Også en del av brukerens kriterier) ---
+    // ==========================================================================
+    // SJEKK B: Sjekk om otherNote har lagt ut en link tilbake til centerNote (Speiling!)
+    // ==========================================================================
+    if (baitForCenter && baitForCenter.sources.has(otherNote)) {
+      // Hent ut nøyaktig hvilken egenskap otherNote brukte da den linket til centerNote [dan]
+      const prop = baitForCenter.sources.get(otherNote)!;
+      otherNote.discoverySource = "frontmatter-kriterium";
+
+      if (childProps.includes(prop))  return "parent"; // Linker til oss via 'barn' -> Er vår forelder [dan]
+      if (parentProps.includes(prop)) return "child";  // Linker til oss via 'forelder' -> Er vårt barn [dan]
+      if (friendProps.includes(prop)) return "friend"; // Linker til oss via 'partner' -> Er vår venn [dan]
+    }
+
+    // --- LAG 2 & 3: TAGGER OG FRITTSTÅENDE TEKST-LINKER (Forblir helt uendret) ---
     if (StringUtils.hasAnyOf(otherNote.tags, this.settings.optParentTags)) {
       otherNote.discoverySource = "frontmatter-kriterium";
       return "parent";
@@ -262,27 +296,17 @@ export class RelatedData {
       return "friend";
     }
 
-    // --- LAG 3: KOBLEDES, MEN FALLER UTENFOR BRUKERENS KRITERIER ("Undefined") ---
-    // Her sjekker vi om koblingen i det hele tatt finnes i frontmatter (men uten å matche egenskapene over)
+    const targetName = otherNote.basename;
     const finnesIFm = (centerNote.rawFrontmatter && Object.values(centerNote.rawFrontmatter).toString().includes(targetName)) ||
                       (otherNote.rawFrontmatter && Object.values(otherNote.rawFrontmatter).toString().includes(centerNote.basename));
 
     if (finnesIFm) {
-      otherNote.discoverySource = "frontmatter-udefinert"; // Det var en fm-link, men ikke valgt av bruker!
+      otherNote.discoverySource = "frontmatter-udefinert";
     } else {
-      otherNote.discoverySource = "bodytext"; // Fant overhodet ingen spor i frontmatter -> Rent brødtekst-funn
+      otherNote.discoverySource = "bodytext";
     }
-    return "undefined";
-  }
 
-  private fetchAllGates() {
-    this.allGates = [];
-    for (const note of this.noteCache.values()) {
-      // Dytter kun de 3 reelle portene inn i den globale listen
-      this.allGates.push(note.upperGate);
-      this.allGates.push(note.lowerGate);
-      this.allGates.push(note.friendGate);
-    }
+    return "undefined";
   }
     
   private setCenterNoteRelations(centerNote: NoteClass, newNote: NoteClass){
@@ -330,10 +354,9 @@ export class RelatedData {
       for (const relatedFile of filesSet) {
         if (relatedFile.path === parent.path) continue; // skip self
         
-        // if other relations in graph exists (friend, child, other parent), make link
         const relatedNote = this.noteCache.get(relatedFile.path);
 
-        if (relatedNote && relatedNote.isUsed) { // only notes that exists in view already are relevant 
+        if (relatedNote && relatedNote.isUsed) { 
           const relation = this.findRelation(parent, relatedNote);
           
           switch (relation) {
@@ -355,27 +378,29 @@ export class RelatedData {
           continue;
         }
 
-        // create new sibling, as it didn't exist in graph already
-        const siblingNote = this.getOrCreateNote(relatedFile); // get an unused and unrelated note.
+        // Opprett nytt søsken (siden det ikke fantes i grafen fra før)
+        const siblingNote = this.getOrCreateNote(relatedFile); 
         if (!siblingNote) continue;
 
-        siblingNote.assignedArea = 'right'; // Søsken tvinges til å bo i høyre kvadrant!
+        siblingNote.assignedArea = 'right'; // Søsken bor i høyre kvadrant!
         
-        // --- NYTT: SKILL MELLOM EKTE OG BRØDTEKST-SØSKEN ---
-        // Vi sjekker om det finnes et aktivt frontmatter-agn (bait) lagt ut av parent på dette søskenet
-        const parentBait = this.baitCache.get(siblingNote.basename);
-        const isRealFrontmatterLink = parentBait && parentBait.sourceNote === parent;
+        // ==========================================================================
+        // OPPDATERT: Sjekk om forelderen ('parent') finnes i agnets 'sources'-kart!
+        // Dette forteller oss om koblingen kom fra en aktiv frontmatter-egenskap hos parent. [dan]
+        // ==========================================================================
+        const parentBait = this.baitCache.get(siblingNote.basename.toLowerCase());
+        const isRealFrontmatterLink = parentBait && parentBait.sources.has(parent);
 
         if (isRealFrontmatterLink) {
-          siblingNote.relation = "sibling"; // Solid frontmatter-link!
+          siblingNote.relation = "sibling"; // Ekte frontmatter-søsken (Kolleksjon 1) [dan]
         } else {
-          siblingNote.relation = "undefined"; // Kun funnet i brødteksten!
+          siblingNote.relation = "undefined"; // Brødtekst-søsken (Kolleksjon 2) [dan]
         }
 
         parent.relations.children.add(siblingNote);
         siblingNote.relations.parents.add(parent);
 
-        centerNote.relations.siblings.add(siblingNote); // Registrer i centers søsken-register
+        centerNote.relations.siblings.add(siblingNote); 
       }
     }
   }

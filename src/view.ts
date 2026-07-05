@@ -243,13 +243,27 @@ export class RelatednotesView extends ItemView implements HoverParent {
    * Opens selection in adjacent pane.
    * @param internalLink 
    */
-  private onInternalLinkClicked(internalLink: string): void {
+  private async onInternalLinkClicked(internalLink: string): Promise<void> {
     const selectedFile = this.getFile(internalLink);
-    
-    if (selectedFile) {
-      this.plugin.relatedData.update(selectedFile)
-      this.openLinkInAdjacentPane(internalLink);
+    if (!selectedFile) return;
+
+    // ==========================================================================
+    // DØRVAKT MOT DOBBEL-RENDERING: 
+    // Hvis filen brukeren klikket på ALLEREDE er den aktive senternoten i minnet,
+    // avbryter vi her! Dette stopper timing-kræsjen og forhindrer at linjene forsvinner [dan].
+    // ==========================================================================
+    const currentCenter = this.plugin.relatedData.centerNote;
+    if (currentCenter && currentCenter.path === selectedFile.path) {      
+      // Final safeguard: Hvis linjene mot formodning skulle ha flyttet seg litt, 
+      // ber vi bare om en rask piksel-oppretting uten å røre datamodellen! [dan]
+      this.areaManager.requestRedraw(); 
+      return; 
     }
+
+    // Hvis det var en NY node, kjører vi den fulle, dype navigasjonen som før:
+    this.openLinkInAdjacentPane(internalLink);
+    await this.plugin.relatedData.update(selectedFile);
+    this.areaManager.renderGraph();
   }
 
   private onMouseOverLink(event: MouseEvent, targetBox: HTMLElement) {

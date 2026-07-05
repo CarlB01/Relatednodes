@@ -52,14 +52,17 @@ export class AreaManager {
     // Planlegg en ny frame synkronisert med nettleseren/skjermen
     this.animationFrameId = requestAnimationFrame(() => {
 
-      // check heights of lef/right areas - make upper/lower yield
-      this.yieldIfLeftTall();
-      this.yieldIfRightTall();
+      // Tvinger en liten micro-timeout slik at CSS Grid-rammene har landet 100% 
+      // på de ekte pikslene sine før vi gjør getBoundingClientRect()! [dan]
+      setTimeout(() => {
+        this.yieldIfLeftTall();
+        this.yieldIfRightTall();
 
-      // Draw new lines based on recent coords.
-      if (this.related?.centerNote) {
-        this.drawAllGraphLinks();
-      }
+        if (this.related?.centerNote) {
+          this.drawAllGraphLines(); // Tegner strekene fjellstøtt på rett plass!
+        }
+      }, 50); // 50ms er usynlig for det blotte øye, men en evighet for nettleser-geometri
+
       // Nullstill ID-en så neste frame kan kjøre fritt
       this.animationFrameId = null;
     });
@@ -72,19 +75,14 @@ export class AreaManager {
     for (const area of scrollableAreas) {
       if (!area) continue;
 
-      // Finn den faktiske samlingsboksen (.rv-area-collections) som ruller inni området
-      const scrollContainer = area.querySelector(`.${RV_CLASSES.COLLECTION}`) as HTMLElement;
-      
-      if (scrollContainer) {
-        this.plugin.registerDomEvent(
-          scrollContainer, 
-          'scroll', 
-          () => {
-            this.requestRedraw(); // Sørger for at Beziér-kurvene følger med live! [dan]
-          }, 
-          { passive: true }
-        );
-      }
+      this.plugin.registerDomEvent(
+        area, 
+        'scroll', 
+        () => {
+          this.requestRedraw(); // Sørger for at Beziér-kurvene følger med live! [dan]
+        }, 
+        { passive: true }
+      );
     }
   }
 
@@ -95,16 +93,19 @@ export class AreaManager {
    */
   yieldIfLeftTall() {
     const vc = this.containerEl;
-    const descr = `.${RV_CLASSES.LEFT_AREA} .${RV_CLASSES.COL_WRAPPER}`;
+    const descr = '.rv-area.left';
     const leftWrapper = vc.querySelector(descr) as HTMLElement;
+    console.log('leftWrapper?')
+
     if (!leftWrapper) return;
     
     const currentValue = vc.getAttribute(RV_CLASSES.LEFT_TALL);
     const isLeftTall = leftWrapper.scrollHeight > this.center.offsetHeight;
     const newValue = isLeftTall ? "true" : "false";
+    console.log('isLeftTall:', newValue, leftWrapper.scrollHeight, ">", this.center.offsetHeight)
 
     if (currentValue !== newValue) {
-        vc.setAttribute('data-left-tall', newValue);
+        vc.setAttribute(RV_CLASSES.LEFT_TALL, newValue);
     }
   }
 
@@ -114,7 +115,7 @@ export class AreaManager {
    */
   yieldIfRightTall() {
     const vc = this.containerEl;
-    const descr = `.${RV_CLASSES.RIGHT_AREA} .${RV_CLASSES.COL_WRAPPER}`;
+    const descr = '.rv-area.right';
     const rightWrapper = vc.querySelector(descr) as HTMLElement;
     if (!rightWrapper) return;
     
@@ -171,11 +172,11 @@ export class AreaManager {
     mainContainerEl.setAttribute(RV_CLASSES.LEFT_TALL, 'false');
     mainContainerEl.setAttribute(RV_CLASSES.RIGHT_TALL, 'false');
 
-    this.center = mainContainerEl.createDiv({ cls: RV_CLASSES.CENTER_AREA });
-    this.left   = mainContainerEl.createDiv({ cls: RV_CLASSES.LEFT_AREA });
-    this.right  = mainContainerEl.createDiv({ cls: RV_CLASSES.RIGHT_AREA });
-    this.upper  = mainContainerEl.createDiv({ cls: RV_CLASSES.TOP_AREA });
-    this.lower  = mainContainerEl.createDiv({ cls: RV_CLASSES.BOTTOM_AREA });
+    this.center = mainContainerEl.createDiv({ cls: RV_CLASSES.AREA_CENTER });
+    this.left   = mainContainerEl.createDiv({ cls: RV_CLASSES.AREA_LEFT });
+    this.right  = mainContainerEl.createDiv({ cls: RV_CLASSES.AREA_RIGHT });
+    this.upper  = mainContainerEl.createDiv({ cls: RV_CLASSES.AREA_TOP });
+    this.lower  = mainContainerEl.createDiv({ cls: RV_CLASSES.AREA_BOTTOM });
     
     this.backContainerSVG = mainContainerEl.createSvg("svg", { cls: RV_CLASSES.SVG_LAYER });
 
@@ -298,7 +299,7 @@ export class AreaManager {
   /**
    * Denne metoden kjøres når du skal tegne opp alle SVG-linjene på skjermen
    */
-  drawAllGraphLinks() {
+  drawAllGraphLines() {
     const centerNote = this.related.centerNote;
     if (!centerNote) return;
     
@@ -308,76 +309,121 @@ export class AreaManager {
     const links = this.linkCache;
     const canvas = this.backContainerSVG;
 
-    // 1. START-FASE: Marker alle eksisterende SVG-linjer i cachen som ubrukt
-    for (const link of links.values()) {
-        link.used = false; 
-    }
-    
-    // SIKRINGSDØRVAKT: Sjekker om begge portene er fysisk tegnet ut og synlige i DOM-en
-    const canDraw = (from: GateProperties, to: GateProperties) => {
-      return from && to && from.svg && to.svg && 
-             from.parentNote.div && to.parentNote.div;
-    };
-
-    // Hent ut kun de notene som faktisk overlevde Garbage Collection og er i bruk på skjermen
+    // 1. START-FASE: Marker linjer som ubrukt, og nullstill ALLE synlige porter
     const visibleNotes = Array.from(this.related.noteCache.values())
       .filter(n => n.isUsed && n.assignedArea !== "ignored");
 
+    for (const link of links.values()) {
+        link.used = false; 
+    }
+
+    // Fjern tilkoblings-klassen fra alle porter før vi begynner å tegne på nytt [dan]
+    for (const note of visibleNotes) {
+      note.upperGate.svg?.classList.remove('is-connected');
+      note.lowerGate.svg?.classList.remove('is-connected');
+      note.friendGate.svg?.classList.remove('is-connected');
+    }
+    
+    // DØRVAKT: Sjekker om begge portene er fysisk tegnet ut og synlige i DOM-en
+    const canDraw = (from: GateProperties, to: GateProperties) => {
+      return from && to && from.svg && to.svg && 
+             from.parentNote.div && to.parentNote.div &&
+             from.parentNote.div.offsetHeight > 0;
+    };
+
+    // // Hjelpefunksjon: Sjekker om det eksisterer en reell, fysisk kobling i YAML eller brødtekst mellom to noder.
+    const harEkteFysiskLink = (a: NoteClass, b: NoteClass): boolean => {
+      // Hent ut BÅDE de eksisterende (resolved) og uopprettede (unresolved) koblingene fra Obsidian [dan]
+      const resolvedLinks = this.plugin.app.metadataCache.resolvedLinks;
+      const unresolvedLinks = this.plugin.app.metadataCache.unresolvedLinks;
+      
+      // INTERN HJELPEFUNKSJON: Gjør oppslagene 100% eksplisitte og vanntette for TypeScript!
+      const sjekkKobling = (fraPath: string, tilBasename: string): boolean => {
+        // 1. Sjekk eksisterende lenker (resolvedLinks lagrer stier som nøkler: resolvedLinks[fraPath][tilPath]) [dan]
+        const resObj = resolvedLinks[fraPath];
+        if (resObj) {
+          // Siden resolvedLinks bruker fulle stier som under-nøkler, sjekker vi om noen av stiene matcher tilBasename [dan]
+          const harTreff = Object.keys(resObj).some(path => path.toLowerCase().endsWith(`/${tilBasename.toLowerCase()}.md`) || path.toLowerCase() === `${tilBasename.toLowerCase()}.md`);
+          if (harTreff) return true;
+        }
+
+        // 2. Sjekk uopprettede lenker (unresolvedLinks lagrer basenames som under-nøkler: unresolvedLinks[fraPath][tilBasename]) [dan]
+        const unresObj = unresolvedLinks[fraPath];
+        if (unresObj && typeof unresObj === 'object') {
+          if (tilBasename in unresObj) return true;
+        }
+
+        return false;
+      };
+
+      // Sjekk to-veis i Obsidians offisielle registre [dan]
+      if (sjekkKobling(a.path, b.basename) || sjekkKobling(b.path, a.basename)) {
+        return true;
+      }
+
+      // Sjekk 3: Sjekk om de deler et agn i din egen sources-modell
+      const baitForB = this.related.baitCache.get(b.basename.toLowerCase());
+      const baitForA = this.related.baitCache.get(a.basename.toLowerCase());
+
+      if (baitForB && baitForB.sources.has(a)) return true;
+      if (baitForA && baitForA.sources.has(b)) return true;
+
+      return false;
+    };
+
     // ==========================================================================
-    // 2. TEGNE-FASE: Vi parer notene i en dobbel-loop for å unngå duplikate linjer
+    // 2. TEGNE-FASE: Kun linjer mellom noder med REELL, FYSISK LINK!
     // ==========================================================================
     for (let i = 0; i < visibleNotes.length; i++) {
       const nodeA = visibleNotes[i];
-      
       if (!nodeA) continue;
 
       for (let j = i + 1; j < visibleNotes.length; j++) {
         const nodeB = visibleNotes[j];
-  
         if (!nodeB) continue;
 
-        // --- KATEGORI A: VERTIKALE RELASJONER (Parents / Children / Siblings) ---
-      
-        // Sjekk 1: Er nodeB et barn av nodeA?
+        // PRINSIPP: Hvis det IKKE finnes en ekte, fysisk link/frontmatter-kobling 
+        // mellom akkurat disse to nodene, tegner vi ALDRI linje! [dan]
+        if (!harEkteFysiskLink(nodeA, nodeB)) continue;
+
+        // --- KATEGORI A: VERTIKALE RELASJONER (Parents / Children) ---
         if (nodeA.relations.children.has(nodeB)) {
-          // Linjen går fra toppen av barnet (up) til bunnen av forelderen (down)
           if (canDraw(nodeB.upperGate, nodeA.lowerGate)) {
             DrawingUtils.drawLink(nodeB.upperGate, nodeA.lowerGate, links, offBy, canvas);
+            
+            // BINGO! Begge disse to portene har nå en aktiv linje [dan]
+            nodeB.upperGate.svg!.classList.add('is-connected');
+            nodeA.lowerGate.svg!.classList.add('is-connected');
           }
         } 
-        // Sjekk 2: Er nodeA et barn av nodeB?
         else if (nodeA.relations.parents.has(nodeB)) {
-          // Linjen går fra toppen av barnet (up) til bunnen av forelderen (down)
           if (canDraw(nodeA.upperGate, nodeB.lowerGate)) {
             DrawingUtils.drawLink(nodeA.upperGate, nodeB.lowerGate, links, offBy, canvas);
+            
+            nodeA.upperGate.svg!.classList.add('is-connected');
+            nodeB.lowerGate.svg!.classList.add('is-connected');
           }
         }
 
-        // --- KATEGORI B: HORISONTALE RELASJONER (Friends & Kryssende Baits) ---
-        
-        // Sjekk om disse to unike nodene deler et eller flere aktive baits (fra trinn 3c)
-        const delerBait = nodeA.crossingBaits.size > 0 && 
-                          Array.from(nodeA.crossingBaits).some(b => nodeB.crossingBaits.has(b));
-
-        // Hvis de er venner, søsken av samme center, eller deler et kryssende agn:
-        if (nodeA.relations.friends.has(nodeB) || nodeA.relations.siblings.has(nodeB) || delerBait) {
-          
-          // Siden friendGate dynamisk er plassert på enten venstre eller høyre flanke 
-          // av NoteClass.render() basert på kvadrant, kan vi trygt koble sammen 
-          // friendGate mot friendGate. Akse-regelen og CSS-en din sikrer at de møtes horisontalt!
+        // --- KATEGORI B: HORISONTALE RELASJONER (Friends & Søsken & Kryssende Baits) ---
+        // Siden de overlevde dørvakten over, betyr det at de HAR en beviselig link, 
+        // og vi kobler dem vakkert horisontalt flanke-til-flanke via friendGate! [dan]
+        else {
           if (canDraw(nodeA.friendGate, nodeB.friendGate)) {
             DrawingUtils.drawLink(nodeA.friendGate, nodeB.friendGate, links, offBy, canvas);
+          
+            nodeA.friendGate.svg!.classList.add('is-connected');
+            nodeB.friendGate.svg!.classList.add('is-connected');
           }
         }
       }
-    }
-
+    }  
     // 3. OPPRYDDINGS-FASE: Slett alle linjer i cachen som ikke ble gjenbrukt i denne runden
     for (const [key, link] of this.linkCache.entries()) {
-        if (!link.used) {
-            link.svgElement.remove(); // Fjern fysisk fra SVG-containeren i DOM-en
-            this.linkCache.delete(key); // Fjern fra minne-cachen
-        }
+      if (!link.used) {
+        link.svgElement.remove(); // Fjern fysisk fra SVG-containeren i DOM-en
+        this.linkCache.delete(key); // Fjern fra minne-cachen
+      }
     }
   }
 

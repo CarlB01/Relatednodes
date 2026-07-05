@@ -35,7 +35,7 @@ export class NoteClass {
   assignedArea: "upper" | "lower" | "left" | "right" | "center" | "ignored" = "lower";
 
   // connections
-  crossingBaits = new Set<BaitClass>();
+  public crossingBaits = new Set<BaitClass>();
   
   // De 3 faste portene
   upperGate: GateProperties;
@@ -108,7 +108,7 @@ export class NoteClass {
   
     let div = this.div;
       
-    // 1. REUSE or CREATE?
+    // 1. REUSE or CREATE
     if (div) {
       div.innerHTML = "";
       div.className = "item"; //  this.linkDivDescr;
@@ -120,7 +120,7 @@ export class NoteClass {
     // 2. BUILD INSIDE
     const linkWrapper = createDiv({ cls: RV_CLASSES.LINK });
 
-    const nativeLink = createEl('a', { 
+    linkWrapper.createEl('a', { 
         text: this.displayText,
         cls: `${RV_CLASSES.A} ${RV_CLASSES.SUPERCHARGED_ATTRIB}`,
         attr: {
@@ -131,8 +131,6 @@ export class NoteClass {
         }
     });
     
-    linkWrapper.appendChild(nativeLink);
-
     // 3. FRIENDGATE DIRECTION
     if (this.assignedArea === "left") {
       this.friendGate.direction = 'right'; // Vennen peker inn mot høyre (mot center)
@@ -165,14 +163,12 @@ export class NoteClass {
     div.appendChild(topSVG);
     div.appendChild(bottomSVG);
 
-    const isLeftFriend = this.friendGate.direction === 'left'
-    
-    if (isLeftFriend) {
-      // Venstre side: [ FriendGate ] [ Tekst-lenke ]
+    if (this.friendGate.direction === 'left') {
+      // Venstre side: [ FriendGate ] [ Tekst]
       div.appendChild(friendSVG); 
       div.appendChild(linkWrapper);
     } else {
-      // Høyre side (og topp/bunn): [ Tekst-lenke ] [ FriendGate ]
+      // Høyre side (og topp/bunn): [ Tekst ] [ FriendGate ]
       div.appendChild(linkWrapper);
       div.appendChild(friendSVG);
     }

@@ -11,14 +11,14 @@ export const RV_CLASSES = {
   SVG_LAYER: 'rv-svg-layer',
   
   // Kvadranter
-  CENTER_AREA: 'rv-center-area',
-  LEFT_AREA: 'rv-left-area',
-  RIGHT_AREA: 'rv-right-area',
-  TOP_AREA: 'rv-upper-area',
-  BOTTOM_AREA: 'rv-lower-area',
+  AREA_CENTER: 'rv-area center',
+  AREA_LEFT: 'rv-area left',
+  AREA_RIGHT: 'rv-area right',
+  AREA_TOP: 'rv-area upper',
+  AREA_BOTTOM: 'rv-area lower',
   
   // Samlinger og grupper
-  COLLECTION: 'rv-area-collections',
+  COLLECTION: 'rv-collection',
   COL_WRAPPER: 'rv-columns-wrapper',
   GROUPS: 'rv-groups',
 
@@ -36,7 +36,7 @@ export const RV_CLASSES = {
   PLUS: '+',
 
   //Gates
-  GATE_NODE: 'rv-gate-node',
+  GATE_SVG: 'rv-gate-svg',
   
   // Data-attributter
   LEFT_TALL: 'data-left-tall',

@@ -1,48 +1,84 @@
 export class StringUtils {
+  // Én felles Regex-motor som fanger opp [[Wikilenker]] og stripper dem i ett blunk.
+  // Gjenbrukes i minnet i stedet for å opprette nye strenger hele tiden.
+  private static readonly WIKILINK_REGEX = /^\[+|\u200B|\]+$/g;
 
   /**
-   * Splits by comma and cleans each part (handles wikilinks with | )
+   * TRINN 1: Lynrask normalisering.
+   * Kutter ut unødvendige flatMaps og filters. Den sjekker typen med en gang,
+   * og sluser innholdet direkte videre.
    */
-  static splitAndClean(value: unknown): string[] {
-    if (value == null) return [];
+  static normalizeToStringArray(input: unknown): string[] {
+    if (input == null) return [];
 
+    if (Array.isArray(input)) {
+      const result: string[] = [];
+      // Bruker en klassisk for-of loop (mye raskere enn .flatMap og .filter i JS!)
+      for (const item of input) {
+        if (item == null) continue;
+        // Tvinger elementet til streng og vasker det direkte inn i resultatet
+        const cleaned = this.splitAndClean(String(item));
+        if (cleaned.length > 0) {
+          // I stedet for å slå sammen arrays med .concat eller flatMap, 
+          // dytter vi elementene direkte inn med en effektiv push-spread
+          result.push(...cleaned);
+        }
+      }
+      return result;
+    }
+
+    // Singel verdi
+    return this.splitAndClean(String(input));
+  }
+
+  /**
+   * TRINN 2: Smart komma-splitting.
+   * I stedet for å kjøre tunge kjede-operasjoner, splitter vi på komma,
+   * og kjører en super-ren for-loop som vasker bitene direkte.
+   */
+  static splitAndClean(value: string): string[] {
+    if (value == null) return [];
     const str = String(value).trim();
     if (!str) return [];
 
-    return str.split(',')
-        .flatMap(part => this.extractLinkTargets(part))
-        .filter(Boolean);
+    if (!str.includes(',')) {
+      const singleClean = this.cleanSingleSegment(str);
+      return singleClean ? [singleClean] : [];
+    }
+
+    const parts = str.split(',');
+    const result: string[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (!part) continue;
+      const cleaned = this.cleanSingleSegment(part);
+      if (cleaned) result.push(cleaned);
+    }
+    return result;
   }
 
   /**
-   * Handles both [[Link]] and [[Link|Display Text]] → returns clean link targets
+   * TRINN 3: Den store tidsspareren!
+   * Slår sammen dine gamle 'extractLinkTargets' og 'trimWikilinks' til én felles, lynrask operasjon.
+   * Den parser unna pipen (|) og stripper klammer [[ ]] samtidig uten array-støy.
    */
-  static extractLinkTargets(text: string): string[] {
-      const trimmed = text.trim();
-      if (!trimmed) return [];
+  static cleanSingleSegment(text: unknown): string {
+    if (text == null) return '';
+    let segment = String(text).trim();
+    if (!segment) return '';
+    
+    // Sjekk om det er en wikilink med en display-tekst pipe (f.eks. [[Notat|Mitt Alias]])
+    // Vi bruker indexOf i stedet for split('|') for å unngå å lage en unødvendig array i minnet!
+    const pipeIndex = segment.indexOf('|');
+    if (pipeIndex !== -1) {
+      // Vi kutter strengen og beholder kun den venstre siden (selve filnavnet)
+      segment = segment.substring(0, pipeIndex).trim();
+    }
 
-      // Split on pipe (|) and take the first part (the actual link target)
-      const segments = trimmed.split('|').map(s => s.trim());
-
-      return segments.map(segment => StringUtils.trimWikilinks(segment));
-  }
-
-  /**
-   * Optional: Cleaner alias for trimWikilinks if you prefer the name
-   */
-  static cleanLink = (str: string): string => this.trimWikilinks(str);
-
-  /**
-   * Removes [[ and ]] from both sides
-   */
-  static trimWikilinks(str: string): string {
-      if (typeof str !== 'string' || !str) return '';
-
-      return str
-          .trim()
-          .replace(/^\[+/, '')   // remove one or more [ at start
-          .replace(/\]+$/, '')   // remove one or more ] at end
-          .trim();
+    // Stripper bort [[ og ]] i én rask operasjon ved hjelp av Regex-motoren vår
+    // KORRIGERT: Vi kaller den spesifikt via 'StringUtils.WIKILINK_REGEX' i stedet for 'this.WIKILINK_REGEX'!
+    // Dette garanterer at JavaScript ALLTID finner motoren, uansett hvordan funksjonen kalles! [dan]
+    return segment.replace(StringUtils.WIKILINK_REGEX, '').trim();
   }
 
   //return an array 
@@ -56,7 +92,7 @@ export class StringUtils {
       .flatMap(part => part.trim())
       .filter(Boolean);
   }
-
+ 
   /**
      * Sjekker om en tekst inneholder noen av de forhåndskonverterte fragmentene.
      * @param text Stien eller teksten som skal sjekkes

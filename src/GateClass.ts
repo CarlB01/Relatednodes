@@ -47,7 +47,7 @@ export class GateProperties {
       attr: {
         width: RV_CLASSES.RADIUS * 2,
         height: RV_CLASSES.RADIUS * 2,
-        class: `${RV_CLASSES.GATE_NODE} direction-${this.direction}`,
+        class: `${RV_CLASSES.GATE_SVG} ${this.direction}`,
         style: "position: absolute; z-index: 5; overflow: visible;"
       }
     });

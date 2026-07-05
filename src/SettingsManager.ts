@@ -30,7 +30,12 @@ export class SettingsManager {
    * Denne bodde før i main.ts. Nå lever den her og har direkte tilgang til dataene!
    */
   public prepare() {
-    const parseStr = (str: string) => str ? str.split(",").map(s => s.trim()).filter(Boolean) : [];
+    // Oppdatert hjelpefunksjon: Fjerner usynlige linjeskift (\n, \r) og trimmer elementene safely!
+    const parseStr = (str: string) => {
+      if (!str) return [];
+      const cleanStr = str.replace(/[\r\n]+/g, ""); // Stripper bort absolutt alle linjeskift!
+      return cleanStr.split(",").map(s => s.trim()).filter(Boolean);
+    };
 
     // 1. Properties (Case-sensitive)
     this.optParentProperties = parseStr(this.parentProperties);

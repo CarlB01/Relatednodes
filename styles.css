@@ -1,6 +1,7 @@
-/* ==========================================================================
-   SPECIFIC REGIONS (CSS Grid Ryggrad + Absolute Ankre)
-   ========================================================================== */
+/* =============================================== */
+/*  CONTAINER                                           */
+/* =============================================== */
+
 .rv-container {
   container-name: main;
 
@@ -29,7 +30,11 @@
   }
 }
 
-.rv-center-area {
+/* =============================================== */
+/*  AREA                                           */
+/* =============================================== */
+
+.rv-area.center {
   grid-column: 2;
   grid-row: 3;
   
@@ -42,7 +47,7 @@
   width:auto;
 }
 
-.rv-upper-area {
+.rv-area.upper {
   grid-column: 2;
   grid-row: 2;
   margin-bottom: 5px; /* Skaper avstand til senter */
@@ -58,7 +63,7 @@
   align-self:last baseline;
 }
 
-.rv-left-area {
+.rv-area.left {
   grid-column: 1;
   grid-row: 3;
 
@@ -74,7 +79,7 @@
   overflow-y: auto !important; 
 }
 
-.rv-right-area {
+.rv-area.right {
   grid-column: 3;
   grid-row: 2 / span 2; 
   
@@ -93,7 +98,7 @@
 }
 
 /* LOWER AREA (Deltar i ryggraden, men viker unna rad 3 automatisk) */
-.rv-lower-area {
+.rv-area.lower {
   /* Default: Strekk seg over alle 3 kolonnene (full bredde i bunn) */
   grid-row: 4;
   margin-top: 5px;
@@ -113,13 +118,17 @@
   box-sizing: border-box;
 }
 
+/* =============================================== */
+/*  AREA + CONTAINER                               */
+/* =============================================== */
+
 .rv-container[data-left-tall="true"] {
   
-  & .rv-upper-area {
+  & .rv-area.upper {
     grid-column: 2; /* yield left upper area */
   }
 
-  & .rv-left-area {
+  & .rv-area.left {
     grid-row: 2 / span 2; /* left area takes over */
     max-height: 40vh;
     align-self: last baseline;
@@ -128,23 +137,22 @@
 
 .rv-container[data-right-tall="true"] {
   
-  & .rv-lower-area {
+  & .rv-area.lower {
     grid-column: 1 / span 2; /* Gi fra deg kolonne 3 */
   }
 
-  & .rv-right-area {
+  & .rv-area.right {
     grid-row: 2 / span 3;    /* Høyre side okkuperer hele den vertikale veggen */
     max-height: 60vh;
   }
 }
 
-
-/* ==========================================================================
-   4. GROUPS & ITEMS INTERNT (Automatisk kolonne-grid på maks 120px)
-   ========================================================================== */
+/* =============================================== */
+/*  COLLECTION                                     */
+/* =============================================== */
 
 /* Etasje-stableren: Skal KUN stable gruppene vertikalt! */
-.rv-area-collections {
+.rv-collection {
   display: flex !important;
   flex-direction: column;
   gap: 15px;
@@ -152,7 +160,6 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  border: 1px solid greenyellow;
   height: auto; /* La høyden leve med innholdet slik at rullefeltet i lower-area trigges */
   overflow: visible; /* La plus/minus-knapper blø hvis nødvendig */
   /* border: 1px solid green; /* Behold for testing */
@@ -161,6 +168,10 @@
     margin-top: 0; 
   }
 }
+
+/* =============================================== */
+/*  COLUMNS-WRAPPER                                */
+/* =============================================== */
 
 /* Genererer kolonnene for ALT innhold samlet */
 .rv-columns-wrapper {
@@ -174,11 +185,14 @@
   max-width: 100%;
   height: fit-content;
   box-sizing: border-box;
+  overflow: visible !important;
 }
 
-/* KOLONNE-WRAPPER SPESIFIKT FOR LOWER AREA */
-/* Vi overstyrer den generelle .rv-columns-wrapper KUN når den bor i bunnen */
-.rv-lower-area .rv-columns-wrapper {
+/* =============================================== */
+/*  COLUMNS-WRAPPER + AREA.LOWER                   */
+/* =============================================== */
+
+.rv-area.lower .rv-columns-wrapper {
   display: block !important;
   columns: 100px;
   column-gap: 12px;
@@ -187,28 +201,10 @@
   max-width: 100%; 
 }
 
-/* ==========================================================================
-   DYNAMISK DØRVAKT: Hvis det kun er 1, 2 eller 3 elementer totalt i bunnen
-   ========================================================================== */
+/* =============================================== */
+/*  GROUPS                                         */
+/* =============================================== */
 
-/* Hvis wrapperen inneholder kun ett enslig element (1 item) */
-.rv-lower-area .rv-columns-wrapper:not(:has(.rv-linkDiv:nth-child(2))) {
-  display: flex !important;
-  justify-content: center !important;
-  align-items: center !important;
-  columns: none !important; /* Skru av kolonneflyten helt */
-}
-
-/* Hvis wrapperen inneholder maksimalt 3 elementer (2-3 items) */
-.rv-lower-area .rv-columns-wrapper:has(.rv-linkDiv:nth-child(2)):not(:has(.rv-linkDiv:nth-child(4))) {
-  display: flex !important;
-  flex-flow: row wrap !important; /* Legg dem ved siden av hverandre horisontalt */
-  justify-content: center !important;
-  gap: 12px !important;
-  columns: none !important; /* Skru av kolonneflyten helt */
-}
-
-/* GRUPPEN: Gjennomskinnelig for kolonneflyten, men beholder styling */
 .rv-groups {
   /* display: contents gjør at denne div-en blir "usynlig" for kolonne-motoren, 
      slik at alle .rv-linkDiv på innsiden flyter og balanseres 
@@ -227,81 +223,43 @@
   border-color: var(--background-modifier-border-hover);
 }
 
-/* LINK CONTAINER (Fortsatt en horisontal Flexbox for side-portene) */
-.rv-linkDiv {
-  width: fit-content !important;
-  max-width: 120px; 
+/* =============================================== */
+/*  ITEM                                           */
+/* =============================================== */
 
-  /* MAGIEN: margin: 0 auto sørger for at Flexbox-rammen sentreres horisontalt 
-     i midten av kolonne-cellen sin, uansett om det er 1 eller 3 kolonner! */
-  margin: 0 auto 12px auto;
-  break-inside: avoid;
+.item {
+  /* Tvinger innholdet (friendGate og tekst) til å ligge sidelengs i en pen rekke! */
+  display: inline-flex !important; 
+  flex-direction: row !important;
+  align-items: center !important;  
+  justify-content: center !important;
   
-  display: flex !important;
-  flex-direction: row; 
-  align-items: center; 
-  justify-content: center;
+  /* KRITISK: Gjør at position: absolute på top og bottom gate låses til denne knappen, 
+     i stedet for å flyte vilt rundt på skjermen! */
+  position: relative !important; 
   
-  /* Etablerer (0,0) for øvre og nedre absolutt-port */
-  position: relative !important;
-  padding: 1px;
-  background-color: color-mix(in srgb, var(--background-primary), transparent 50%);
+  min-width: 100px;
+  max-width: 125px;
+  padding: 6px 12px;
+  margin: 4px;
+  
+  background-color: color-mix(in srgb, var(--background-primary), transparent 50%);  
+  border-radius: 4px;
+  box-sizing: border-box;
 }
 
-/* ??? display: inline-block; /* makes the info 'i' appear normally */
+/* =============================================== */
+/*  LINKDIV                                        */
+/* =============================================== */
 
-.rv-linkDiv.hidden {
-  display: none !important;
+.rv-linkdiv {
+  display: inline-block;
+  flex-grow: 0; /* Hindrer at teksten dytter portene ut av knappen */
 }
 
-/* SELVE NOTAT-LENKEN */
-.rv-link {  
-  display: block;
-  white-space: normal; 
-  word-break: break-word; 
-  hyphens: auto; 
-  padding: 8px 12px; 
-  flex: 1; /* La teksten ta den plassen den trenger */
-}
-
-.rv-info-button,
-.rv-plusminus {
-  position: absolute;
-  white-space: nowrap;
-  background-color: rgb(from var(--background-primary) r g b);
-  box-shadow: 0 1px calc(4px * var(--scaleFactor)) #0008;  
-  border: 1px solid gray;
-  border-radius: calc(8px * var(--scaleFactor));
-  padding: calc(3px * var(--scaleFactor));
-  font-size: calc(10px * var(--scaleFactor));
-  font-weight: 900;
-  /* borderColor = '#068ef6' */
-  left: calc(100% - 5px);
-  top: calc(100% - 5px);
-  z-index: 101;
-  overflow: visible;
-}
-
-.rv-plusminus {
-  left: calc(100% - 15px);
-}
-
-
-.rv-info-hover {
-  /* width: 150px;
-  position: absolute;
-  top: anchor(top);
-  right: anchor(left);
-  background-color: rgb(from var(--background-primary) r g b);     
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 12px; 
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15);
-   z-index: 1102; */
-}
-/* ==========================================================================
-   SVG area for line drawing
-   ========================================================================== */
-
+/* =============================================== */
+/*  SVG-LAYER                                      */
+/* =============================================== */
 
 .rv-svg-layer {
   position: absolute !important; 
@@ -315,43 +273,129 @@
   pointer-events: none; /* Sørg for at linjene ikke blokkerer klikk! */
 }
 
-/* ==========================================================================
-   GLOBAL GATE-STYLING
-   ========================================================================== */
+/* =============================================== */
+/*  GATE                                           */
+/* =============================================== */
 
-/* GLOBAL GATE-STYLING (Felles for alle retninger) */
-.rv-gate-node {
-  width: 5px;
-  height: 5px;
-  overflow: visible;
+.rv-gate-svg {
+  position: absolute !important;
+  width: 6px !important;
+  height: 6px !important;
+  overflow: visible !important;
+  pointer-events: none;
 }
 
-.rv-gate-node.direction-up {
-  position: absolute !important;
+.rv-gate-svg.up {
   z-index: 6;
   top: 0; 
   left: calc(50% - 10px); 
 }
 
-.rv-gate-node.direction-down {
-  position: absolute !important;
-  z-index: 6;
+.rv-gate-svg.down {
   bottom: -4px;   
+  z-index: 6;
   left: calc(50% + 10px); 
 }
 
-.rv-gate-node.direction-right,
-.rv-gate-node.direction-left {
+.rv-gate-svg.left, 
+.rv-gate-svg.right {
   position: relative !important; 
-  display: block !important;
-  flex: 0 0 5px; 
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
 }
 
-.rv-gate-node.direction-left {
+.rv-gate-svg.left {
   margin-right: 4px;
 }
 
-.rv-gate-node.direction-right {
+.rv-gate-svg.right {
   margin-left: 4px;
 }
 
+/* ==========================================================================
+   PORT-FYLLING (Aktiv vs. Tom tilstand)
+   ========================================================================== */
+
+/* STANDARD/TOM TILSTAND: 
+   Portene fødes som bittesmå, hule ringer (gjennomsiktig inni med en tynn ramme) */
+.rv-gate-svg circle {
+  fill: var(--background-secondary) !important; /* Matcher knappebakgrunnen */
+  stroke: var(--text-muted) !important;         /* Dus, nøytral ramme */
+  stroke-width: 1px !important;
+  transition: fill 0.2s ease, stroke 0.2s ease; /* Lekker, flytende fargeovergang! */
+}
+
+/* AKTIV/FYLT TILSTAND:
+   Når JavaScript oppdager en ekte linje, fylles sirkelen med fargen til linjene dine! */
+.rv-gate-svg.is-connected circle {
+  /* Her bruker vi Obsidians offisielle aksentfarge (lilla/blå alt etter tema), 
+     eller du kan skrive en hardkodet farge som #a76f6f eller var(--graph-line) */
+  fill: var(--text-muted) !important; /* Matcher knappebakgrunnen */
+  stroke: var(--text-muted) !important;         /* Dus, nøytral ramme */
+}
+
+/* EFFEKT VED HOVER (Valgfritt, men utrolig stilig):
+   Når brukeren holder musen over en aktiv knapp, kan vi gløde portene ekstra! */
+.item.is-hovered .rv-gate-svg.is-connected circle {
+  filter: drop-shadow(0 0 2px var(--interactive-accent));
+}
+/*
+.rv-gammellinkdiv {
+  width: fit-content !important;
+  max-width: 120px; 
+
+  margin: 0 auto 12px auto;
+  break-inside: avoid;
+  
+  display: flex !important;
+  flex-direction: row; 
+  align-items: center; 
+  justify-content: center;
+  
+  position: relative !important;
+  padding: 1px;
+  background-color: color-mix(in srgb, var(--background-primary), transparent 50%);
+}
+
+/* ??? display: inline-block; /* makes the info 'i' appear normally */
+/*
+.rv-linkdiv.hidden {
+  display: none !important;
+}
+
+.rv-info-but,
+.rv-plusm {
+  position: absolute;
+  white-space: nowrap;
+  background-color: rgb(from var(--background-primary) r g b);
+  box-shadow: 0 1px calc(4px * var(--scaleFactor)) #0008;  
+  border: 1px solid gray;
+  border-radius: calc(8px * var(--scaleFactor));
+  padding: calc(3px * var(--scaleFactor));
+  font-size: calc(10px * var(--scaleFactor));
+  font-weight: 900;
+  borderColor = '#068ef6' 
+  left: calc(100% - 5px);
+  top: calc(100% - 5px);
+  z-index: 101;
+  overflow: visible;
+}
+
+.rv-plusm {
+  left: calc(100% - 15px);
+}
+
+
+.rv-info-h {
+  /* width: 150px;
+  position: absolute;
+  top: anchor(top);
+  right: anchor(left);
+  background-color: rgb(from var(--background-primary) r g b);     
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px; 
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.15);
+   z-index: 1102; 
+}
+   */
