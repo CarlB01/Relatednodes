@@ -315,7 +315,7 @@ export class AreaManager {
     const links = this.linkCache;
     const canvas = this.backContainerSVG;
 
-    // 1. START-FASE: Marker linjer som ubrukt, og nullstill ALLE synlige porter
+    // 1. START-FASE: Hent aktive noder og nullstill porter
     const visibleNotes = Array.from(this.related.noteCache.values())
       .filter(n => n.isUsed && n.assignedArea !== "ignored");
 
@@ -323,54 +323,40 @@ export class AreaManager {
         link.used = false; 
     }
 
-    // Fjern tilkoblings-klassen fra alle porter før vi begynner å tegne på nytt [dan]
     for (const note of visibleNotes) {
       note.upperGate.svg?.classList.remove('is-connected');
       note.lowerGate.svg?.classList.remove('is-connected');
       note.friendGate.svg?.classList.remove('is-connected');
     }
     
-    // DØRVAKT: Sjekker om begge portene er fysisk tegnet ut og synlige i DOM-en
     const canDraw = (from: GateProperties, to: GateProperties) => {
       return from && to && from.svg && to.svg && 
-             from.parentNote.div && to.parentNote.div &&
-             from.parentNote.div.offsetHeight > 0;
+            from.parentNote.div && to.parentNote.div &&
+            from.parentNote.div.offsetHeight > 0;
     };
 
-    // // Hjelpefunksjon: Sjekker om det eksisterer en reell, fysisk kobling i YAML eller brødtekst mellom to noder.
+    // Din bunnsolide link-vasker fra tidligere (sjekker resolved/unresolved og baits)
     const harEkteFysiskLink = (a: NoteClass, b: NoteClass): boolean => {
-      // Hent ut BÅDE de eksisterende (resolved) og uopprettede (unresolved) koblingene fra Obsidian [dan]
       const resolvedLinks = this.plugin.app.metadataCache.resolvedLinks;
       const unresolvedLinks = this.plugin.app.metadataCache.unresolvedLinks;
       
-      // INTERN HJELPEFUNKSJON: Gjør oppslagene 100% eksplisitte og vanntette for TypeScript!
       const sjekkKobling = (fraPath: string, tilBasename: string): boolean => {
-        // 1. Sjekk eksisterende lenker (resolvedLinks lagrer stier som nøkler: resolvedLinks[fraPath][tilPath]) [dan]
         const resObj = resolvedLinks[fraPath];
         if (resObj) {
-          // Siden resolvedLinks bruker fulle stier som under-nøkler, sjekker vi om noen av stiene matcher tilBasename [dan]
           const harTreff = Object.keys(resObj).some(path => path.toLowerCase().endsWith(`/${tilBasename.toLowerCase()}.md`) || path.toLowerCase() === `${tilBasename.toLowerCase()}.md`);
           if (harTreff) return true;
         }
-
-        // 2. Sjekk uopprettede lenker (unresolvedLinks lagrer basenames som under-nøkler: unresolvedLinks[fraPath][tilBasename]) [dan]
         const unresObj = unresolvedLinks[fraPath];
         if (unresObj && typeof unresObj === 'object') {
           if (tilBasename in unresObj) return true;
         }
-
         return false;
       };
 
-      // Sjekk to-veis i Obsidians offisielle registre [dan]
-      if (sjekkKobling(a.path, b.basename) || sjekkKobling(b.path, a.basename)) {
-        return true;
-      }
+      if (sjekkKobling(a.path, b.basename) || sjekkKobling(b.path, a.basename)) return true;
 
-      // Sjekk 3: Sjekk om de deler et agn i din egen sources-modell
       const baitForB = this.related.baitCache.get(b.basename.toLowerCase());
       const baitForA = this.related.baitCache.get(a.basename.toLowerCase());
-
       if (baitForB && baitForB.sources.has(a)) return true;
       if (baitForA && baitForA.sources.has(b)) return true;
 
@@ -378,7 +364,7 @@ export class AreaManager {
     };
 
     // ==========================================================================
-    // 2. TEGNE-FASE: Kun linjer mellom noder med REELL, FYSISK LINK!
+    // 2. ULTRA-EFFEKTIV TEGNE-LOOP (Lydig etter dine eksakte regler!)
     // ==========================================================================
     for (let i = 0; i < visibleNotes.length; i++) {
       const nodeA = visibleNotes[i];
@@ -388,47 +374,56 @@ export class AreaManager {
         const nodeB = visibleNotes[j];
         if (!nodeB) continue;
 
-        // PRINSIPP: Hvis det IKKE finnes en ekte, fysisk link/frontmatter-kobling 
-        // mellom akkurat disse to nodene, tegner vi ALDRI linje! [dan]
+        const meg = 'This is me';
+        const mor = 'mother of my children';
+        const Ameg = nodeA.basename == meg;
+        const Bmeg = nodeB.basename == meg;
+        const Amor = nodeA.basename == mor;
+        const Bmor = nodeB.basename == mor;
+        const AmegBmor = Ameg && Bmor;
+        const BmegAmor = Bmeg && Amor;
+
+        const fantMM = AmegBmor || BmegAmor;
+        const harLink = harEkteFysiskLink(nodeA, nodeB);
+        const canDraw2 = canDraw(nodeA.friendGate, nodeB.friendGate);
+
         if (!harEkteFysiskLink(nodeA, nodeB)) continue;
 
-        // --- KATEGORI A: VERTIKALE RELASJONER (Parents / Children) ---
-        if (nodeA.relations.children.has(nodeB)) {
-          if (canDraw(nodeB.upperGate, nodeA.lowerGate)) {
-            DrawingUtils.drawLink(nodeB.upperGate, nodeA.lowerGate, links, offBy, canvas);
-            
-            // BINGO! Begge disse to portene har nå en aktiv linje [dan]
-            nodeB.upperGate.svg!.classList.add('is-connected');
+        // REGEL 1: Er Node A biologisk forelder til Node B? (A har B i barn, eller B har A i foreldre) [dan]
+        if (nodeA.relations.children.has(nodeB) || nodeB.relations.parents.has(nodeA)) {
+          if (canDraw(nodeA.lowerGate, nodeB.upperGate)) {
+            DrawingUtils.drawLink(nodeA.lowerGate, nodeB.upperGate, links, offBy, canvas);
             nodeA.lowerGate.svg!.classList.add('is-connected');
+            nodeB.upperGate.svg!.classList.add('is-connected');
           }
         } 
-        else if (nodeA.relations.parents.has(nodeB)) {
-          if (canDraw(nodeA.upperGate, nodeB.lowerGate)) {
-            DrawingUtils.drawLink(nodeA.upperGate, nodeB.lowerGate, links, offBy, canvas);
-            
-            nodeA.upperGate.svg!.classList.add('is-connected');
+        // REGEL 2: Er Node B biologisk forelder til Node A? [dan]
+        else if (nodeB.relations.children.has(nodeA) || nodeA.relations.parents.has(nodeB)) {
+          if (canDraw(nodeB.lowerGate, nodeA.upperGate)) {
+            DrawingUtils.drawLink(nodeB.lowerGate, nodeA.upperGate, links, offBy, canvas);
             nodeB.lowerGate.svg!.classList.add('is-connected');
+            nodeA.upperGate.svg!.classList.add('is-connected');
           }
-        }
-
-        // --- KATEGORI B: HORISONTALE RELASJONER (Friends & Søsken & Kryssende Baits) ---
-        // Siden de overlevde dørvakten over, betyr det at de HAR en beviselig link, 
-        // og vi kobler dem vakkert horisontalt flanke-til-flanke via friendGate! [dan]
+        } 
+        // REGEL 3: Horisontale relasjoner (Friends, søsken, crossing baits) [dan]
         else {
           if (canDraw(nodeA.friendGate, nodeB.friendGate)) {
+            if (fantMM && harLink && canDraw2) {
+              console.log('alt klart for horisontal' );
+            }
             DrawingUtils.drawLink(nodeA.friendGate, nodeB.friendGate, links, offBy, canvas);
-          
             nodeA.friendGate.svg!.classList.add('is-connected');
             nodeB.friendGate.svg!.classList.add('is-connected');
           }
         }
       }
     }  
-    // 3. OPPRYDDINGS-FASE: Slett alle linjer i cachen som ikke ble gjenbrukt i denne runden
+
+    // 3. OPPRYDDINGS-FASE
     for (const [key, link] of this.linkCache.entries()) {
       if (!link.used) {
-        link.svgElement.remove(); // Fjern fysisk fra SVG-containeren i DOM-en
-        this.linkCache.delete(key); // Fjern fra minne-cachen
+        link.svgElement.remove(); 
+        this.linkCache.delete(key); 
       }
     }
   }

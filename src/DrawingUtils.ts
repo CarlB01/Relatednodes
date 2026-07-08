@@ -9,7 +9,19 @@ export class DrawingUtils {
 
   // Liten hjelpemetode for å skjule linjen hvis den ruller ut av syne
   private static hideLineInCache(fromGate: GateProperties, toGate: GateProperties, linkCache: Map<string, any>) {
-    const lineId = `${fromGate.parentNote.basename}->${toGate.parentNote.basename}`;
+    const nameA = fromGate.parentNote.basename;
+    const nameB = toGate.parentNote.basename;
+  
+    const lineId = nameA.localeCompare(nameB) < 0 ? `${nameA}->${nameB}` : `${nameB}->${nameA}`;
+    
+    const meg = 'This is me';
+    const mor = 'mother of my children';
+    const funnetID = lineId.contains(meg) && lineId.contains(mor);
+
+    if (funnetID) {
+        (console.log('ID skjules:', lineId))
+    }
+
     const cacheItem = linkCache.get(lineId);
     if (cacheItem) cacheItem.svgElement.style.display = 'none';
   }
@@ -52,18 +64,48 @@ export class DrawingUtils {
     const p1 = this.sub(rawP1, offBy);
     const p2 = this.sub(rawP2, offBy);
 
-    // Din unike, rekkefølge-uavhengige ID basert på basenames [dan]
-    const lineId = `${fromGate.parentNote.basename}->${toGate.parentNote.basename}`;
-    
+    // ==========================================================================
+    // KRITISK RETTING: Symmetrisk, rekkefølge-uavhengig ID-generering!
+    // Ved å sortere navnene alfabetisk (Math.min/localeCompare), vil ID-en 
+    // ALLTID bli identisk, uavhengig av hvem som står i senter! [dan]
+    // ==========================================================================
+    const nameA = fromGate.parentNote.basename;
+    const nameB = toGate.parentNote.basename;
+
+    // Sorterer navnene alfabetisk så mor og far alltid får samme nøkkel i cachen [dan]
+    const lineId = nameA.localeCompare(nameB) < 0 
+    ? `${nameA}->${nameB}` 
+    : `${nameB}->${nameA}`;
+
+    const meg = 'This is me';
+    const mor = 'mother of my children';
+    const funnetID = lineId.contains(meg) && lineId.contains(mor);
+
     // 3. CACHE-SJEKK & TEGNING
     let cacheItem = linkCache.get(lineId);
     let pathEl: SVGPathElement;
 
     if (cacheItem) {
+        if (funnetID) {
+            (console.log('ID cachet:', lineId))
+        }
         pathEl = cacheItem.svgElement;
         pathEl.style.display = ''; // Vis den igjen hvis den var skjult
+        pathEl.style.visibility = 'visible'
+        // ==========================================================================
+        // KORRIGERT & TYPESIKKERT (DOM Disconnect-sikring):
+        // Sjekker om linjen fysisk mangler inni det splitter nye SVG-canvaset [dan].
+        // Hvis den ble slettet av .empty() under klikk, blir den reddet inn her! [dan]
+        // ==========================================================================
+        if (!svgContainer.contains(pathEl)) {
+            svgContainer.appendChild(pathEl);
+        }
         cacheItem.used = true;
     } else {
+        if (funnetID) {
+            (console.log('ID ny!:', lineId))
+        }
+        
         pathEl = svgContainer.createSvg("path", {
             attr: {
                 id: lineId,

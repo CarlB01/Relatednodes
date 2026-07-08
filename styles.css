@@ -41,7 +41,7 @@
   anchor-name: --center-area; /* Beholdes for venstre boks */
   
   min-width: 33%;
-  padding: 50px 20px 50px 20px;
+  padding: 40px 20px;
   align-self:center;
   justify-self: center;
   width:auto;
@@ -60,7 +60,9 @@
 
   /* Krav 7: Hvis det er trangt, la elementer "blø" ut i stedet for å skjules */
   overflow: visible !important; 
-  align-self:last baseline;
+  align-self: end;
+  max-height: 38vh;
+  overflow-y: auto !important;
 }
 
 .rv-area.left {
@@ -90,7 +92,7 @@
   padding: 5px;
   
   /* Siden den deler rad med center, setter vi en trygg default makshøyde */
-  max-height: 40vh;
+  max-height: 75vh;
   display: flex;
   flex-direction: column;
   overflow-y: auto !important;
@@ -98,11 +100,10 @@
 }
 
 .rv-area.lower {
-  /* Default: Strekk seg over alle 3 kolonnene (full bredde i bunn) */
+  grid-column: 1 / span 3; 
   grid-row: 4;
   margin-top: 5px;
   padding: 5px;
-  grid-column: 1 / span 3; 
   width: 100%;
   
   align-self: start; /* cloce to center area */
@@ -112,7 +113,7 @@
   align-items: center;      /* Dønn perfekt horisontal sentrering av wrapperen på X-aksen */  
   justify-content: flex-start; /* x-axis */
 
-  max-height: min(250px, 35vh);
+  max-height: 38vh !important;
   overflow-y: auto !important;
   box-sizing: border-box;
 }
@@ -130,7 +131,7 @@
   & .rv-area.left {
     grid-row: 2 / span 2; /* left area takes over */
     max-height: 40vh;
-    align-self: last baseline;
+    align-self: end;
   }
 }
 
@@ -142,7 +143,8 @@
 
   & .rv-area.right {
     grid-row: 2 / span 3;    /* Høyre side okkuperer hele den vertikale veggen */
-    max-height: 60vh;
+    max-height: 75vh;
+    align-self: center;
   }
 }
 
