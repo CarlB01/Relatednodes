@@ -258,13 +258,20 @@ export class AreaManager {
         // Hver unike tag-gruppe får sin egen "usynlige" gruppe-DIV (.rv-groups)
         const groupDiv = colWrapDiv.createDiv({ cls: RV_CLASSES.GROUPS });
 
-        group.notes.forEach(note => {
+        const groupNotes = group.notes; // Array/liste med alle notene i denne tag-gruppen
+        const overGrensen = groupNotes.length > 4;
+
+        //Bygg knappen, a-lenken og de 3 portene ferdig i minnet
+        groupNotes.forEach((note, index) => {
           // STEMPEL: Sikringen settes på nøyaktig riktig sted
           note.assignedArea = areaName;
 
           // RENDRE: Bygg knappen, a-lenken og de 3 portene ferdig i minnet
-          const noteElement = note.render(); 
-          groupDiv.appendChild(noteElement);
+          const noteEl = note.render(); 
+          if (overGrensen && index > 0) {
+            noteEl.classList.add('hidden');
+          };
+          groupDiv.appendChild(noteEl);
 
           // Region-referanser for portene
           if (note.upperGate)  note.upperGate.areaElement = area;
@@ -272,20 +279,22 @@ export class AreaManager {
           if (note.friendGate) note.friendGate.areaElement = area;
         });
 
-        // Din pluss/minus-logikk
-        if (group.notes.length > 4 && noteCount > 20) {
-          const firstNoteInstance = group.notes[0];
-          if (firstNoteInstance && firstNoteInstance.div) {
+        // Hvis gruppen har mer enn 1 medlem, legger vi på pluss/minus-knappen på den første noten
+        if (groupNotes.length > 1) {
+          // 1. KORRIGERT & TYPESIKKERT: Hent ut den aller første noten fra listen safely
+          const firstNote = groupNotes[0];
+          
+          // 2. DØRVAKT: Sjekk eksplisitt at noten og dens HTML-div eksisterer før vi går videre
+          if (firstNote && firstNote.div) {
+            const firstNoteDiv = firstNote.div;
             
-            // Sender med det ekte gruppe-objektet ({ tag, notes }) til din DOMUtils
-            DOMUtils.buildPlusMinusBtn(firstNoteInstance.div, group);
+            // Bygg knappen via din oppdaterte DOMUtils (overgensen ble bestemt lenger opp i funksjonen)
+            const plusMinusBtn = DOMUtils.buildPlusMinusBtn(firstNoteDiv, group, overGrensen);
             
-            // Skjul de resterende notene i denne spesifikke tag-gruppen
-            group.notes.slice(1).forEach(note => {
-              note.div?.parentElement?.classList.add('hidden');
-            });
+            // Dytt knappen absolutt posisjonert inn på den første noten [dan]
+            firstNoteDiv.appendChild(plusMinusBtn);
           }
-        } 
+        }
       });
     });
 

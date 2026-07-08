@@ -52,6 +52,7 @@ export class DrawingUtils {
     const p1 = this.sub(rawP1, offBy);
     const p2 = this.sub(rawP2, offBy);
 
+    // Din unike, rekkefølge-uavhengige ID basert på basenames [dan]
     const lineId = `${fromGate.parentNote.basename}->${toGate.parentNote.basename}`;
     
     // 3. CACHE-SJEKK & TEGNING
@@ -66,6 +67,7 @@ export class DrawingUtils {
         pathEl = svgContainer.createSvg("path", {
             attr: {
                 id: lineId,
+                class: "rv-link-path", // Bruker CSS-klassen for den lekre glass- og baksidestylingen! [dan]
                 stroke: RV_CLASSES.GATE_COLOR,
                 "stroke-width": 0.5 * RV_CLASSES.FACTOR,
                 fill: "none"
@@ -73,59 +75,62 @@ export class DrawingUtils {
         });
         linkCache.set(lineId, { svgElement: pathEl, used: true });
     }
+    linkCache.get(lineId)!.used = true;
 
-      // 4. BEZIER-DIRECTION: Oversett portenes retning til din bezier-retning
-      let bezierDir: 'up' | 'down' | 'horizontal' | 'friend' = 'down';
-      if (fromGate.direction === 'left' || fromGate.direction === 'right') bezierDir = 'friend';
-      else if (fromGate.direction === 'up') bezierDir = 'up';
-      else if (fromGate.direction === 'down') bezierDir = 'down';
+    // 4. BÉZIER-DIRECTION: Sender med hele gaten for å vite retningen på svingen! [dan]
+    const dAttribute = this.calculateBezierPath(p1, p2, fromGate, toGate);
 
-      // 5. MATHS: Beregn bezier-kurven ved hjelp av din eksisterende logikk
-      const dAttribute = this.calculateBezierPath(p1, p2, bezierDir);
-      
-      // 6. UPDATE: Oppdater stien i DOM-en (Dette er lynraskt!)
-      pathEl.setAttribute("d", dAttribute);
+    // 5. UPDATE: Oppdater stien i DOM-en (Dette er lynraskt!)
+    pathEl.setAttribute("d", dAttribute);
   }
 
   /**
    * Din eksisterende formel, skrevet om til å returnere en ren SVG 'd'-streng i stedet for å tegne direkte.
    */
   private static calculateBezierPath(
-      p1: Point, 
-      p2: Point, 
-      direction: 'up' | 'down' | 'horizontal' | 'friend',
-      curvature = 0.5
-  ): string {
-      const c1: Point = { x: 0, y: 0 };
-      const c2: Point = { x: 0, y: 0 };
-      const isHorizontal = direction === 'horizontal' || direction === 'friend';
+    p1: Point, 
+    p2: Point, 
+    fromGate: GateProperties, 
+    toGate: GateProperties
+    ): string {
+    // Sjekk om det er en kobling mellom to friend-porter (horisontale flanker)
+    const isFriendLink = fromGate.direction === 'left' || fromGate.direction === 'right';
 
-      if (isHorizontal) {
-          const xdiff = p2.x - p1.x;
-          c1.x = p1.x + xdiff * curvature;
-          c1.y = p1.y;
-          c2.x = p2.x - xdiff * curvature;
-          c2.y = p2.y;
-      } else {
-          const xdiff = p2.x - p1.x;
-          const ydiff = p2.y - p1.y;
-          const distance = Math.sqrt(xdiff * xdiff + ydiff * ydiff);
-          const verticalOffset = Math.min(Math.max(distance * curvature, 45), 160);
+    if (isFriendLink) {
+        // === HORISONTAL BÉZIER (Dine lekre, vannrette svinger fra flankene) ===
+        const bendStrength = Math.max(35, Math.abs(p2.x - p1.x) * 0.4);
 
-          c1.x = p1.x;
-          c2.x = p2.x;
+        const dirA = fromGate.direction === 'left' ? -1 : 1;
+        const cp1x = p1.x + (bendStrength * dirA);
+        const cp1y = p1.y; 
 
-          if (direction === 'down') {
-              c1.y = p1.y + verticalOffset;
-              c2.y = p2.y - verticalOffset;
-          } else {
-              c1.y = p1.y - verticalOffset;
-              c2.y = p2.y + verticalOffset;
-          }
-      }
+        const dirB = toGate.direction === 'left' ? -1 : 1;
+        const cp2x = p2.x + (bendStrength * dirB);
+        const cp2y = p2.y; 
 
-      // Returner den ferdige SVG-stien
-      return `M ${p1.x} ${p1.y} C ${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${p2.x} ${p2.y}`;
-  }
+        return `M ${p1.x} ${p1.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+    }
+
+    // ==========================================================================
+    // KORRIGERT VERTIKAL BÉZIER (For foreldre/barn via up/down-porter)
+    // Vi styrer fortegnet ut fra om porten fysisk peker 'up' eller 'down'! [dan]
+    // ==========================================================================
+    const verticalStrength = Math.max(40, Math.abs(p2.y - p1.y) * 0.7);
+
+    // Bestem retningen for start-kontrollpunktet (cp1) [dan]
+    // Hvis porten peker opp, må linjen skyte OPP (-), ellers NED (+) [dan]
+    const dirVertA = fromGate.direction === 'up' ? -1 : 1;
+    const cp1x = p1.x; // Låst horisontalt -> Garanterer 100% loddrett start! [dan]
+    const cp1y = p1.y + (verticalStrength * dirVertA);
+
+    // Bestem retningen for landings-kontrollpunktet (cp2) [dan]
+    // Hvis mottaker-porten peker opp, må den lande ovenfra (-), ellers nedenfra (+) [dan]
+    const dirVertB = toGate.direction === 'up' ? -1 : 1;
+    const cp2x = p2.x; // Låst horisontalt -> Garanterer 100% loddrett landing! [dan]
+    const cp2y = p2.y + (verticalStrength * dirVertB);
+
+    // Returnerer den perfekte, loddrette S-kurven [dan]
+    return `M ${p1.x} ${p1.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+    }
 
 }

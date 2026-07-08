@@ -286,44 +286,42 @@ export class RelatednotesView extends ItemView implements HoverParent {
   }
 
   private onPlusMinusBtnClicked(target: HTMLElement) {
-    
-    // 1. KORRIGERT: Finn den nærmeste tag-gruppen (.rv-groups) som denne knappen tilhører.
-    // .closest() klatrer oppover i HTML-treet til den finner riktig boks, uansett antall wrappers!
+    const plus = RV_CLASSES.PLUS;   // Det eksakte pluss-tegnet ditt (f.eks. '+')
+    const minus = RV_CLASSES.MINUS; // Det eksakte minus-tegnet ditt (f.eks. '−')
+
+    // Finn den nærmeste tag-gruppe-containeren (.rv-groups) som denne knappen styrer [dan]
     const groupDiv = target.closest(`.${RV_CLASSES.GROUPS}`) as HTMLElement;
     if (!groupDiv) return;
-    
-    // 2. KORRIGERT: Hent alle de individuelle note-knappene (.item) inni denne spesifikke gruppen.
-    // Vi bruker querySelectorAll for maksimal nettleser-hastighet.
+
+    // Hent alle de individuelle note-knappene (.item) inni denne spesifikke gruppen
     const items = Array.from(groupDiv.querySelectorAll('.item')) as HTMLElement[];
-    if (items.length <= 1) return; // Ingenting å skjule hvis det bare er 1 note
+    if (items.length <= 1) return;
 
     const textContent = target.textContent || "";
-    const textParts = textContent.split(" ");
-    const label = textParts[0] || "";
 
-    // Sjekk om knappen akkurat nå viser pluss-tegnet
-    if (textParts[1] === RV_CLASSES.PLUS) {
-      // === APNE GRUPPEN (EXPAND) ===
+    // REGEL 3: Hvis knappen viser '+', skal alle medlemmene vises, og symbolet byttes til minus! [dan]
+    if (textContent.includes(plus)) {
       groupDiv.classList.add('expanded');
       
-      // Vis absolutt alle notene fra indeks 1 og utover (beholder den første synlig)
+      // Vis absolutt alle notene (fjerner 'hidden' fra indeks 1 og utover) [dan]
       items.slice(1).forEach(item => item.classList.remove('hidden'));
       
-      // Oppdater teksten på knappen til å vise minus-tegnet
-      target.textContent = `${label} ${RV_CLASSES.MINUS}`;
-    } else {
-      // === LUKK GRUPPEN (COLLAPSE) ===
+      // Bytt symbol til minus
+      target.textContent = minus;
+    } 
+    // REGEL 4: Hvis knappen viser minus, skal alle bortsett fra første medlem skjules, og endres til '+' [dan]
+    else {
       groupDiv.classList.remove('expanded');
       
-      // Skjul alle notene bortsett fra den aller første
+      // Skjul alle noder fra indeks 1 og utover
       items.slice(1).forEach(item => item.classList.add('hidden'));
       
-      // Oppdater teksten på knappen tilbake til pluss-tegnet
-      target.textContent = `${label} ${RV_CLASSES.PLUS}`;
+      // Bytt symbol tilbake til pluss
+      target.textContent = plus;
     }
-    
-    // Siden boksene på skjermen akkurat endret høyde/form, MÅ vi be AreaManager 
-    // om å beregne de nye piksel-koordinatene og flytte SVG-linjene live!
+
+    // Siden knapper akkurat dukket opp eller forsvant, har CSS-høydene endret seg.
+    // Vi ber AreaManager om å hente de nye pikslene og flytte Beziér-kurvene live under neste bildefelt! [dan]
     this.areaManager.requestRedraw();
   }
 
@@ -455,7 +453,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
 
   private setupPlusMinusBtnHandler() {
     // 1. EVENT: Brukeren KLIKKER på pluss/minus-knappen (Kollapser/ekspanderer gruppen)
-    this.contentEl.on("click", ".rv-plusminus", (event, target) => {
+    this.contentEl.on("click", `.${RV_CLASSES.PLUS_MINUS_BTN}`, (event, target) => {
       event.preventDefault();
       if (!target || !(target instanceof HTMLElement)) return;
 
@@ -466,60 +464,82 @@ export class RelatednotesView extends ItemView implements HoverParent {
     let activePopup: HTMLElement | null = null;
 
     // 2. EVENT: Brukeren HOVRER over pluss/minus-knappen (Viser popup-boble live!)
-    this.contentEl.on("mouseover", ".rv-plusminus", (event, target) => {
+    this.contentEl.on("mouseover", `.${RV_CLASSES.PLUS_MINUS_BTN}`, (event, target) => {
       if (!target || !(target instanceof HTMLElement)) return;
 
       // Hvis det mot formodning henger igjen en gammel popup, fjern den først
-      if (activePopup) {
-        activePopup.remove();
-        activePopup = null;
-      }
+      if (activePopup) { activePopup.remove(); activePopup = null; }
 
-      // Vi henter ut hvor mange notater denne gruppen inneholder.
-      // (Forutsetter at din DOMUtils dytter inn f.eks. button.setAttribute('data-count', group.notes.length.toString()) når den lages!)
+      // Hent ut de to unike data-stemplene vi akkurat la på knappen i utils-en [dan]!
       const count = target.getAttribute("data-count") || "?";
-      
+      const tag = target.getAttribute("data-tag") || "Gruppe";
+  
       // Sjekk om gruppen allerede er utvidet (hvis den har minus-tegn, er den expanded)
-      const isExpanded = target.textContent?.includes('−') ?? false;
+      const isExpanded = target.textContent?.includes(RV_CLASSES.MINUS) ?? false;
       const hoverText = isExpanded 
-        ? `Klikk for å skjule ${count} notater` 
-        : `Klikk for å vise ${count} skjulte notater`;
+        ? `Klikk for å skjule medlemmene` 
+        : `Klikk for å vise ${count} noder i denne gruppen`;
 
       // Bygg den lekre popupen ferskt i minnet (Bruker dine egne beskrivende klasser fra DOMUtils!)
-      activePopup = createDiv({ cls: "rv-info-hover bordered-div rounded-div" });
-      
-      // Strukturer innholdet nøyaktig slik du opprinnelig designet det
-      activePopup.createEl("p", { text: "Skjulte data", cls: "popup-title" });
+      activePopup = createDiv({ cls: RV_CLASSES.INFO_HOVER });
+
+      // Vi bruker hele tag-navnet (f.eks. #samling) som en lekker tittel på popupen [dan]!
+      activePopup.createEl("p", { text: tag, cls: "popup-title" });
       const ul = activePopup.createEl("ul");
       ul.createEl("li", { text: hoverText });
 
-      // CSS-Styling for å plassere popupen rett over eller ved siden av pluss/minus-knappen:
+      // Sett basestyling (Må gjøres FØR vi måler bredden!)
       activePopup.style.position = "absolute";
-      activePopup.style.zIndex = "var(--layer-menu)"; // Obsidians offisielle z-indeks for menyer
-      activePopup.style.pointerEvents = "none";       // Sørger for at den ikke blokkerer musen
+      activePopup.style.zIndex = "var(--layer-menu)";
+      activePopup.style.pointerEvents = "none";
       activePopup.style.background = "var(--background-secondary-alt)";
       activePopup.style.border = "1px solid var(--border-color)";
       activePopup.style.padding = "6px 10px";
       activePopup.style.borderRadius = "4px";
 
-      // Finn ut nøyaktig hvor knappen er på skjermen relativt til fanens container
+      // --- NYTT: GJØR POPUPEN USYNLIG OG DYTT DEN INN FOR Å MÅLE DEN ---
+      activePopup.style.visibility = "hidden"; // Skjul den for brukeren et millisekund [dan]
+      this.contentEl.appendChild(activePopup);
+
+      // Nå kan vi måle nøyaktig hvor mange piksler bred popupen ble basert på teksten! [dan]
+      const popupWidth = activePopup.offsetWidth || 160; // Fallback til 160px hvis tom [dan]
+
+      // Hent de fysiske målene til knappen og selve Obsidian-visningen
       const viewRect = this.contentEl.getBoundingClientRect();
       const btnRect = target.getBoundingClientRect();
 
-      // Plasser popupen dønn perfekt rett OVER pluss/minus-knappen! [dan]
-      activePopup.style.left = `${btnRect.left - viewRect.left}px`;
-      activePopup.style.top = `${btnRect.top - viewRect.top - 55}px`; // Skyver den 55 piksler opp
+      // Luftmargin mellom knappen og popup-boblen (10 piksler er kjempepent)
+      const padding = 10; 
 
+      // ==========================================================================
+      // INTELLIGENT KANT-SJEKK (Dersom høyre flanke er for trang)
+      // ==========================================================================
+
+      // Vi regner ut hvor høyre kant av popupen vil lande dersom vi legger den til høyre.
+      // Hvis den lander utenfor bredden til hele fanen din (viewRect.right), er det for trangt [dan]!
+      const vilKrasjePåHøyreSide = (btnRect.right + padding + popupWidth) > viewRect.right;
+
+      if (vilKrasjePåHøyreSide) {
+        // === PLASSER PÅ VENSTRE FLANKE ===
+        activePopup.style.left = `${btnRect.left - viewRect.left - popupWidth - padding}px`;
+      } else {
+        // === PLASSER PÅ HØYRE FLANKE (Standard) ===
+        activePopup.style.left = `${btnRect.right - viewRect.left + padding}px`;
+      }
+
+      // Sentrer popupen dønn perfekt vertikalt (Y-akse) i forhold til knappen [dan]
+      // Vi tar knattekanten på topp, og trekker fra en liten justering for å sentrere høyden [dan]
+      activePopup.style.top = `${btnRect.top - viewRect.top - 15}px`;
+
+      // Gjør popupen synlig for brukeren igjen nå som den står på rett plass! [dan]
+      activePopup.style.visibility = "visible";
       // Dytt popupen synlig inn i fanen din
       this.contentEl.appendChild(activePopup);
     });
 
     // 3. EVENT: Brukeren flytter musen BORT fra pluss/minus-knappen (Sletter popupen øyeblikkelig)
-    this.contentEl.on("mouseout", ".rv-plusminus", (event, target) => {
-      if (activePopup) {
-        activePopup.remove(); // Sletter fysisk fra DOM-treet for å unngå minneforurensning! [dan]
-        activePopup = null;
-      }
+    this.contentEl.on("mouseout", `.${RV_CLASSES.PLUS_MINUS_BTN}`, (event, target) => {
+      if (activePopup) { activePopup.remove(); activePopup = null; }
     });
   }
   

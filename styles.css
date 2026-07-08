@@ -97,7 +97,6 @@
   /* background-image: linear-gradient(45deg, #a76f6f, transparent); */
 }
 
-/* LOWER AREA (Deltar i ryggraden, men viker unna rad 3 automatisk) */
 .rv-area.lower {
   /* Default: Strekk seg over alle 3 kolonnene (full bredde i bunn) */
   grid-row: 4;
@@ -240,12 +239,16 @@
   
   min-width: 100px;
   max-width: 125px;
-  padding: 6px 12px;
+  padding: 0;
   margin: 4px;
   
   background-color: color-mix(in srgb, var(--background-primary), transparent 50%);  
   border-radius: 4px;
   box-sizing: border-box;
+}
+
+.item.hidden {
+  display: none !important;
 }
 
 /* =============================================== */
@@ -313,9 +316,9 @@
   margin-left: 4px;
 }
 
-/* ==========================================================================
-   PORT-FYLLING (Aktiv vs. Tom tilstand)
-   ========================================================================== */
+/* ========================================================================== */
+/* GATE-FYLLING (Aktiv vs. Tom tilstand)                                      */
+/* ========================================================================== */
 
 /* STANDARD/TOM TILSTAND: 
    Portene fødes som bittesmå, hule ringer (gjennomsiktig inni med en tynn ramme) */
@@ -331,8 +334,8 @@
 .rv-gate-svg.is-connected circle {
   /* Her bruker vi Obsidians offisielle aksentfarge (lilla/blå alt etter tema), 
      eller du kan skrive en hardkodet farge som #a76f6f eller var(--graph-line) */
-  fill: var(--text-muted) !important; /* Matcher knappebakgrunnen */
-  stroke: var(--text-muted) !important;         /* Dus, nøytral ramme */
+  fill: var(--text-muted) !important; 
+  stroke: var(--text-muted) !important;
 }
 
 /* EFFEKT VED HOVER (Valgfritt, men utrolig stilig):
@@ -340,6 +343,59 @@
 .item.is-hovered .rv-gate-svg.is-connected circle {
   filter: drop-shadow(0 0 2px var(--interactive-accent));
 }
+
+/* ==========================================================================
+   ULTRAKOMPAKT ABSOLUTT BADGE-KNAPP (Tilpasset din opprettelsesmetode)
+   ========================================================================== */
+
+/* Vi bruker navnet på din klasse fra RV_CLASSES.PLUS_MINUS_BTN */
+.rv-plusminus {
+  /* Tar knappen ut av den vanlige inline-teksten, og lar den flyte fritt [dan] */
+  position: absolute !important;
+  
+  /* Siden den bor inni tekstfeltet, dytter disse negative verdiene den 
+     perfekt opp og ut på det øverste høyre hjørnet av noten din [dan]! */
+  top: -8px !important;
+  right: -6px !important;
+  z-index: 10 !important; /* Ligger trygt helt på topp av alt annet */
+  
+  /* FASTE SIRKEL-MÅL (Dønn symmetrisk 14px sirkel) [dan] */
+  width: 14px !important;
+  height: 14px !important;
+  min-width: 14px !important;
+  min-height: 14px !important;
+  
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 50% !important; 
+  
+  /* DELIKAT TEKST: Gjør selve pluss/minus-tegnet supersmått og vakkert [dan] */
+  font-size: 10px !important;
+  font-weight: bold !important;
+  line-height: 1 !important;
+  
+  /* SOLID BAKGRUNN & TYNN KANT: Bryter opp glass-morfismen på en proff måte [dan] */
+  background-color: var(--background-primary-alt) !important; 
+  border: 1px solid var(--border-color) !important; 
+  color: var(--text-muted) !important;
+  
+  cursor: pointer;
+  box-sizing: border-box;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); /* Subtil 3D skygge-effekt [dan] */
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+/* Hover-effekt på den lille sirkelen */
+.rv-plusminus:hover {
+  background-color: var(--interactive-accent) !important; 
+  border-color: var(--interactive-accent) !important;
+  color: white !important;
+  transform: scale(1.15); /* Vokser ørlite grann når musen treffer den [dan] */
+}
+
 /*
 .rv-gammellinkdiv {
   width: fit-content !important;

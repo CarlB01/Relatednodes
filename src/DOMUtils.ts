@@ -16,24 +16,27 @@ export class DOMUtils {
     return `--${basename.replace(/[^a-zA-Z0-9]/g, '').trim()}`;
   }
 
-  static buildPlusMinusBtn(firstNoteDiv: HTMLElement, group: { tag: string, notes: NoteClass[] }) {
-    
-    // prepare a unique anchor
-    const anchor = this.uniqueAnchor(group.notes.first()!.basename);
-    const containerDiv = firstNoteDiv.parentElement?.parentElement?.parentElement;
-
-    // prepare the popup
-    const title = 'Hidden';
+  static buildPlusMinusBtn(
+    firstNoteDiv: HTMLElement, 
+    group: { tag: string, notes: NoteClass[]}, 
+    startsClosed: boolean 
+  ): HTMLElement {
     const count = group.notes.length;
-    const text = `<ul><li>click to show ${count} notes</li></ul>`;
-    const popup = createDiv(RV_CLASSES.INFO_HOVER);
-    popup.innerHTML = `<p>${title}</p><p>${text}</p>`;
-    popup.style.positionAnchor = anchor;
 
-    // prepare the button
+    // 1. Opprett knappen inni firstNoteDiv nøyaktig slik du pleier, 
+    // men pass på at den får vår unike klasse '.rv-plusminus' (fra RV_CLASSES.PLUS_MINUS_BTN) [dan]
     const button = firstNoteDiv.createDiv(`${RV_CLASSES.PLUS_MINUS_BTN} ${RV_CLASSES.BORDERED} ${RV_CLASSES.ROUNDED}`);
-    button.textContent = `${group.tag} ${RV_CLASSES.PLUS}`;
-    button.style.anchorName = anchor;
+    
+    // 2. ULTRAKOMPAKT TEKST: I stedet for å dytte inn hele tag-navnet, 
+    // bruker vi KUN pluss-tegnet for å bevare den lekre 14px sirkelformelen [dan]!
+    button.textContent = startsClosed ? RV_CLASSES.PLUS : RV_CLASSES.MINUS; 
+
+    // 3. METADATA: Vi stempler på data-attributter direkte på HTML-knappen.
+    // Dette gjør at hover-lytteren vår i RelatednotesView kan lese taggen og antallet live [dan]!
+    button.setAttribute("data-count", count.toString());
+    button.setAttribute("data-tag", group.tag);
+
+    return button;
   }
 
   static makeHoverable(
