@@ -9,11 +9,13 @@ export class DrawingUtils {
 
   // Liten hjelpemetode for å skjule linjen hvis den ruller ut av syne
   private static hideLineInCache(fromGate: GateProperties, toGate: GateProperties, linkCache: Map<string, any>) {
-    const nameA = fromGate.parentNote.basename;
-    const nameB = toGate.parentNote.basename;
-  
-    const lineId = nameA.localeCompare(nameB) < 0 ? `${nameA}->${nameB}` : `${nameB}->${nameA}`;
+    const pathA = fromGate.parentNote.path;
+    const pathB = toGate.parentNote.path;
 
+    const lineId = pathA.localeCompare(pathB) < 0 
+    ? `${pathA}->${pathB}` 
+    : `${pathB}->${pathA}`;
+    
     const cacheItem = linkCache.get(lineId);
     if (cacheItem) cacheItem.svgElement.style.display = 'none';
   }
@@ -56,13 +58,12 @@ export class DrawingUtils {
     const p1 = this.sub(rawP1, offBy);
     const p2 = this.sub(rawP2, offBy);
 
-    const nameA = fromGate.parentNote.basename;
-    const nameB = toGate.parentNote.basename;
+    const pathA = fromGate.parentNote.path;
+    const pathB = toGate.parentNote.path;
 
-    // Sorterer navnene alfabetisk så mor og far alltid får samme nøkkel i cachen [dan]
-    const lineId = nameA.localeCompare(nameB) < 0 
-    ? `${nameA}->${nameB}` 
-    : `${nameB}->${nameA}`;
+    const lineId = pathA.localeCompare(pathB) < 0 
+    ? `${pathA}->${pathB}` 
+    : `${pathB}->${pathA}`;
 
     // 3. CACHE-SJEKK & TEGNING
     let cacheItem = linkCache.get(lineId);

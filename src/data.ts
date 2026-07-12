@@ -4,6 +4,7 @@ import { NoteClass, Relation } from "./NoteClass.js";
 import { StringUtils } from "./StringUtils.js";
 import { BaitClass } from "./BaitClass.js";
 import { SettingsManager } from "./SettingsManager.js";
+import { GateProperties } from "./GateClass.js";
 
 const relationOrder: Record<Relation, number> = {
   "center": 0,
@@ -68,6 +69,8 @@ export class RelatedData {
       note.relations.ignored.clear();
       note.crossingBaits.clear();
     }
+
+    GateProperties.cachedRadius = null; 
 
     for (const bait of this.baitCache.values()) {
       bait.isUsed = false;

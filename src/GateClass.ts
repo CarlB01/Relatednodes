@@ -11,6 +11,7 @@ export class GateProperties {
 	
   areaElement: HTMLElement | null = null;
   parentNote: NoteClass;
+  public static cachedRadius: number | null = null
 
   constructor(parentNote: NoteClass, direction: Direction) {
     this.parentNote = parentNote;
@@ -27,40 +28,45 @@ export class GateProperties {
     
     // Hent status direkte fra NoteClass sitt minne-Set (tar O(1) tid)
     const hasConnections = this.hasActiveConnections();
-    const fill = hasConnections ? RV_CLASSES.GATE_COLOR : "transparent";
-    
     
     // 1. GJENBRUK: Elementet må eksistere i minnet, OG det må fysisk være 
     // en del av den NYE parentDiv på skjermen for å kunne gjenbrukes!
     if (this.svg && this.circleEl && parentDiv && parentDiv.contains(this.svg)) {
-      this.circleEl.setAttribute("fill", fill);
+      if (hasConnections) {
+        this.svg.classList.add('is-connected');
+      } else {
+        this.svg.classList.remove('is-connected');
+      }
       return this.svg;
     }
     
-    // Hvis parentDiv IKKE inneholder gaten (f.eks. etter gjenbruk fra cache), 
-    // betyr det at den gamle må kastes og en ny frisk må lages for dette vinduet.
-    
     // 2. NYTT ELEMENT: Hvis det ikke finnes (eller lå i en slettet DOM-del)
     
-    // Opprett hoved-SVG-beholderen
+    // ==========================================================================
+    // KORRIGERT & RENSET FOR STORSKALA (Slukker piksel-kollisjonen)
+    // Vi SLETTER width og height herfra fullstendig! 
+    // Vi legger i stedet inn 'viewBox: "0 0 10 10"' [dan]. Dette definerer et virtuelt 
+    // koordinatsystem (et 10x10 rutenett) som lar sirkelen skalere seg 100% 
+    // trinnløst og knivskarpt etter em-størrelsen i CSS-en din [dan]!
+    // ==========================================================================
     this.svg = createSvg("svg", {
       attr: {
-        width: RV_CLASSES.RADIUS * 2,
-        height: RV_CLASSES.RADIUS * 2,
+        viewBox: "0 0 10 10", // Det magiske relative rutenettet [dan]!
         class: `${RV_CLASSES.GATE_SVG} ${this.direction}`,
         style: "position: absolute; z-index: 5; overflow: visible;"
       }
     });
     
-    // Opprett sirkelen på innsiden
+    // Hvis gaten fødes og allerede har aktive koblinger, legger vi på klassen med en gang [dan]
+    if (hasConnections) {
+      this.svg.classList.add('is-connected');
+    }
+    // Opprett sirkelen på innsiden (Låst til midten av vårt nye 10x10 rutenett) [dan]
     this.circleEl = this.svg.createSvg("circle", {
       attr: {
-        cx: "50%",
-        cy: "50%",
-        r: "40%",
-        fill: fill,
-        stroke: RV_CLASSES.GATE_COLOR,
-        "stroke-width": RV_CLASSES.FACTOR
+        cx: "5",   // Midten av 10x10 rutenettet på X-aksen (50%) [dan]
+        cy: "5",   // Midten av 10x10 rutenettet på Y-aksen (50%) [dan]
+        r: "4",    // Radius på 4 enheter gir en perfekt, delikat glassperle (40%) [dan]
       }
     });
 
@@ -77,13 +83,17 @@ export class GateProperties {
     // Hent gatens EGEN fysiske plassering i nettleservinduet (ikke notat-diven!)
     const rect = this.svg.getBoundingClientRect();
     
-    // Siden gaten har en fast fysisk sirkelstørrelse inni seg, 
-    // legger vi bare til den faste radiusen (2.5 piksler) for å treffe dønn i midten!
-    const radius = 2.5; 
+    // Hvis vi ikke har målt radiusen ennå i denne runden, måler vi den én gang [dan]!
+    if (GateProperties.cachedRadius === null && rect.width > 0) {
+      GateProperties.cachedRadius = rect.width / 2;
+    }
+
+    // Bruker den lynraske, lagrede radiusen for alle de neste 200 portene i loopen [dan]!
+    const r = GateProperties.cachedRadius || 4; // Fallback til 4px hvis alt er null
 
     return {
-        x: rect.left + radius,
-        y: rect.top + radius
+        x: rect.left + r,
+        y: rect.top + r
     };
   }
 

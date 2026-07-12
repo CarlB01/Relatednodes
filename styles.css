@@ -1,12 +1,6 @@
 :root {
-  /* Her definerer du din absolutte drømme-farge for linjene! 
-     Du kan bruke en fast farge (som #a76f6f), eller du kan la den arve 
-     en dus, nøytral tekstfarge fra Obsidian-temaet ditt (var(--text-muted)) [dan] */
-  --minbrain-line: var(--text-muted, #888888); 
-  
-  /* Tykkelsen på linjene dine (Siden RV_CLASSES.FACTOR ble brukt før, 
-     kan du enkelt tune tykkelsen live her, f.eks. 1px eller 1.5px) [dan] */
-  --minbrain-line-width: 1.2px; 
+  --rv-line: var(--text-muted, #888888); 
+  --rv-line-width: 0.5px; 
 }
 
 /* =============================================== */
@@ -14,6 +8,10 @@
 /* =============================================== */
 .rv-container {
   container-name: main;
+  display: grid;
+  grid-template-columns: 1fr minmax(25%, 33%) 1fr;
+  grid-template-rows: 1fr auto auto auto 1fr;
+  
   position: absolute;
   top: 0;
   left: 0;
@@ -22,19 +20,30 @@
   background-color: transparent;
   overflow: hidden !important;
   box-sizing: border-box;
-
-  display: grid;
-  grid-template-columns: 1fr minmax(25%, 33%) 1fr;
-  grid-template-rows: 1fr auto auto auto 1fr;
+  
   /* alternative is --font-interface-size */
   font-size: calc(var(--font-text-size, 13px) * 0.8) !important;
 }
 
-/* Dynamisk fontstørrelse basert på total containerhøyde (Krav 6/Trangt) */
-@container main (min-height: 1px) {
-  .rv-view-container {
-    font-size: clamp(4px, 2.5cqh, 12px);
-  }
+.is-phone .rv-container {
+  height: calc(100% - 10px) !important;
+  box-sizing: border-box;
+  padding-bottom: 0 !important;
+}
+
+/* Krymp ikonene (::before og ::after) */
+.rv-container .focusable-note-link::before,
+.rv-container .focusable-note-link::after {
+  font-size: 0.75em !important; /* Krymper ikonet i forhold til teksten [dan] */
+  transform: translateY(-15%) !important;
+  
+  vertical-align: middle !important; 
+  
+  /* Sørger for en bitteliten, lekker luftmargin mellom ikonet og ordene [dan] */
+  
+  /* Tvinger nettleseren til å tegne ikonet knivskarpt i den nye størrelsen */
+  line-height: 1 !important;
+  display: inline-block !important;
 }
 
 /* =============================================== */
@@ -111,6 +120,9 @@
   touch-action: pan-y !important;
 }
 
+/* =============================================== */
+/*  AREA + COLLECTION-WRAPPER (scroll + maxHeight) */
+/* =============================================== */
 .rv-area.lower .rv-collection-wrapper {
   /* ==========================================================================
      KRITISK ENDRING FOR IPHONE (iOS):
@@ -119,15 +131,22 @@
      en elastisk strikk: den fyller området sitt perfekt, men kutter kontant 
      på 55% av vinduet. Dette tvinger iOS-skjermen til å føde rullefeltet [dan]!
      ========================================================================== */
-  height: clamp(10px, 100%, 55vh) !important;
-  max-height: 55vh !important; 
+  height: clamp(10px, 100%, 65vh) !important;
+  max-height: 65vh !important; 
   align-items: center;
 
   /* Sørger for at innholdet presses opp mot overkanten i stedet for å 
      strekke seg rart dersom det er få noder inni den faste høyden [dan] */
   justify-content: flex-start !important;
+}
 
+.is-phone .rv-area.lower .rv-collection-wrapper {
+  /* Tvinger en god polstring (luft) helt i bunnen av selve touch-rullefeltet [dan]! */
+  padding-bottom: 45px !important; 
+  box-sizing: border-box;
+  
   /* Behold de viktige touch-bryterne for Apple-skjermer [dan] */
+  /* Garanterer at momentum-rullingen til Apple vet at det er her inne det ruller [dan] */
   -webkit-overflow-scrolling: touch !important;
   touch-action: pan-y !important;
 }
@@ -147,16 +166,8 @@
   min-height: min-content !important; 
 }
 
-/* =============================================== */
-/*  AREA + COLLECTION-WRAPPER (scroll + maxHeight) */
-/* =============================================== */
 .rv-area.upper .rv-collection-wrapper {
   max-height: 22vh !important; /* Toppen tar maks 22% før den ruller internt [dan] */
-}
-
-.rv-area.lower .rv-collection-wrapper {
-  max-height: 65vh; 
-  overflow-y: auto !important;
 }
 
 .rv-area.left .rv-collection-wrapper {
@@ -308,15 +319,15 @@
   fill: none !important; /* Garanterer at svingene aldri fylles med svart */
   
   /* Henter de sentraliserte variablene vi akkurat definerte over [dan]! */
-  stroke: var(--minbrain-line) !important;
-  stroke-width: var(--minbrain-line-width) !important;
+  stroke: var(--rv-line) !important;
+  stroke-width: var(--rv-line-width) !important;
   
   stroke-linecap: round;
   stroke-linejoin: round;
   
   /* Gir den lekre glassaktige, semitransparente finishen på baksiden [dan] */
-  opacity: 0.55; 
-  transition: stroke 0.2s ease, stroke-width 0.2s ease;
+  /*opacity: 0.55; 
+  transition: stroke 0.2s ease, stroke-width 0.2s ease; */
 }
 
 /* =============================================== */
@@ -333,7 +344,7 @@
 }
 
 .rv-gate-svg.up {
-  top: 0 !important; 
+  top: -0.25em !important;   
   left: calc(50% - 0.5em) !important; 
 }
 
@@ -366,36 +377,26 @@
    Portene fødes som bittesmå, hule ringer (gjennomsiktig inni med en tynn ramme) */
 .rv-gate-svg circle {
   fill: var(--background-secondary) !important; /* Matcher knappebakgrunnen */
-  stroke: var(--text-muted) !important;         /* Dus, nøytral ramme */
+  stroke: var(--rv-line) !important;
   stroke-width: 1px !important;
-  transition: fill 0.2s ease, stroke 0.2s ease; /* Lekker, flytende fargeovergang! */
-}
-
-/* AKTIV/FYLT TILSTAND:
-   Når JavaScript oppdager en ekte linje, fylles sirkelen med fargen til linjene dine! */
-.rv-gate-svg.is-connected circle {
-  /* Her bruker vi Obsidians offisielle aksentfarge (lilla/blå alt etter tema), 
-     eller du kan skrive en hardkodet farge som #a76f6f eller var(--graph-line) */
-  fill: var(--text-muted) !important; 
-  stroke: var(--text-muted) !important;
 }
 
 .rv-gate-svg.is-connected circle {
   /* Det sekundet en linje plugges inn, fylles ringen med nøyaktig samme farge 
      som ledningsnettet, men med en lekker glass-alfa (0.6) under tekstkapselen [dan]! */
-  fill: color-mix(in srgb, var(--minbrain-line), transparent 40%) !important;
-  stroke: var(--minbrain-line) !important;
+  fill: color-mix(in srgb, var(--rv-line), transparent 40%) !important;
+  stroke: var(--rv-line) !important;
   stroke-width: 1px !important;
   
   /* Gløden (neon-auraen) matcher nå også linjefargen din 100% automatisk [dan]! */
-  filter: drop-shadow(0 0 2px var(--minbrain-line)) !important;
+  /*filter: drop-shadow(0 0 2px var(--rv-line)) !important; */
 }
 
 /* HVIS BRUKEREN HOVRER EN UTVALGT NOTE-KNAPP:
    Da kan vi la linjene som hører til den hovrede knappen lyse opp ekstra! */
 .item.is-hovered .rv-gate-svg.is-connected circle {
-  fill: var(--minbrain-line) !important; /* Blir helt solid ved hover */
-  filter: drop-shadow(0 0 4px var(--minbrain-line)) !important; /* Dobbel glød-styrke */
+  fill: var(--rv-line) !important; /* Blir helt solid ved hover */
+  filter: drop-shadow(0 0 4px var(--rv-line)) !important; /* Dobbel glød-styrke */
 }
 
 /* ==========================================================================

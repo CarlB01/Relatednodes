@@ -44,8 +44,6 @@ export const RV_CLASSES = {
   RIGHT_TALL: 'data-right-tall',
 
   // Drawing
-  GATE_COLOR: 'var(--bases-table-header-color)',
-  RADIUS: 2.5,
   FACTOR: 1,
 
   // Welcome

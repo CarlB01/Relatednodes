@@ -24,6 +24,8 @@ export class AreaManager {
   private linkCache = new Map<string, { svgElement: SVGPathElement; used: boolean }>();
     
   private animationFrameId: number | null = null;
+  private debounceTimer: NodeJS.Timeout | null = null;
+
 
   constructor(
     related: RelatedData, 
@@ -61,12 +63,13 @@ export class AreaManager {
         if (this.related?.centerNote) {
           this.drawAllGraphLines(); // Tegner strekene fjellstøtt på rett plass!
         }
-      }, 50); // 50ms er usynlig for det blotte øye, men en evighet for nettleser-geometri
+      }, 150); // 50ms er usynlig for det blotte øye, men en evighet for nettleser-geometri
 
       // Nullstill ID-en så neste frame kan kjøre fritt
       this.animationFrameId = null;
     });
   }
+
 
   private setupScrollEventListeners() {
     // En liste over alle områdene som har fått tildelt rulling i CSS-en din
@@ -331,9 +334,14 @@ export class AreaManager {
     }
     
     const canDraw = (from: GateProperties, to: GateProperties) => {
-      return from && to && from.svg && to.svg && 
-            from.parentNote.div && to.parentNote.div &&
-            from.parentNote.div.offsetHeight > 0;
+      if (!from || !to || !from.svg || !to.svg || !from.parentNote.div || !to.parentNote.div) return false;
+      
+      // SIKRING: Sjekk at nodene faktisk har fått en reell plassering i vinduet.
+      // Hvis de måles til 0 på absolutt alt, venter vi på at debounce-timeren vår 
+      // tegner dem på nytt om 150ms når de har brettet seg ut [dan]!
+      const rA = from.svg.getBoundingClientRect();
+      const rB = to.svg.getBoundingClientRect();
+      return rA.width > 0 || rB.width > 0;
     };
 
     const harEkteFysiskLink = (a: NoteClass, b: NoteClass): boolean => {
@@ -343,22 +351,42 @@ export class AreaManager {
       const sjekkKobling = (fraPath: string, tilBasename: string): boolean => {
         const resObj = resolvedLinks[fraPath];
         if (resObj) {
-          const harTreff = Object.keys(resObj).some(path => path.toLowerCase().endsWith(`/${tilBasename.toLowerCase()}.md`) || path.toLowerCase() === `${tilBasename.toLowerCase()}.md`);
+          // KORRIGERT FOR STORSKALA: I stedet for eksakt matching, sjekker vi om stien 
+          // inneholder eller slutter på filnavnet (tar høyde for .dokumenter, aliaser etc.)! [dan]
+          const tilNameLower = tilBasename.toLowerCase();
+          const harTreff = Object.keys(resObj).some(path => {
+            const pLower = path.toLowerCase();
+            return pLower.includes(tilNameLower) || pLower.endsWith(`/${tilNameLower}.md`);
+          });
           if (harTreff) return true;
         }
+
         const unresObj = unresolvedLinks[fraPath];
         if (unresObj && typeof unresObj === 'object') {
-          if (tilBasename in unresObj) return true;
+          const tilNameLower = tilBasename.toLowerCase();
+          const harTreff = Object.keys(unresObj).some(key => key.toLowerCase().includes(tilNameLower));
+          if (harTreff) return true;
         }
         return false;
       };
 
+      // Sjekk to-veis i Obsidians registre
       if (sjekkKobling(a.path, b.basename) || sjekkKobling(b.path, a.basename)) return true;
 
-      const baitForB = this.related.baitCache.get(b.basename.toLowerCase());
-      const baitForA = this.related.baitCache.get(a.basename.toLowerCase());
-      if (baitForB && baitForB.sources.has(a)) return true;
-      if (baitForA && baitForA.sources.has(b)) return true;
+      // Sjekk 3: Sjekk din egen feilfrie sources-cache (Gjort case- og punktum-insensitiv!) [dan]
+      const nameALower = a.basename.toLowerCase();
+      const nameBLower = b.basename.toLowerCase();
+
+      for (const [baitName, bait] of this.related.baitCache.entries()) {
+        if (!bait.isUsed) continue;
+        // Hvis agnet treffer en av nodene delvis (f.feks. "autisme" matcher "autisme.dokumenter") [dan]
+        if (baitName.includes(nameALower) || nameALower.includes(baitName)) {
+          if (bait.sources.has(b)) return true;
+        }
+        if (baitName.includes(nameBLower) || nameBLower.includes(baitName)) {
+          if (bait.sources.has(a)) return true;
+        }
+      }
 
       return false;
     };
@@ -372,6 +400,25 @@ export class AreaManager {
         if (!nodeB) continue;
 
         if (!harEkteFysiskLink(nodeA, nodeB)) continue;
+
+        // Sjekk A: Er de registrert som direkte venner eller søsken i minnekartene?
+        const erDirekteVennerEllerSøsken = nodeA.relations.friends.has(nodeB) || nodeB.relations.friends.has(nodeA) ||
+                                          nodeA.relations.siblings.has(nodeB) || nodeB.relations.siblings.has(nodeA);
+
+        // Sjekk B: Deler de et KRYSSENDE agn (tverrgående kobling) som IKKE tilhører center-noten?
+        const lowercaseCenterName = centerNote.basename.toLowerCase();
+        
+        const delerEkteKryssendeAgn = nodeA.crossingBaits.size > 0 && Array.from(nodeA.crossingBaits).some(bait => {
+          // DØRVAKT: Hvis agnet de deler matcher navnet på senternoten, 
+          // returnerer vi false! Dette eliminerer de indirekte linjene fullstendig [dan].
+          if (bait.targetName.toLowerCase() === lowercaseCenterName) return false;
+          
+          // Hvis de deler et ANNET agn (f.eks. "the clan" eller et felles prosjekt), godkjenner vi det!
+          return nodeB.crossingBaits.has(bait);
+        });
+        
+        const erGyldigHorisontal = erDirekteVennerEllerSøsken || delerEkteKryssendeAgn;
+
  
         // REGEL 1: Er Node A biologisk forelder til Node B? (A har B i barn, eller B har A i foreldre) [dan]
         if (nodeA.relations.children.has(nodeB) || nodeB.relations.parents.has(nodeA)) {
@@ -390,7 +437,7 @@ export class AreaManager {
           }
         } 
         // REGEL 3: Horisontale relasjoner (Friends, søsken, crossing baits) [dan]
-        else {
+        else if (erGyldigHorisontal) {
           if (canDraw(nodeA.friendGate, nodeB.friendGate)) {
             DrawingUtils.drawLink(nodeA.friendGate, nodeB.friendGate, links, offBy, canvas);
             nodeA.friendGate.svg!.classList.add('is-connected');
@@ -407,6 +454,7 @@ export class AreaManager {
         this.linkCache.delete(key); 
       }
     }
+
   }
 
 }
