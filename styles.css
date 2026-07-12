@@ -1,26 +1,33 @@
-/* =============================================== */
-/*  CONTAINER                                           */
-/* =============================================== */
+:root {
+  /* Her definerer du din absolutte drømme-farge for linjene! 
+     Du kan bruke en fast farge (som #a76f6f), eller du kan la den arve 
+     en dus, nøytral tekstfarge fra Obsidian-temaet ditt (var(--text-muted)) [dan] */
+  --minbrain-line: var(--text-muted, #888888); 
+  
+  /* Tykkelsen på linjene dine (Siden RV_CLASSES.FACTOR ble brukt før, 
+     kan du enkelt tune tykkelsen live her, f.eks. 1px eller 1.5px) [dan] */
+  --minbrain-line-width: 1.2px; 
+}
 
+/* =============================================== */
+/*  1. CONTAINER (rigid grid-frame w/flex heights) */
+/* =============================================== */
 .rv-container {
   container-name: main;
-
   position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   background-color: transparent;
-  
-  display: grid;
-  /* 3 kolonner: Venstre side (1fr), Senter-ryggraden (max-content), Høyre side (1fr) */
-  grid-template-columns: 1fr minmax(25%, 33%) 1fr;
+  overflow: hidden !important;
+  box-sizing: border-box;
 
-  /* 5 rader for perfekt vertikal balansering:
-     Rad 1: Fleksibel luft på topp (1fr)
-     Rad 2: Upper area (auto-høyde)
-     Rad 3: Center area (auto-høyde)
-     Rad 4: Lower area (auto-høyde)
-     Rad 5: Fleksibel luft i bunn (1fr) */
-  grid-template-rows: 1fr auto auto auto 1fr;  
+  display: grid;
+  grid-template-columns: 1fr minmax(25%, 33%) 1fr;
+  grid-template-rows: 1fr auto auto auto 1fr;
+  /* alternative is --font-interface-size */
+  font-size: calc(var(--font-text-size, 13px) * 0.8) !important;
 }
 
 /* Dynamisk fontstørrelse basert på total containerhøyde (Krav 6/Trangt) */
@@ -31,181 +38,187 @@
 }
 
 /* =============================================== */
-/*  AREA                                           */
+/*  2. AREAS  (neutral open grid/flex frames)      */
 /* =============================================== */
-
 .rv-area.center {
   grid-column: 2;
   grid-row: 3;
-  
-  anchor-name: --center-area; /* Beholdes for venstre boks */
-  
+  anchor-name: --center-area; 
   min-width: 33%;
-  padding: 40px 20px;
   align-self:center;
   justify-self: center;
   width:auto;
+  padding: clamp(8px, 4cqh, 40px) 20px !important;
 }
 
 .rv-area.upper {
   grid-column: 2;
   grid-row: 2;
-  margin-bottom: 5px; /* Skaper avstand til senter */
-  
+  margin-bottom: 5px;
   width: 100%;
-  min-width: 150px;
-  padding: 5px;
-  
+  min-width: 150px;  
   anchor-name: --upper-area; 
-
-  /* Krav 7: Hvis det er trangt, la elementer "blø" ut i stedet for å skjules */
-  overflow: visible !important; 
   align-self: end;
-  max-height: 38vh;
-  overflow-y: auto !important;
-}
-
-.rv-area.left {
-  grid-column: 1;
-  grid-row: 3;
-
-  justify-self: stretch;
-  align-self: center; /* Sørger for at den er sentrert vertikalt med midten */
-  
-  margin-right: 5px;
-  padding: 5px;
-  
-  max-height: 40vh;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto !important; 
-}
-
-.rv-area.right {
-  grid-column: 3;
-  grid-row: 2 / span 2; 
-  
-  justify-self: stretch;
-  align-self: center; /* Sørger for at den er sentrert vertikalt med midten */
-  
-  margin-left: 5px;
-  padding: 5px;
-  
-  /* Siden den deler rad med center, setter vi en trygg default makshøyde */
-  max-height: 75vh;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto !important;
-  /* background-image: linear-gradient(45deg, #a76f6f, transparent); */
+  overflow: visible !important
 }
 
 .rv-area.lower {
   grid-column: 1 / span 3; 
   grid-row: 4;
   margin-top: 5px;
-  padding: 5px;
-  width: 100%;
-  
-  align-self: start; /* cloce to center area */
+  width: 100%;  
+  align-self: start; 
 
   display: flex !important;
   flex-direction: column;
-  align-items: center;      /* Dønn perfekt horisontal sentrering av wrapperen på X-aksen */  
-  justify-content: flex-start; /* x-axis */
+  align-items: center;
+  justify-content: flex-start;
+}
 
-  max-height: 38vh !important;
-  overflow-y: auto !important;
-  box-sizing: border-box;
+.rv-area.left, .rv-area.right {
+  justify-self: stretch;
+  align-self: center;
+  display: flex;
+  flex-direction: column;
+  overflow: visible !important; 
+}
+
+.rv-area.left {
+  grid-column: 1;
+  grid-row: 3;
+  margin-right: 5px;
+}
+
+.rv-area.right {
+  grid-column: 3;
+  grid-row: 2 / span 2; 
+  margin-left: 5px;
 }
 
 /* =============================================== */
-/*  AREA + CONTAINER                               */
+/*  3. COLLECTION-WRAPPER                          */
 /* =============================================== */
-
-.rv-container[data-left-tall="true"] {
-  
-  & .rv-area.upper {
-    grid-column: 2; /* yield left upper area */
-  }
-
-  & .rv-area.left {
-    grid-row: 2 / span 2; /* left area takes over */
-    max-height: 40vh;
-    align-self: end;
-  }
-}
-
-.rv-container[data-right-tall="true"] {
-  
-  & .rv-area.lower {
-    grid-column: 1 / span 2; /* Gi fra deg kolonne 3 */
-  }
-
-  & .rv-area.right {
-    grid-row: 2 / span 3;    /* Høyre side okkuperer hele den vertikale veggen */
-    max-height: 75vh;
-    align-self: center;
-  }
-}
-
-/* =============================================== */
-/*  COLLECTION                                     */
-/* =============================================== */
-
-/* Etasje-stableren: Skal KUN stable gruppene vertikalt! */
-.rv-collection {
+.rv-collection-wrapper {
   display: flex !important;
   flex-direction: column;
-  gap: 15px;
-  
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  height: auto; /* La høyden leve med innholdet slik at rullefeltet i lower-area trigges */
-  overflow: visible; /* La plus/minus-knapper blø hvis nødvendig */
-  /* border: 1px solid green; /* Behold for testing */
-  .rv-lower-area & {
-    /* NYTT: Sikrer at innholdet starter helt i overkant, rett under delelinjen til center */
-    margin-top: 0; 
-  }
+  overflow-y: auto !important; 
+  overflow-x: hidden !important; 
+  
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+}
+
+.rv-area.lower .rv-collection-wrapper {
+  /* ==========================================================================
+     KRITISK ENDRING FOR IPHONE (iOS):
+     I stedet for kun 'max-height: 55vh', tvinger vi fram en fast og stabil 'height' 
+     for bunnområdet. Vi bruker CSS-funksjonen clamp() slik at den oppfører seg som 
+     en elastisk strikk: den fyller området sitt perfekt, men kutter kontant 
+     på 55% av vinduet. Dette tvinger iOS-skjermen til å føde rullefeltet [dan]!
+     ========================================================================== */
+  height: clamp(10px, 100%, 55vh) !important;
+  max-height: 55vh !important; 
+  align-items: center;
+
+  /* Sørger for at innholdet presses opp mot overkanten i stedet for å 
+     strekke seg rart dersom det er få noder inni den faste høyden [dan] */
+  justify-content: flex-start !important;
+
+  /* Behold de viktige touch-bryterne for Apple-skjermer [dan] */
+  -webkit-overflow-scrolling: touch !important;
+  touch-action: pan-y !important;
+}
+
+.rv-area.lower .rv-collection-wrapper .rv-columns-wrapper:has(.rv-groups:nth-child(2)):not(:has(.rv-groups:nth-child(4))) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  columns: none !important;
+  width: 100%;
+  
+  /* Siden vi har fjernet den lumske fellen, kan denne stå superrent 
+     og trygt på både Mac, iPad og iPhone [dan]! */
+  height: auto !important;
+  min-height: min-content !important; 
+}
+
+/* =============================================== */
+/*  AREA + COLLECTION-WRAPPER (scroll + maxHeight) */
+/* =============================================== */
+.rv-area.upper .rv-collection-wrapper {
+  max-height: 22vh !important; /* Toppen tar maks 22% før den ruller internt [dan] */
+}
+
+.rv-area.lower .rv-collection-wrapper {
+  max-height: 65vh; 
+  overflow-y: auto !important;
+}
+
+.rv-area.left .rv-collection-wrapper {
+  max-height: 35vh !important; /* Flankene utnytter opptil 75% av hele Mac-høyden live [dan]! */
+}
+
+.rv-area.right .rv-collection-wrapper {
+  max-height: 75vh !important; /* Flankene utnytter opptil 75% av hele Mac-høyden live [dan]! */
+}
+
+/* =============================================== */
+/*  4. COLLECTION (vertical stabling)              */
+/* =============================================== */
+.rv-collection {
+  max-height: none !important;
+  height: auto !important;
+  width: 100%;
+  overflow: visible !important; /* Slipper innholdet fritt igjennom [dan] */
+  box-sizing: border-box;
 }
 
 /* =============================================== */
 /*  COLUMNS-WRAPPER                                */
 /* =============================================== */
-
-/* Genererer kolonnene for ALT innhold samlet */
 .rv-columns-wrapper {
   display: block !important;
-  
-  /* Her styres kolonnebredden for hele regionen under ett! */
   columns: 100px; 
   column-gap: 12px; 
-  
   width: 100%;
   max-width: 100%;
   height: fit-content;
-  box-sizing: border-box;
   overflow: visible !important;
+  box-sizing: border-box;
+}
+
+/* Hold dørvakten for 1-3 noder i bunnen intakt via den nye wrapperen [dan] */
+.rv-area.lower .rv-collection-wrapper .rv-columns-wrapper:has(.rv-groups:nth-child(2)):not(:has(.rv-groups:nth-child(4))) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  columns: none !important;
+  width: 100%;
 }
 
 /* =============================================== */
-/*  COLUMNS-WRAPPER + AREA.LOWER                   */
+/*  DYNAMIC SIDES-CHECK                            */
 /* =============================================== */
+.rv-container[data-left-tall="true"] {
+  & .rv-area.upper { grid-column: 2; }                       /* yield left upper area */
+  & .rv-area.left { grid-row: 2 / span 2; align-self: end; } /* left area takes over */
+}
 
-.rv-area.lower .rv-columns-wrapper {
-  display: block !important;
-  columns: 100px;
-  column-gap: 12px;
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 100%; 
+.rv-container[data-right-tall="true"] {
+  & .rv-area.lower { grid-column: 1 / span 2; }                  /* yield right lower area */
+  & .rv-area.right { grid-row: 2 / span 3; align-self: center; } /* Høyre side okkuperer hele den vertikale veggen */
 }
 
 /* =============================================== */
 /*  GROUPS                                         */
 /* =============================================== */
-
 .rv-groups {
   /* display: contents gjør at denne div-en blir "usynlig" for kolonne-motoren, 
      slik at alle .rv-linkDiv på innsiden flyter og balanseres 
@@ -244,7 +257,6 @@
   padding: 0;
   margin: 4px;
   
-  background-color: color-mix(in srgb, var(--background-primary), transparent 50%);  
   border-radius: 4px;
   box-sizing: border-box;
 }
@@ -260,6 +272,20 @@
 .rv-linkdiv {
   display: inline-block;
   flex-grow: 0; /* Hindrer at teksten dytter portene ut av knappen */
+}
+
+.internal-link {
+  background-color: color-mix(in srgb, var(--background-primary), transparent 50%);  
+}
+
+/* =============================================== */
+/*  UNDERLINE & HOVER                              */
+/* =============================================== */
+/* Garanterer helt rene glass-noder til vanlig */
+.rv-container .focusable-note-link {
+  text-decoration: none !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
 }
 
 /* =============================================== */
@@ -278,28 +304,42 @@
   pointer-events: none; /* Sørg for at linjene ikke blokkerer klikk! */
 }
 
+.rv-link-path {
+  fill: none !important; /* Garanterer at svingene aldri fylles med svart */
+  
+  /* Henter de sentraliserte variablene vi akkurat definerte over [dan]! */
+  stroke: var(--minbrain-line) !important;
+  stroke-width: var(--minbrain-line-width) !important;
+  
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  
+  /* Gir den lekre glassaktige, semitransparente finishen på baksiden [dan] */
+  opacity: 0.55; 
+  transition: stroke 0.2s ease, stroke-width 0.2s ease;
+}
+
 /* =============================================== */
 /*  GATE                                           */
 /* =============================================== */
 
 .rv-gate-svg {
   position: absolute !important;
-  width: 6px !important;
-  height: 6px !important;
+  width: 0.5em !important;
+  height: 0.5em !important;
+  z-index: 6;
   overflow: visible !important;
   pointer-events: none;
 }
 
 .rv-gate-svg.up {
-  z-index: 6;
-  top: 0; 
-  left: calc(50% - 10px); 
+  top: 0 !important; 
+  left: calc(50% - 0.5em) !important; 
 }
 
 .rv-gate-svg.down {
-  bottom: -4px;   
-  z-index: 6;
-  left: calc(50% + 10px); 
+  bottom: -0.25em !important;   
+  left: calc(50% + 0.5em); 
 }
 
 .rv-gate-svg.left, 
@@ -340,10 +380,22 @@
   stroke: var(--text-muted) !important;
 }
 
-/* EFFEKT VED HOVER (Valgfritt, men utrolig stilig):
-   Når brukeren holder musen over en aktiv knapp, kan vi gløde portene ekstra! */
+.rv-gate-svg.is-connected circle {
+  /* Det sekundet en linje plugges inn, fylles ringen med nøyaktig samme farge 
+     som ledningsnettet, men med en lekker glass-alfa (0.6) under tekstkapselen [dan]! */
+  fill: color-mix(in srgb, var(--minbrain-line), transparent 40%) !important;
+  stroke: var(--minbrain-line) !important;
+  stroke-width: 1px !important;
+  
+  /* Gløden (neon-auraen) matcher nå også linjefargen din 100% automatisk [dan]! */
+  filter: drop-shadow(0 0 2px var(--minbrain-line)) !important;
+}
+
+/* HVIS BRUKEREN HOVRER EN UTVALGT NOTE-KNAPP:
+   Da kan vi la linjene som hører til den hovrede knappen lyse opp ekstra! */
 .item.is-hovered .rv-gate-svg.is-connected circle {
-  filter: drop-shadow(0 0 2px var(--interactive-accent));
+  fill: var(--minbrain-line) !important; /* Blir helt solid ved hover */
+  filter: drop-shadow(0 0 4px var(--minbrain-line)) !important; /* Dobbel glød-styrke */
 }
 
 /* ==========================================================================

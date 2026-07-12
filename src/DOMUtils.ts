@@ -21,7 +21,7 @@ export class DOMUtils {
     group: { tag: string, notes: NoteClass[]}, 
     startsClosed: boolean 
   ): HTMLElement {
-    const count = group.notes.length;
+    const count = group.notes.length.toString();
 
     // 1. Opprett knappen inni firstNoteDiv nøyaktig slik du pleier, 
     // men pass på at den får vår unike klasse '.rv-plusminus' (fra RV_CLASSES.PLUS_MINUS_BTN) [dan]
@@ -29,11 +29,11 @@ export class DOMUtils {
     
     // 2. ULTRAKOMPAKT TEKST: I stedet for å dytte inn hele tag-navnet, 
     // bruker vi KUN pluss-tegnet for å bevare den lekre 14px sirkelformelen [dan]!
-    button.textContent = startsClosed ? RV_CLASSES.PLUS : RV_CLASSES.MINUS; 
+    button.textContent = startsClosed ? `${RV_CLASSES.PLUS}${count}` : RV_CLASSES.MINUS; 
 
     // 3. METADATA: Vi stempler på data-attributter direkte på HTML-knappen.
     // Dette gjør at hover-lytteren vår i RelatednotesView kan lese taggen og antallet live [dan]!
-    button.setAttribute("data-count", count.toString());
+    button.setAttribute("data-count", count);
     button.setAttribute("data-tag", group.tag);
 
     return button;

@@ -151,7 +151,6 @@ export default class RelatednotesPlugin extends Plugin {
 		if (this.resolvedEventRef) {
 			this.app.metadataCache.offref(this.resolvedEventRef);
 			this.resolvedEventRef = undefined; // Nullstill slik at den kan registreres igjen ved behov
-			console.log("Avregistrerte 'resolved'-lytteren safely.");
 		}
 	}
 

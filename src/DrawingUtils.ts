@@ -13,14 +13,6 @@ export class DrawingUtils {
     const nameB = toGate.parentNote.basename;
   
     const lineId = nameA.localeCompare(nameB) < 0 ? `${nameA}->${nameB}` : `${nameB}->${nameA}`;
-    
-    const meg = 'This is me';
-    const mor = 'mother of my children';
-    const funnetID = lineId.contains(meg) && lineId.contains(mor);
-
-    if (funnetID) {
-        (console.log('ID skjules:', lineId))
-    }
 
     const cacheItem = linkCache.get(lineId);
     if (cacheItem) cacheItem.svgElement.style.display = 'none';
@@ -64,11 +56,6 @@ export class DrawingUtils {
     const p1 = this.sub(rawP1, offBy);
     const p2 = this.sub(rawP2, offBy);
 
-    // ==========================================================================
-    // KRITISK RETTING: Symmetrisk, rekkefølge-uavhengig ID-generering!
-    // Ved å sortere navnene alfabetisk (Math.min/localeCompare), vil ID-en 
-    // ALLTID bli identisk, uavhengig av hvem som står i senter! [dan]
-    // ==========================================================================
     const nameA = fromGate.parentNote.basename;
     const nameB = toGate.parentNote.basename;
 
@@ -77,41 +64,23 @@ export class DrawingUtils {
     ? `${nameA}->${nameB}` 
     : `${nameB}->${nameA}`;
 
-    const meg = 'This is me';
-    const mor = 'mother of my children';
-    const funnetID = lineId.contains(meg) && lineId.contains(mor);
-
     // 3. CACHE-SJEKK & TEGNING
     let cacheItem = linkCache.get(lineId);
     let pathEl: SVGPathElement;
 
     if (cacheItem) {
-        if (funnetID) {
-            (console.log('ID cachet:', lineId))
-        }
         pathEl = cacheItem.svgElement;
         pathEl.style.display = ''; // Vis den igjen hvis den var skjult
         pathEl.style.visibility = 'visible'
-        // ==========================================================================
-        // KORRIGERT & TYPESIKKERT (DOM Disconnect-sikring):
-        // Sjekker om linjen fysisk mangler inni det splitter nye SVG-canvaset [dan].
-        // Hvis den ble slettet av .empty() under klikk, blir den reddet inn her! [dan]
-        // ==========================================================================
         if (!svgContainer.contains(pathEl)) {
             svgContainer.appendChild(pathEl);
         }
         cacheItem.used = true;
-    } else {
-        if (funnetID) {
-            (console.log('ID ny!:', lineId))
-        }
-        
+    } else {        
         pathEl = svgContainer.createSvg("path", {
             attr: {
                 id: lineId,
-                class: "rv-link-path", // Bruker CSS-klassen for den lekre glass- og baksidestylingen! [dan]
-                stroke: RV_CLASSES.GATE_COLOR,
-                "stroke-width": 0.5 * RV_CLASSES.FACTOR,
+                class: "rv-link-path",
                 fill: "none"
             }
         });
@@ -139,7 +108,7 @@ export class DrawingUtils {
     const isFriendLink = fromGate.direction === 'left' || fromGate.direction === 'right';
 
     if (isFriendLink) {
-        // === HORISONTAL BÉZIER (Dine lekre, vannrette svinger fra flankene) ===
+        // === HORISONTAL BÉZIER ===
         const bendStrength = Math.max(35, Math.abs(p2.x - p1.x) * 0.4);
 
         const dirA = fromGate.direction === 'left' ? -1 : 1;
@@ -155,7 +124,6 @@ export class DrawingUtils {
 
     // ==========================================================================
     // KORRIGERT VERTIKAL BÉZIER (For foreldre/barn via up/down-porter)
-    // Vi styrer fortegnet ut fra om porten fysisk peker 'up' eller 'down'! [dan]
     // ==========================================================================
     const verticalStrength = Math.max(40, Math.abs(p2.y - p1.y) * 0.7);
 
@@ -174,5 +142,5 @@ export class DrawingUtils {
     // Returnerer den perfekte, loddrette S-kurven [dan]
     return `M ${p1.x} ${p1.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
     }
-
+ 
 }

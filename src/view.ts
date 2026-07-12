@@ -10,7 +10,11 @@ export class RelatednotesView extends ItemView implements HoverParent {
   app: App;
   
   public areaManager!: AreaManager;
-  
+
+  // 1. Lagre en referanse til det siste mus-eventet og målet i klassen din
+  private lastMouseEvent: MouseEvent | null = null;
+  private lastMouseTarget: HTMLElement | null = null;
+
   hoverPopover: HoverPopover | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: RelatednotesPlugin) {
@@ -180,7 +184,6 @@ export class RelatednotesView extends ItemView implements HoverParent {
     const containerEl = this.areaManager.containerEl;
     const center = this.areaManager.center;
     containerEl.appendChild(center);
-    console.log('displayed welcome');
   }
 
   // #endregion
@@ -247,15 +250,8 @@ export class RelatednotesView extends ItemView implements HoverParent {
     const selectedFile = this.getFile(internalLink);
     if (!selectedFile) return;
 
-    // ==========================================================================
-    // DØRVAKT MOT DOBBEL-RENDERING: 
-    // Hvis filen brukeren klikket på ALLEREDE er den aktive senternoten i minnet,
-    // avbryter vi her! Dette stopper timing-kræsjen og forhindrer at linjene forsvinner [dan].
-    // ==========================================================================
     const currentCenter = this.plugin.relatedData.centerNote;
     if (currentCenter && currentCenter.path === selectedFile.path) {      
-      // Final safeguard: Hvis linjene mot formodning skulle ha flyttet seg litt, 
-      // ber vi bare om en rask piksel-oppretting uten å røre datamodellen! [dan]
       this.areaManager.requestRedraw(); 
       return; 
     }
@@ -317,7 +313,8 @@ export class RelatednotesView extends ItemView implements HoverParent {
       items.slice(1).forEach(item => item.classList.add('hidden'));
       
       // Bytt symbol tilbake til pluss
-      target.textContent = plus;
+      const count = items.length.toString();
+      target.textContent = `${plus}${count}`;
     }
 
     // Siden knapper akkurat dukket opp eller forsvant, har CSS-høydene endret seg.
@@ -418,52 +415,71 @@ export class RelatednotesView extends ItemView implements HoverParent {
   }
 
   private setupInternalLinkHandler() {
-    // 1. LINK CLICKED
+    //CLICK
     this.contentEl.on("click", ".focusable-note-link", (event, target) => {
       event.preventDefault();
 
-      // Henter stien (path) direkte fra attributten vi la på <a>-elementet
       const path = target.getAttribute("data-link-path");
       if (path) {
         this.onInternalLinkClicked(path);
       }
     });
 
-    // 2. LINK HOVERED (Vekker Obsidians offisielle Page Preview!)
-    // SIKRING: Vi legger til 'target' i parameterlisten slik at Obsidians .on() 
-    // garanterer at 'target' ALLTID er det ekte .focusable-note-link (<a>) elementet!
-    this.contentEl.on("mouseover", ".focusable-note-link", (event, target) => {
-      if (!target) return;
-
-      // Videresender både event (for mus-koordinater) og target (for data-href) [dan]
-      this.onMouseOverLink(event, target);
+    // MOUSEMOVE
+    this.contentEl.on("mousemove", ".focusable-note-link", (event: MouseEvent, target: HTMLElement) => {
+      this.lastMouseEvent = event;
+      this.lastMouseTarget = target;
       
-      // Legger til din hover-klasse for CSS-effekter
-      target.addClass('is-hovered');
+      if (event.metaKey && !target.hasClass('is-hovered')) {
+        this.onMouseOverLink(event, target);
+        target.addClass('is-hovered')
+      }
     });
 
-    // 3. LINK HOVER ENDED (Fjerner popup og visuelle effekter safely)
-    this.contentEl.on("mouseout", ".focusable-note-link", (event, target) => {
-    if (target) {
+    // MOUSELEAVE
+    this.contentEl.on("mouseleave", ".focusable-note-link", (event: MouseEvent, target: HTMLElement) => {
       target.removeClass('is-hovered');
-    }
-  });
+      this.lastMouseEvent = null;
+      this.lastMouseTarget = null;
+    });
+
+    // KEYDOWN
+    this.registerDomEvent(window, "keydown", (event: KeyboardEvent) => {
+      if (event.key === "Meta") {
+        // SIKKERHETS-SJEKK: Er musen faktisk over denne lenken akkurat nå?
+        if (this.lastMouseTarget && this.lastMouseTarget.matches(':hover')) {
+          if (this.lastMouseEvent && !this.lastMouseTarget.hasClass('is-hovered')) {
+            this.onMouseOverLink(this.lastMouseEvent, this.lastMouseTarget);
+            this.lastMouseTarget.addClass('is-hovered');
+          }
+        } else {
+          // Hvis musen IKKE er over lenken lenger, nullstiller vi lagringen med en gang
+          this.lastMouseEvent = null;
+          this.lastMouseTarget = null;
+        }
+      }
+    });
+
+    // KEYUP
+    this.registerDomEvent(window, "keyup", (event: KeyboardEvent) => {
+      if (event.key === "Meta") {
+        // Fjerner hover-effekten når Command slippes
+        const elements = document.querySelectorAll(".focusable-note-link.is-hovered");
+        elements.forEach(el => el.classList.remove("is-hovered"));
+      }
+    });
 
   }
 
   private setupPlusMinusBtnHandler() {
-    // 1. EVENT: Brukeren KLIKKER på pluss/minus-knappen (Kollapser/ekspanderer gruppen)
     this.contentEl.on("click", `.${RV_CLASSES.PLUS_MINUS_BTN}`, (event, target) => {
       event.preventDefault();
       if (!target || !(target instanceof HTMLElement)) return;
-
       this.onPlusMinusBtnClicked(target);
     });
 
-    // En felles, flyktig popup-referanse for denne fanen
     let activePopup: HTMLElement | null = null;
 
-    // 2. EVENT: Brukeren HOVRER over pluss/minus-knappen (Viser popup-boble live!)
     this.contentEl.on("mouseover", `.${RV_CLASSES.PLUS_MINUS_BTN}`, (event, target) => {
       if (!target || !(target instanceof HTMLElement)) return;
 
@@ -476,17 +492,12 @@ export class RelatednotesView extends ItemView implements HoverParent {
   
       // Sjekk om gruppen allerede er utvidet (hvis den har minus-tegn, er den expanded)
       const isExpanded = target.textContent?.includes(RV_CLASSES.MINUS) ?? false;
-      const hoverText = isExpanded 
-        ? `Klikk for å skjule medlemmene` 
-        : `Klikk for å vise ${count} noder i denne gruppen`;
+      const hoverText = tag 
 
       // Bygg den lekre popupen ferskt i minnet (Bruker dine egne beskrivende klasser fra DOMUtils!)
       activePopup = createDiv({ cls: RV_CLASSES.INFO_HOVER });
 
-      // Vi bruker hele tag-navnet (f.eks. #samling) som en lekker tittel på popupen [dan]!
-      activePopup.createEl("p", { text: tag, cls: "popup-title" });
-      const ul = activePopup.createEl("ul");
-      ul.createEl("li", { text: hoverText });
+      activePopup.createEl("span", { text: hoverText });
 
       // Sett basestyling (Må gjøres FØR vi måler bredden!)
       activePopup.style.position = "absolute";
@@ -511,12 +522,6 @@ export class RelatednotesView extends ItemView implements HoverParent {
       // Luftmargin mellom knappen og popup-boblen (10 piksler er kjempepent)
       const padding = 10; 
 
-      // ==========================================================================
-      // INTELLIGENT KANT-SJEKK (Dersom høyre flanke er for trang)
-      // ==========================================================================
-
-      // Vi regner ut hvor høyre kant av popupen vil lande dersom vi legger den til høyre.
-      // Hvis den lander utenfor bredden til hele fanen din (viewRect.right), er det for trangt [dan]!
       const vilKrasjePåHøyreSide = (btnRect.right + padding + popupWidth) > viewRect.right;
 
       if (vilKrasjePåHøyreSide) {
@@ -527,17 +532,11 @@ export class RelatednotesView extends ItemView implements HoverParent {
         activePopup.style.left = `${btnRect.right - viewRect.left + padding}px`;
       }
 
-      // Sentrer popupen dønn perfekt vertikalt (Y-akse) i forhold til knappen [dan]
-      // Vi tar knattekanten på topp, og trekker fra en liten justering for å sentrere høyden [dan]
       activePopup.style.top = `${btnRect.top - viewRect.top - 15}px`;
-
-      // Gjør popupen synlig for brukeren igjen nå som den står på rett plass! [dan]
       activePopup.style.visibility = "visible";
-      // Dytt popupen synlig inn i fanen din
       this.contentEl.appendChild(activePopup);
     });
 
-    // 3. EVENT: Brukeren flytter musen BORT fra pluss/minus-knappen (Sletter popupen øyeblikkelig)
     this.contentEl.on("mouseout", `.${RV_CLASSES.PLUS_MINUS_BTN}`, (event, target) => {
       if (activePopup) { activePopup.remove(); activePopup = null; }
     });

@@ -75,11 +75,14 @@ export class AreaManager {
     for (const area of scrollableAreas) {
       if (!area) continue;
 
+      const scrollWrapper = area.querySelector(`.${RV_CLASSES.COLLECTION_WRAPPER}`) as HTMLElement;
+      if (!scrollWrapper) continue;
+
       this.plugin.registerDomEvent(
-        area, 
+        scrollWrapper, 
         'scroll', 
         () => {
-          this.requestRedraw(); // Sørger for at Beziér-kurvene følger med live! [dan]
+          this.requestRedraw(); 
         }, 
         { passive: true }
       );
@@ -239,6 +242,7 @@ export class AreaManager {
 
     // 1. OPPRETT DET USYNLIGE FRAGMENTET I MINNET
     const areaFragment = document.createDocumentFragment();
+    const collectionWrapper = areaFragment.createDiv(RV_CLASSES.COLLECTION_WRAPPER);
     
     // Vi looper gjennom de overordnede kolleksjonene (f.eks. maks 2 i lower area)
     collections.forEach(collection => {
@@ -246,7 +250,7 @@ export class AreaManager {
 
       // PRINSIPP: Hver kolleksjon får sin egen etasje-stabler (.rv-area-collections). 
       // Siden disse stables vertikalt i CSS, vil Kolleksjon 2 legge seg vakkert UNDER Kolleksjon 1!
-      const areaCollectionDiv = areaFragment.createDiv({ cls: RV_CLASSES.COLLECTION });
+      const areaCollectionDiv = collectionWrapper.createDiv({ cls: RV_CLASSES.COLLECTION });
 
       // Hver kolleksjon får sin egen kolonneflyt (.rv-columns-wrapper)
       const colWrapDiv = areaCollectionDiv.createDiv({ cls: RV_CLASSES.COL_WRAPPER});
@@ -268,7 +272,7 @@ export class AreaManager {
 
           // RENDRE: Bygg knappen, a-lenken og de 3 portene ferdig i minnet
           const noteEl = note.render(); 
-          if (overGrensen && index > 0) {
+          if (overGrensen && index > 0 && this.plugin.settings.groupsCollapsed) {
             noteEl.classList.add('hidden');
           };
           groupDiv.appendChild(noteEl);
@@ -279,16 +283,13 @@ export class AreaManager {
           if (note.friendGate) note.friendGate.areaElement = area;
         });
 
-        // Hvis gruppen har mer enn 1 medlem, legger vi på pluss/minus-knappen på den første noten
-        if (groupNotes.length > 1) {
+        if (overGrensen) {
           // 1. KORRIGERT & TYPESIKKERT: Hent ut den aller første noten fra listen safely
           const firstNote = groupNotes[0];
           
-          // 2. DØRVAKT: Sjekk eksplisitt at noten og dens HTML-div eksisterer før vi går videre
           if (firstNote && firstNote.div) {
             const firstNoteDiv = firstNote.div;
             
-            // Bygg knappen via din oppdaterte DOMUtils (overgensen ble bestemt lenger opp i funksjonen)
             const plusMinusBtn = DOMUtils.buildPlusMinusBtn(firstNoteDiv, group, overGrensen);
             
             // Dytt knappen absolutt posisjonert inn på den første noten [dan]
@@ -335,7 +336,6 @@ export class AreaManager {
             from.parentNote.div.offsetHeight > 0;
     };
 
-    // Din bunnsolide link-vasker fra tidligere (sjekker resolved/unresolved og baits)
     const harEkteFysiskLink = (a: NoteClass, b: NoteClass): boolean => {
       const resolvedLinks = this.plugin.app.metadataCache.resolvedLinks;
       const unresolvedLinks = this.plugin.app.metadataCache.unresolvedLinks;
@@ -363,9 +363,6 @@ export class AreaManager {
       return false;
     };
 
-    // ==========================================================================
-    // 2. ULTRA-EFFEKTIV TEGNE-LOOP (Lydig etter dine eksakte regler!)
-    // ==========================================================================
     for (let i = 0; i < visibleNotes.length; i++) {
       const nodeA = visibleNotes[i];
       if (!nodeA) continue;
@@ -374,21 +371,8 @@ export class AreaManager {
         const nodeB = visibleNotes[j];
         if (!nodeB) continue;
 
-        const meg = 'This is me';
-        const mor = 'mother of my children';
-        const Ameg = nodeA.basename == meg;
-        const Bmeg = nodeB.basename == meg;
-        const Amor = nodeA.basename == mor;
-        const Bmor = nodeB.basename == mor;
-        const AmegBmor = Ameg && Bmor;
-        const BmegAmor = Bmeg && Amor;
-
-        const fantMM = AmegBmor || BmegAmor;
-        const harLink = harEkteFysiskLink(nodeA, nodeB);
-        const canDraw2 = canDraw(nodeA.friendGate, nodeB.friendGate);
-
         if (!harEkteFysiskLink(nodeA, nodeB)) continue;
-
+ 
         // REGEL 1: Er Node A biologisk forelder til Node B? (A har B i barn, eller B har A i foreldre) [dan]
         if (nodeA.relations.children.has(nodeB) || nodeB.relations.parents.has(nodeA)) {
           if (canDraw(nodeA.lowerGate, nodeB.upperGate)) {
@@ -408,9 +392,6 @@ export class AreaManager {
         // REGEL 3: Horisontale relasjoner (Friends, søsken, crossing baits) [dan]
         else {
           if (canDraw(nodeA.friendGate, nodeB.friendGate)) {
-            if (fantMM && harLink && canDraw2) {
-              console.log('alt klart for horisontal' );
-            }
             DrawingUtils.drawLink(nodeA.friendGate, nodeB.friendGate, links, offBy, canvas);
             nodeA.friendGate.svg!.classList.add('is-connected');
             nodeB.friendGate.svg!.classList.add('is-connected');

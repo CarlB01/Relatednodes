@@ -161,6 +161,15 @@ export class SampleSettingTab extends PluginSettingTab {
 							this.plugin.settings.displayAliases = value;
 							await this.plugin.saveSettings();
 				}));
+		new Setting(containerEl)
+			.setName('Collapse large node groups as default')
+			.setDesc('Toggle this option to yes or no')
+			.addToggle(toggle => toggle
+					.setValue(this.plugin.settings.groupsCollapsed)
+					.onChange(async (value) => {
+							this.plugin.settings.groupsCollapsed = value;
+							await this.plugin.saveSettings();
+				}));
 	}
 
 	private createAutoResizeTextSetting(

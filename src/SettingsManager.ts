@@ -10,6 +10,7 @@ export class SettingsManager {
   public ignoreTags: string = '#excalidraw';
   public ignoreNameFragments: string = '@';
   public displayAliases: boolean = false;
+  public groupsCollapsed: boolean = false;
 
   // === B. DE OPTIMALISERTE LISTENE (Ferdigtygde arrays for grafloopen) ===
   public optParentProperties: string[] = [];

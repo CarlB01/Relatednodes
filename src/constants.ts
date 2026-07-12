@@ -18,6 +18,7 @@ export const RV_CLASSES = {
   AREA_BOTTOM: 'rv-area lower',
   
   // Samlinger og grupper
+  COLLECTION_WRAPPER: 'rv-collection-wrapper',
   COLLECTION: 'rv-collection',
   COL_WRAPPER: 'rv-columns-wrapper',
   GROUPS: 'rv-groups',

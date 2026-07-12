@@ -55,9 +55,9 @@ export class GateProperties {
     // Opprett sirkelen på innsiden
     this.circleEl = this.svg.createSvg("circle", {
       attr: {
-        cx: RV_CLASSES.RADIUS,
-        cy: RV_CLASSES.RADIUS,
-        r: RV_CLASSES.RADIUS * RV_CLASSES.FACTOR,
+        cx: "50%",
+        cy: "50%",
+        r: "40%",
         fill: fill,
         stroke: RV_CLASSES.GATE_COLOR,
         "stroke-width": RV_CLASSES.FACTOR
