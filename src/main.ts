@@ -1,11 +1,9 @@
 import { Plugin, Notice, WorkspaceLeaf, EventRef, TFile, TAbstractFile } from 'obsidian';
 import { SampleSettingTab } from "./SettingTab.js";
 import { RelatednotesView } from './view.js';
-import { RV_CLASSES } from './constants.js';
+import { RV } from './constants.js';
 import { RelatedData } from './data.js';
 import { SettingsManager } from './SettingsManager.js';
-
-export const relatednodesID = 'relatednotesViewType';
 
 export default class RelatednotesPlugin extends Plugin {
 	declare settings: SettingsManager;
@@ -23,7 +21,7 @@ export default class RelatednotesPlugin extends Plugin {
 	
 		// Registrer visningen din (Gjør det mulig å åpne både i sidebar og som stor tab!) [dan]
     this.registerView(
-      RV_CLASSES.RELATED_NOTES_VIEW_TYPE,
+      RV.RELATED_NOTES_VIEW_TYPE,
       (leaf) => new RelatednotesView(leaf, this) // Vi sender med 'this' (pluginen) [dan]
     );
 
@@ -50,13 +48,9 @@ export default class RelatednotesPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on('file-open', async (file: TFile | null) => {
         if (!file) return;
-        await this.relatedData.update(file);
-        
-        // NYTT & MAGISK: Finn ALLE åpne instanser av grafen din (både i sidebar og store vinduer) 
-        // og be dem tegne seg på nytt basert på de ferske dataene! [dan]
-        this.app.workspace.getLeavesOfType(RV_CLASSES.RELATED_NOTES_VIEW_TYPE).forEach(leaf => {
+        this.app.workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE).forEach(leaf => {
           if (leaf.view instanceof RelatednotesView) {
-            leaf.view.areaManager.renderGraph(); // Trigger 100% minne-utskrift live! [dan]
+            leaf.view.onFileChange(file);
           }
         });
       })
@@ -78,7 +72,7 @@ export default class RelatednotesPlugin extends Plugin {
 				
 				// 2. Hvis dørvakten ga grønt lys og dataene ble endret: Oppdater skjermene!
 				if (dataBleOppdatert) {
-					this.app.workspace.getLeavesOfType(RV_CLASSES.RELATED_NOTES_VIEW_TYPE).forEach(leaf => {
+					this.app.workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE).forEach(leaf => {
 						if (leaf.view instanceof RelatednotesView) {
 							// Hvert unike vindu (sidebar/stor tab) tegner seg på nytt i minnet sitt
 							leaf.view.areaManager.renderGraph();
@@ -106,7 +100,7 @@ export default class RelatednotesPlugin extends Plugin {
 		const { workspace } = this.app;
 		
 		// 2. SIKRING: Sjekk om visningen allerede finnes (Unngå duplikate faner)
-		let leaf = workspace.getLeavesOfType(RV_CLASSES.RELATED_NOTES_VIEW_TYPE)[0];
+		let leaf = workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE)[0];
 		
 		if (leaf) {
 			// Visningen finnes allerede! Bare flytt fokus dit
@@ -121,7 +115,7 @@ export default class RelatednotesPlugin extends Plugin {
 
 		if (newLeaf) {
 			await newLeaf.setViewState({
-				type: RV_CLASSES.RELATED_NOTES_VIEW_TYPE,
+				type: RV.RELATED_NOTES_VIEW_TYPE,
 				active: true,
 			});
 			
@@ -132,9 +126,8 @@ export default class RelatednotesPlugin extends Plugin {
 			// med den aktive filen brukeren står i akkurat nå med en gang!
 			const activeFile = this.app.workspace.getActiveFile();
 			if (activeFile) {
-				await this.relatedData.update(activeFile);
 				if (newLeaf.view instanceof RelatednotesView) {
-					newLeaf.view.areaManager.renderGraph(); // Tegn det første bildet
+					newLeaf.view.onFileChange(activeFile);
 				}
 			}
 		} else {

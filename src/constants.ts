@@ -1,4 +1,4 @@
-export const RV_CLASSES = {
+export const RV = {
   RELATED_NOTES_VIEW_TYPE: 'relatednotes-view',
   RELATED_SIDEBAR_PANEL_TYPE: 'related-sidebar-view',
 
@@ -24,8 +24,9 @@ export const RV_CLASSES = {
   GROUPS: 'rv-groups',
 
   // Links
-  LINK: 'rv-linkdiv',
-  A: 'internal-link focusable-note-link relatednotes-text',
+  LINKDIV: 'rv-linkdiv',
+  A: 'internal-link focusable-note-link',
+  SPAN: 'rv-text-span',
 
   //Buttons
   INFO_BTN: 'rv-info-button',

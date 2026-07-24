@@ -1,12 +1,10 @@
 import { Workspace } from "obsidian";
-import RelatednotesPlugin, { relatednodesID } from "./main.js";
+import RelatednotesPlugin from "./main.js";
 import { NoteClass } from "./NoteClass.js";
-import { RV_CLASSES } from "./constants.js";
+import { RV } from "./constants.js";
 
 export class DOMUtils {
-  static plusMinusBtnDescr = 'rv-plusminus';
-  private readonly superChargedLinkSimple = 'internal-link data-link-text';
-
+  static plusMinusBtnDescr = RV.PLUS_MINUS_BTN;
 
   constructor(
     public plugin: RelatednotesPlugin,
@@ -15,7 +13,7 @@ export class DOMUtils {
   static uniqueAnchor(basename: string): string {
     return `--${basename.replace(/[^a-zA-Z0-9]/g, '').trim()}`;
   }
-
+ 
   static buildPlusMinusBtn(
     firstNoteDiv: HTMLElement, 
     group: { tag: string, notes: NoteClass[]}, 
@@ -24,17 +22,16 @@ export class DOMUtils {
     const count = group.notes.length.toString();
 
     // 1. Opprett knappen inni firstNoteDiv nøyaktig slik du pleier, 
-    // men pass på at den får vår unike klasse '.rv-plusminus' (fra RV_CLASSES.PLUS_MINUS_BTN) [dan]
-    const button = firstNoteDiv.createDiv(`${RV_CLASSES.PLUS_MINUS_BTN} ${RV_CLASSES.BORDERED} ${RV_CLASSES.ROUNDED}`);
+    const button = firstNoteDiv.createDiv(`${RV.PLUS_MINUS_BTN} ${RV.SUPERCHARGED_ATTRIB} ${RV.BORDERED} ${RV.ROUNDED}`);
     
-    // 2. ULTRAKOMPAKT TEKST: I stedet for å dytte inn hele tag-navnet, 
-    // bruker vi KUN pluss-tegnet for å bevare den lekre 14px sirkelformelen [dan]!
-    button.textContent = startsClosed ? `${RV_CLASSES.PLUS}${count}` : RV_CLASSES.MINUS; 
+    button.textContent = startsClosed 
+      ? `${RV.PLUS}${group.tag}(${count})` 
+      : `${RV.MINUS}${group.tag}(${count})`; 
 
-    // 3. METADATA: Vi stempler på data-attributter direkte på HTML-knappen.
-    // Dette gjør at hover-lytteren vår i RelatednotesView kan lese taggen og antallet live [dan]!
+    // Let hover-listener fetch data-count
     button.setAttribute("data-count", count);
     button.setAttribute("data-tag", group.tag);
+    button.setAttribute('data-link-tags', group.tag);
 
     return button;
   }
@@ -48,7 +45,7 @@ export class DOMUtils {
     const hoverHandler = (evt: MouseEvent) => {
       workspace.trigger('hover-link', {
         event: evt,
-        source: relatednodesID,
+        source: RV.RELATED_NOTES_VIEW_TYPE,
         targetEl: linkEl,
         linktext: linktext,
         sourcePath: sourcePath || linktext,
@@ -60,11 +57,4 @@ export class DOMUtils {
     };
   }
 
-  private infoBtntext (
-    note: NoteClass,
-  ){
-    const title = 'Info';
-    const count = note.relations.ignored.size;
-    return `### ${title} ${'\n'} ignored ${count} notes`;
-  }
 }

@@ -2,7 +2,7 @@ import { CachedMetadata, parseFrontMatterAliases, parseFrontMatterStringArray, p
 import { GateProperties } from "./GateClass";
 import { StringUtils } from "./StringUtils";
 import { BaitClass } from "./BaitClass";
-import { RV_CLASSES } from "./constants";
+import { RV } from "./constants";
 
 /**
  * UNDEFINED: fungerer i praksis som en elastisk "sekkerelasjon" 
@@ -28,6 +28,7 @@ export class NoteClass {
   readonly rawFrontmatter: any;
   
   isUsed: boolean = false; // flag for re-use
+  isIndexedInThisRound: boolean = false; 
 
   // Stemplene som bestemmer ruting og kolleksjoner
 	relation: Relation = "undefined";
@@ -42,9 +43,9 @@ export class NoteClass {
   lowerGate: GateProperties;
   friendGate: GateProperties;
   
-  div: HTMLElement | null = null;
-  // De fysiske portene på selve Note-DIV-en
-
+  public linkDivRef: HTMLElement | null = null;
+  public div: HTMLElement | null = null;
+  
   // Relations-sets
   relations = {
     parents: new Set<NoteClass>(),
@@ -60,15 +61,15 @@ export class NoteClass {
     displayText: string, 
     aliases: string[], 
     tags: string[], 
-    isIgnored: boolean,
-    frontmatter: any
+    isInitiallyIgnored: boolean,
+    frontmatter: any | null
   ) {
     this.path = path;
     this.basename = basename;
     this.displayText = displayText;
     this.aliases = aliases;
     this.tags = tags;
-    this.isInitiallyIgnored = isIgnored;
+    this.isInitiallyIgnored = isInitiallyIgnored;
     this.rawFrontmatter = frontmatter;
 
     // 'friend' starter som 'left' som standard, men overstyres i render() basert på kvadrant
@@ -106,23 +107,21 @@ export class NoteClass {
    */
   public render(): HTMLElement {
   
-    let div = this.div;
+    let itemDiv = this.div;
       
     // 1. REUSE or CREATE
-    if (div) {
-      div.innerHTML = "";
-      div.className = "item"; //  this.linkDivDescr;
+    if (itemDiv) {
+      itemDiv.innerHTML = "";
+      itemDiv.className = "item"; 
     } else {
-      div = createDiv({ cls: "item"}); // this.linkDivDescr});
-      this.div = div;
+      itemDiv = createDiv({ cls: "item"}); 
+      this.div = itemDiv;
     }
 
-    // 2. BUILD INSIDE
-    const linkWrapper = createDiv({ cls: RV_CLASSES.LINK });
+    const linkWrapper = itemDiv.createDiv({ cls: RV.LINKDIV });
 
-    linkWrapper.createEl('a', { 
-        text: this.displayText,
-        cls: `${RV_CLASSES.A} ${RV_CLASSES.SUPERCHARGED_ATTRIB}`,
+    const linkEl = createEl('a', { 
+        cls: `${RV.A} ${RV.SUPERCHARGED_ATTRIB}`,
         attr: {
             'data-href': this.path,
             'draggable': 'true',
@@ -130,6 +129,9 @@ export class NoteClass {
             'data-link-path': this.path
         }
     });
+
+    linkEl.createSpan( { text: this.displayText, cls: 'rv-text-span'} );
+
     
     // 3. FRIENDGATE DIRECTION
     if (this.assignedArea === "left") {
@@ -137,42 +139,30 @@ export class NoteClass {
     } else {
       this.friendGate.direction = 'left';  // Topp, bunn og senter peker mot venstre flanke standard
     }
-
-    // 3. Info-knapp logikk
-    /*const ignored = this.ignored?.length ?? 0;
-    if (ignored > 0) {
-        const anchor = this.uniqueAnchor(this.basename);
-        const button = div.createDiv(`${DOMUtils.infobuttonDescr} bordered-div rounded-div`);
-        button.textContent = '𝚒';
-        button.style.anchorName = anchor;
-    }
     
-    */
-
     // 4. GENERER 3 PORTER
     const topSVG    = this.upperGate.render();
     const bottomSVG = this.lowerGate.render();
     const friendSVG = this.friendGate.render();
-
+    
     this.upperGate.svg  = topSVG;
     this.lowerGate.svg  = bottomSVG;
     this.friendGate.svg = friendSVG;
-
-    // 5. STRUKTURER INNSIDEN (FLEXBOX-REKKEFØLGE)
-    // De to absolutt posisjonerte portene legges i bunnen
-    div.appendChild(topSVG);
-    div.appendChild(bottomSVG);
-
-    if (this.friendGate.direction === 'left') {
-      // Venstre side: [ FriendGate ] [ Tekst]
-      div.appendChild(friendSVG); 
-      div.appendChild(linkWrapper);
+    
+    linkWrapper.appendChild(topSVG);
+    linkWrapper.appendChild(bottomSVG);
+    
+    if (this.friendGate.direction == 'left') {
+      linkWrapper.appendChild(friendSVG); 
+      linkWrapper.appendChild(linkEl);  
     } else {
-      // Høyre side (og topp/bunn): [ Tekst ] [ FriendGate ]
-      div.appendChild(linkWrapper);
-      div.appendChild(friendSVG);
+      linkWrapper.appendChild(linkEl);  
+      linkWrapper.appendChild(friendSVG); 
     }
 
-    return div;
+    this.linkDivRef = linkWrapper; 
+
+    return itemDiv;
   }
+
 }

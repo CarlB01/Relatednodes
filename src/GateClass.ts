@@ -1,6 +1,6 @@
 import { Point } from "obsidian";
 import { NoteClass } from "./NoteClass";
-import { RV_CLASSES } from "./constants";
+import { RV } from "./constants";
 
 export type Direction = "up" | "down" | "left" | "right";
 
@@ -52,7 +52,7 @@ export class GateProperties {
     this.svg = createSvg("svg", {
       attr: {
         viewBox: "0 0 10 10", // Det magiske relative rutenettet [dan]!
-        class: `${RV_CLASSES.GATE_SVG} ${this.direction}`,
+        class: `${RV.GATE_SVG} ${this.direction}`,
         style: "position: absolute; z-index: 5; overflow: visible;"
       }
     });

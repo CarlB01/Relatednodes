@@ -4,7 +4,7 @@ import { Platform, Point } from "obsidian";
 import { DrawingUtils } from "./DrawingUtils.js";
 import { DOMUtils } from "./DOMUtils.js";
 import { GateProperties } from "./GateClass.js";
-import { RV_CLASSES } from "./constants.js";
+import { RV } from "./constants.js";
 import RelatednotesPlugin from "./main.js";
 
 export class AreaManager {
@@ -16,29 +16,29 @@ export class AreaManager {
   right!: HTMLElement;
   upper!: HTMLElement;
   lower!: HTMLElement;
-    
+
   private related: RelatedData;
   private plugin: RelatednotesPlugin;
-  
+
   // Den sentrale minne-cachen for SVG-linjene
   private linkCache = new Map<string, { svgElement: SVGPathElement; used: boolean }>();
-    
+
   private animationFrameId: number | null = null;
   private debounceTimer: NodeJS.Timeout | null = null;
 
 
   constructor(
-    related: RelatedData, 
+    related: RelatedData,
     parentEl: HTMLElement,
     plugin: RelatednotesPlugin
-  ){
+  ) {
     this.related = related;
     this.containerEl = parentEl;
     this.plugin = plugin;
   }
 
   initiate() {
-    this.containerEl.addClass(RV_CLASSES.CONTAINER); 
+    this.containerEl.addClass(RV.CONTAINER);
   }
 
   /**
@@ -48,7 +48,7 @@ export class AreaManager {
   public requestRedraw() {
     // Hvis det allerede er planlagt en tegning, avbryt det forrige varselet
     if (this.animationFrameId !== null) {
-        cancelAnimationFrame(this.animationFrameId);
+      cancelAnimationFrame(this.animationFrameId);
     }
 
     // Planlegg en ny frame synkronisert med nettleseren/skjermen
@@ -78,15 +78,15 @@ export class AreaManager {
     for (const area of scrollableAreas) {
       if (!area) continue;
 
-      const scrollWrapper = area.querySelector(`.${RV_CLASSES.COLLECTION_WRAPPER}`) as HTMLElement;
+      const scrollWrapper = area.querySelector(`.${RV.COLLECTION_WRAPPER}`) as HTMLElement;
       if (!scrollWrapper) continue;
 
       this.plugin.registerDomEvent(
-        scrollWrapper, 
-        'scroll', 
+        scrollWrapper,
+        'scroll',
         () => {
-          this.requestRedraw(); 
-        }, 
+          this.requestRedraw();
+        },
         { passive: true }
       );
     }
@@ -102,13 +102,13 @@ export class AreaManager {
     const descr = '.rv-area.left';
     const leftWrapper = vc.querySelector(descr) as HTMLElement;
     if (!leftWrapper) return;
-    
-    const currentValue = vc.getAttribute(RV_CLASSES.LEFT_TALL);
+
+    const currentValue = vc.getAttribute(RV.LEFT_TALL);
     const isLeftTall = leftWrapper.scrollHeight > this.center.offsetHeight;
     const newValue = isLeftTall ? "true" : "false";
 
     if (currentValue !== newValue) {
-        vc.setAttribute(RV_CLASSES.LEFT_TALL, newValue);
+      vc.setAttribute(RV.LEFT_TALL, newValue);
     }
   }
 
@@ -121,8 +121,8 @@ export class AreaManager {
     const descr = '.rv-area.right';
     const rightWrapper = vc.querySelector(descr) as HTMLElement;
     if (!rightWrapper) return;
-    
-    const currentValue = vc.getAttribute(RV_CLASSES.RIGHT_TALL);
+
+    const currentValue = vc.getAttribute(RV.RIGHT_TALL);
     const isRightTall = rightWrapper.scrollHeight > (this.center.offsetHeight + this.upper.offsetHeight);
     const newValue = isRightTall ? "true" : "false";
 
@@ -130,75 +130,77 @@ export class AreaManager {
       vc.setAttribute('data-right-tall', newValue);
     }
   }
-  
+
   /**
    * Check how much backContainerSVG is off related to future container measures.
    * @returns amount of pixels the drawing routine must adjust coords
    */
-  private offBy(): Point | null{
+  private offBy(): Point | null {
     const isMobile = Platform.isMobile;
-    
+
     if (!this.containerEl) return null;
 
     const rect = this.containerEl.getBoundingClientRect();
-    
+
     // SAFEGUARD 1: Avoid drawing if the container is hidden or currently off-screen (0x0 size)
     // This stops drawings from completely breaking or vanishing
     if (rect.width === 0 || rect.height === 0) {
-        return null; 
+      return null;
     }
 
-    let x = rect.left; 
+    let x = rect.left;
     let y = rect.top;
 
     if (isMobile) {
-        // SAFEGUARD 2: Include native window offset tracking
-        x += window.scrollX || 0;
-        y += window.scrollY || 0;
+      // SAFEGUARD 2: Include native window offset tracking
+      x += window.scrollX || 0;
+      y += window.scrollY || 0;
     } else {
-        x += this.containerEl.scrollLeft || 0;
-        y += this.containerEl.scrollTop || 0;
+      x += this.containerEl.scrollLeft || 0;
+      y += this.containerEl.scrollTop || 0;
     }
 
     return { x: x, y: y };
   }
 
-  public renderGraph() { 
+  public renderGraph() {
     const centerNote = this.related.centerNote;
     if (!centerNote) return;
-    
+
     const related = this.related;
-    const memoryFragment = document.createDocumentFragment();
+    const mainContainer = this.containerEl;
+    mainContainer.empty();
+    mainContainer.className = "view-content rv-container";
 
-    // Klargjør .rv-container i minnet
-    const mainContainerEl = memoryFragment.createDiv({ cls: RV_CLASSES.CONTAINER });
-    mainContainerEl.setAttribute(RV_CLASSES.LEFT_TALL, 'false');
-    mainContainerEl.setAttribute(RV_CLASSES.RIGHT_TALL, 'false');
+    const fragment = document.createDocumentFragment();
+    mainContainer.setAttribute(RV.LEFT_TALL, 'false');
+    mainContainer.setAttribute(RV.RIGHT_TALL, 'false');
 
-    this.center = mainContainerEl.createDiv({ cls: RV_CLASSES.AREA_CENTER });
-    this.left   = mainContainerEl.createDiv({ cls: RV_CLASSES.AREA_LEFT });
-    this.right  = mainContainerEl.createDiv({ cls: RV_CLASSES.AREA_RIGHT });
-    this.upper  = mainContainerEl.createDiv({ cls: RV_CLASSES.AREA_TOP });
-    this.lower  = mainContainerEl.createDiv({ cls: RV_CLASSES.AREA_BOTTOM });
-    
-    this.backContainerSVG = mainContainerEl.createSvg("svg", { cls: RV_CLASSES.SVG_LAYER });
+    this.center = fragment.createDiv({ cls: RV.AREA_CENTER });
+    this.left = fragment.createDiv({ cls: RV.AREA_LEFT });
+    this.right = fragment.createDiv({ cls: RV.AREA_RIGHT });
+    this.upper = fragment.createDiv({ cls: RV.AREA_TOP });
+    this.lower = fragment.createDiv({ cls: RV.AREA_BOTTOM });
+
+    this.backContainerSVG = fragment.createSvg("svg", { cls: RV.SVG_LAYER });
 
     // 0. CENTER
-    this.renderQuadrant(this.center, [ [centerNote] ], "center");
+    this.renderQuadrant(this.center, [[centerNote]], "center");
+    this.renderInfoBtnForCenterNode();
 
     // 1. UPPER AREA (Kun 1 kolleksjon: Ekte parents. Undefined/Ignored holdes HELT utenfor)
-    const cleanParentsOnly = Array.from(centerNote.relations.parents).filter(n => n.relation === "parent"); 
+    const cleanParentsOnly = Array.from(centerNote.relations.parents).filter(n => n.relation === "parent");
     const sortedParents = related.getSortedNotesForQuadrant(cleanParentsOnly, false);
-    this.renderQuadrant(this.upper, [ sortedParents ], "upper");
-  
+    this.renderQuadrant(this.upper, [sortedParents], "upper");
+
     // 2. LEFT AREA (Kun 1 kolleksjon: Ekte friends. Undefined/Ignored holdes HELT utenfor)
-    const cleanFriendsOnly = Array.from(centerNote.relations.friends).filter(n => n.relation === "friend"); 
+    const cleanFriendsOnly = Array.from(centerNote.relations.friends).filter(n => n.relation === "friend");
     const sortedFriends = related.getSortedNotesForQuadrant(cleanFriendsOnly, false);
-    this.renderQuadrant(this.left, [ sortedFriends ], "left");
+    this.renderQuadrant(this.left, [sortedFriends], "left");
 
     // 3. LOWER AREA (Kolleksjon 1: Ekte barn. Kolleksjon 2: Senterets felles oppsamling av ALT udefinert)    
     const allNotesInCache = Array.from(related.noteCache.values()).filter(n => n.isUsed);
-    
+
     // Kolleksjon 1: Kun noder med den definerte relasjonen "child"
     const childrenOnly = related.getSortedNotesForQuadrant(
       allNotesInCache.filter(n => n.relation === "child"), false
@@ -212,12 +214,12 @@ export class AreaManager {
 
     // 4. RIGHT AREA (Søsken-området: Skiller mellom kriterie-søsken og brødtekst/udefinerte søsken)
     const rawSiblings = Array.from(centerNote.relations.siblings);
-    
+
     // Kolleksjon 1: Solide søsken som ble oppdaget via de brukerstyrte frontmatter-kriteriene hos parent
     const solidSiblings = related.getSortedNotesForQuadrant(
       rawSiblings.filter(n => n.relation === "sibling" || n.discoverySource === "frontmatter-kriterium"), true
     );
-    
+
     // Kolleksjon 2: Søsken som ble funnet i parent/søskens brødtekst eller udefinerte frontmatter-egenskaper
     const looseTextSiblings = related.getSortedNotesForQuadrant(
       rawSiblings.filter(n => n.relation === "undefined" || n.discoverySource === "bodytext" || n.discoverySource === "frontmatter-udefinert"), true
@@ -225,17 +227,15 @@ export class AreaManager {
     const siblingCollections = [solidSiblings, looseTextSiblings].filter(c => c.length > 0);
     this.renderQuadrant(this.right, siblingCollections, "right");
 
-    // ERSTATT SKJERMEN
-    this.containerEl.empty(); 
-    this.containerEl.appendChild(memoryFragment);
+    mainContainer.appendChild(fragment);
 
     // NÅ er områdene fysisk tilstede, og vi kobler på lytterne og linjene i samme mikrosekund:
-    this.setupScrollEventListeners(); 
-    this.requestRedraw(); 
+    this.setupScrollEventListeners();
+    this.requestRedraw();
   }
 
   private renderQuadrant(
-    area: HTMLElement, 
+    area: HTMLElement,
     collections: NoteClass[][], // Tar imot de rå kolleksjonene (f.eks. [[children], [undefined]])
     areaName: "upper" | "lower" | "left" | "right" | "center"
   ) {
@@ -245,28 +245,28 @@ export class AreaManager {
 
     // 1. OPPRETT DET USYNLIGE FRAGMENTET I MINNET
     const areaFragment = document.createDocumentFragment();
-    const collectionWrapper = areaFragment.createDiv(RV_CLASSES.COLLECTION_WRAPPER);
-    
+    const collectionWrapper = areaFragment.createDiv(RV.COLLECTION_WRAPPER);
+
     // Vi looper gjennom de overordnede kolleksjonene (f.eks. maks 2 i lower area)
     collections.forEach(collection => {
       if (collection.length === 0) return;
 
       // PRINSIPP: Hver kolleksjon får sin egen etasje-stabler (.rv-area-collections). 
       // Siden disse stables vertikalt i CSS, vil Kolleksjon 2 legge seg vakkert UNDER Kolleksjon 1!
-      const areaCollectionDiv = collectionWrapper.createDiv({ cls: RV_CLASSES.COLLECTION });
+      const areaCollectionDiv = collectionWrapper.createDiv({ cls: RV.COLLECTION });
 
       // Hver kolleksjon får sin egen kolonneflyt (.rv-columns-wrapper)
-      const colWrapDiv = areaCollectionDiv.createDiv({ cls: RV_CLASSES.COL_WRAPPER});
+      const colWrapDiv = areaCollectionDiv.createDiv({ cls: RV.COL_WRAPPER });
 
       // Vi grupperer notene i denne kolleksjonen etter tag!
       const tagGroupedNotes = this.related.groupByFirstTag(collection);
 
       tagGroupedNotes.forEach(group => {
         // Hver unike tag-gruppe får sin egen "usynlige" gruppe-DIV (.rv-groups)
-        const groupDiv = colWrapDiv.createDiv({ cls: RV_CLASSES.GROUPS });
+        const groupDiv = colWrapDiv.createDiv({ cls: RV.GROUPS });
 
         const groupNotes = group.notes; // Array/liste med alle notene i denne tag-gruppen
-        const overGrensen = groupNotes.length > 4;
+        const overGrensen = groupNotes.length > 4 && noteCount > 20;
 
         //Bygg knappen, a-lenken og de 3 portene ferdig i minnet
         groupNotes.forEach((note, index) => {
@@ -274,27 +274,29 @@ export class AreaManager {
           note.assignedArea = areaName;
 
           // RENDRE: Bygg knappen, a-lenken og de 3 portene ferdig i minnet
-          const noteEl = note.render(); 
+          const noteEl = note.render();
           if (overGrensen && index > 0 && this.plugin.settings.groupsCollapsed) {
             noteEl.classList.add('hidden');
           };
           groupDiv.appendChild(noteEl);
 
           // Region-referanser for portene
-          if (note.upperGate)  note.upperGate.areaElement = area;
-          if (note.lowerGate)  note.lowerGate.areaElement = area;
+          if (note.upperGate) note.upperGate.areaElement = area;
+          if (note.lowerGate) note.lowerGate.areaElement = area;
           if (note.friendGate) note.friendGate.areaElement = area;
         });
 
         if (overGrensen) {
           // 1. KORRIGERT & TYPESIKKERT: Hent ut den aller første noten fra listen safely
           const firstNote = groupNotes[0];
-          
+
           if (firstNote && firstNote.div) {
             const firstNoteDiv = firstNote.div;
-            
+
+            firstNoteDiv.classList.add('rv-first-in-group');
+
             const plusMinusBtn = DOMUtils.buildPlusMinusBtn(firstNoteDiv, group, overGrensen);
-            
+
             // Dytt knappen absolutt posisjonert inn på den første noten [dan]
             firstNoteDiv.appendChild(plusMinusBtn);
           }
@@ -306,9 +308,8 @@ export class AreaManager {
     area.appendChild(areaFragment);
   }
 
-  /**
-   * Denne metoden kjøres når du skal tegne opp alle SVG-linjene på skjermen
-   */
+  // INNI AreaManager.ts
+
   drawAllGraphLines() {
     const centerNote = this.related.centerNote;
     if (!centerNote) return;
@@ -455,6 +456,80 @@ export class AreaManager {
       }
     }
 
+  }
+
+  private harEkteFysiskLink(a: NoteClass, b: NoteClass): boolean {
+    const resolvedLinks = this.plugin.app.metadataCache.resolvedLinks;
+    const unresolvedLinks = this.plugin.app.metadataCache.unresolvedLinks;
+    
+    const sjekkKobling = (fraPath: string, tilBasename: string): boolean => {
+      const resObj = resolvedLinks[fraPath];
+      if (resObj) {
+        const tilNameLower = tilBasename.toLowerCase();
+        const harTreff = Object.keys(resObj).some(path => {
+          const pLower = path.toLowerCase();
+          return pLower.includes(tilNameLower) || pLower.endsWith(`/${tilNameLower}.md`);
+        });
+        if (harTreff) return true;
+      }
+
+      const unresObj = unresolvedLinks[fraPath];
+      if (unresObj && typeof unresObj === 'object') {
+        const tilNameLower = tilBasename.toLowerCase();
+        const harTreff = Object.keys(unresObj).some(key => key.toLowerCase().includes(tilNameLower));
+        if (harTreff) return true;
+      }
+      return false;
+    };
+
+    if (sjekkKobling(a.path, b.basename) || sjekkKobling(b.path, a.basename)) return true;
+
+    const nameALower = a.basename.toLowerCase();
+    const nameBLower = b.basename.toLowerCase();
+
+    for (const [baitName, bait] of this.related.baitCache.entries()) {
+      if (!bait.isUsed) continue;
+      if (baitName.includes(nameALower) || nameALower.includes(baitName)) {
+        if (bait.sources.has(b)) return true;
+      }
+      if (baitName.includes(nameBLower) || nameBLower.includes(nameBLower)) {
+        if (bait.sources.has(a)) return true;
+      }
+    }
+
+    return false;
+  };
+
+  private renderInfoBtnForCenterNode() {
+    const centerNote = this.related.centerNote;
+    if (!centerNote) return;
+
+    const centerDiv = centerNote.div; // HTML-elementet til senternoten (.item)
+
+    if (centerDiv) {
+      // 1. Fjern en eventuell gammel info-knapp fra forrige rendering
+      const gammelBtn = centerDiv.querySelector('.rv-info-btn');
+      if (gammelBtn) gammelBtn.remove();
+
+      // 2. TELL IGNORERTE NODER: Vi skanner cachen for å se hvor mange som ble ignorert i denne runden [dan]
+      const antallIgnorert = Array.from(this.related.noteCache.values())
+        .filter(n => n.assignedArea === "ignored" || n.isInitiallyIgnored === true).length;
+
+      // 3. AKTIVERES KUN DERSOM DET FINNES IGNORERTE NODER [dan]
+      if (antallIgnorert > 0) {
+        // Opprett den nye info-knappen som en del av senternotens DIV
+        const infoBtn = centerDiv.createDiv("rv-plusminus rv-info-btn");
+
+        // Vi bruker den internasjonale nøytrale "i"-en som symbol for info [dan]
+        infoBtn.textContent = "i";
+
+        // Metadata: Stempler på antallet direkte som et data-attributt slik at hover-lytteren kan lese det live [dan]!
+        infoBtn.setAttribute("data-ignored-count", antallIgnorert.toString());
+
+        // Plasser den på senternoten
+        centerDiv.appendChild(infoBtn);
+      }
+    }
   }
 
 }

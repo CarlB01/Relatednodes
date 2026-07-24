@@ -1,20 +1,17 @@
-import RelatednotesPlugin, { relatednodesID } from './main.js';
+import RelatednotesPlugin from './main.js';
 import { HoverPopover, TFile, WorkspaceLeaf, HoverParent, MarkdownView, FileView, Platform, ItemView, TAbstractFile, App} from 'obsidian';
 import { AreaManager } from './AreaManager.js';
-import { RV_CLASSES } from './constants.js';
+import { RV } from './constants.js';
 
 export class RelatednotesView extends ItemView implements HoverParent {
 
-  readonly type = relatednodesID;      
   private plugin: RelatednotesPlugin;
   app: App;
-  
   public areaManager!: AreaManager;
-
-  // 1. Lagre en referanse til det siste mus-eventet og målet i klassen din
+  
+  private currentFilePath: string = ""; // Holder styr på hvilken fil dette vinduet viser akkurat nå
   private lastMouseEvent: MouseEvent | null = null;
   private lastMouseTarget: HTMLElement | null = null;
-
   hoverPopover: HoverPopover | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: RelatednotesPlugin) {
@@ -25,7 +22,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
 
   // #region SUPPORT & FUNCTIONS
   
-  getViewType(): string { return RV_CLASSES.RELATED_NOTES_VIEW_TYPE }
+  getViewType(): string { return RV.RELATED_NOTES_VIEW_TYPE }
   getDisplayText(): string { return "Related Notes" }
   
 
@@ -140,10 +137,9 @@ export class RelatednotesView extends ItemView implements HoverParent {
   private async setFocusOnSelf() {
     const { workspace } = this.app;
 
-    // Hent bladet basert på din GJELDENDE visnings-ID (relatednodesID) [dan]
-    // Dette sørger for at systemet finner nøyaktig din Related Notes-fane på Mac eller iPad!
-  
-    const leaves = this.app.workspace.getLeavesOfType(relatednodesID); 
+    // Hent bladet basert på din GJELDENDE visnings-ID (RV.RELATED_NOTES_VIEW_TYPE) [dan]
+    
+    const leaves = this.app.workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE); 
     const targetLeaf = leaves[0];
 
     if (targetLeaf === undefined) return;
@@ -202,10 +198,12 @@ export class RelatednotesView extends ItemView implements HoverParent {
   
     this.registerWorkspaceLayoutChanges();
     this.registerHoverLinkSource();
+    this.setupDataReadyHandler();
     this.setupMobileSafeguards();
     this.setupVisibilitySafeguards();
     this.setupInternalLinkHandler();
     this.setupPlusMinusBtnHandler();
+    this.setupInfoBtnHandler();
   
     
     // 3. ÅPNINGSSEKVENS: Kjør når nettleseren er klar
@@ -214,8 +212,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
       const activeFile = this.getMostRecentMarkdownFile();
 
       if (activeFile) { 
-        await this.plugin.relatedData.update(activeFile);
-        this.areaManager.renderGraph();
+        await this.onFileChange(activeFile);
       } else {
         this.displayWelcome();
       }
@@ -241,52 +238,19 @@ export class RelatednotesView extends ItemView implements HoverParent {
     }
   }
 
-  /**
-   * Calls for update of related data model from user click.
-   * Opens selection in adjacent pane.
-   * @param internalLink 
-   */
-  private async onInternalLinkClicked(internalLink: string): Promise<void> {
-    const selectedFile = this.getFile(internalLink);
-    if (!selectedFile) return;
+  async onFileChange(file: TFile | null) {
+    if (!file) return;
 
-    const currentCenter = this.plugin.relatedData.centerNote;
-    if (currentCenter && currentCenter.path === selectedFile.path) {      
-      this.areaManager.requestRedraw(); 
-      return; 
-    }
-
-    // Hvis det var en NY node, kjører vi den fulle, dype navigasjonen som før:
-    this.openLinkInAdjacentPane(internalLink);
-    await this.plugin.relatedData.update(selectedFile);
-    this.areaManager.renderGraph();
-  }
-
-  private onMouseOverLink(event: MouseEvent, targetBox: HTMLElement) {
-    const linktext = targetBox.getAttribute("data-link-path") || targetBox.getAttribute("data-href");
-    const sourcePath = targetBox.getAttribute("data-link-path");
-
-    if (linktext) {
-      // Fyr av Obsidians offisielle Page Preview-event
-      this.app.workspace.trigger('hover-link', {
-        event: event,
-        source: relatednodesID,
-        targetEl: targetBox,
-        linktext: linktext,
-        sourcePath: sourcePath || linktext,
-        hoverParent: this
-      });
-      
-      targetBox.addClass('is-hovered');
-    }
+    this.currentFilePath = file.path; // Lås vinduets identitet til denne filen
+    await this.plugin.relatedData.update(file); 
   }
 
   private onPlusMinusBtnClicked(target: HTMLElement) {
-    const plus = RV_CLASSES.PLUS;   // Det eksakte pluss-tegnet ditt (f.eks. '+')
-    const minus = RV_CLASSES.MINUS; // Det eksakte minus-tegnet ditt (f.eks. '−')
+    const plus = RV.PLUS;   // Det eksakte pluss-tegnet ditt (f.eks. '+')
+    const minus = RV.MINUS; // Det eksakte minus-tegnet ditt (f.eks. '−')
 
     // Finn den nærmeste tag-gruppe-containeren (.rv-groups) som denne knappen styrer [dan]
-    const groupDiv = target.closest(`.${RV_CLASSES.GROUPS}`) as HTMLElement;
+    const groupDiv = target.closest(`.${RV.GROUPS}`) as HTMLElement;
     if (!groupDiv) return;
 
     // Hent alle de individuelle note-knappene (.item) inni denne spesifikke gruppen
@@ -347,10 +311,27 @@ export class RelatednotesView extends ItemView implements HoverParent {
   
   private registerHoverLinkSource() {
 
-    this.plugin.registerHoverLinkSource(relatednodesID, {
+    this.plugin.registerHoverLinkSource(RV.RELATED_NOTES_VIEW_TYPE, {
       display: 'My custom Hover', // Name shown in Page Preview settings
       defaultMod: false,          // or true if you want Ctrl/Cmd required
     });
+  }
+
+  private setupDataReadyHandler() {
+    // ==========================================================================
+    // FLER-VINDUS-BROEN:
+    // Hvert vindu lytter på den felles hendelsen. Men takket være stisjekken, 
+    // vil dette vinduet KUN re-vandre og tegne kurvene sine dersom de vaskede 
+    // dataene tilhører den filen som DETTE vinduet faktisk viser på skjermen!
+    // ==========================================================================
+    this.plugin.registerEvent(
+      this.app.workspace.on("related:data-ready" as any, ((vasketPath: string) => {
+        
+        if (vasketPath === this.currentFilePath && this.areaManager) {
+          this.areaManager.renderGraph(); // Re-tegner KUN dette vinduets linjer!
+        }
+      }) as any) 
+    );
   }
 
   private setupMobileSafeguards() {
@@ -414,133 +395,185 @@ export class RelatednotesView extends ItemView implements HoverParent {
     );
   }
 
-  private setupInternalLinkHandler() {
-    //CLICK
+  private setupPlusMinusBtnHandler() {
+    this.contentEl.on("click", `.${RV.PLUS_MINUS_BTN}`, (event, target) => {
+      event.preventDefault();
+      if (!target || !(target instanceof HTMLElement)) return;
+      this.onPlusMinusBtnClicked(target);
+    });
+  }
+
+  private setupInfoBtnHandler() {
+    // Felles, flyktig referanse for info-popupen
+    let activeInfoPopup: HTMLElement | null = null;
+
+    // HOVER INN PÅ INFO-KNAPPEN (Viser antall ignorerte noder live!) [dan]
+    this.contentEl.on("mouseover", ".rv-info-btn", (event, target) => {
+      if (!target || !(target instanceof HTMLElement)) return;
+
+      if (activeInfoPopup) { activeInfoPopup.remove(); activeInfoPopup = null; }
+
+      // Hent ut antallet vi stemplet på knappen i sted [dan]
+      const count = target.getAttribute("data-ignored-count") || "0";
+      const hoverText = `${count} skjulte filer`;
+ 
+      // Bygg din lekre popover-beholder i minnet [dan]
+      activeInfoPopup = createDiv({ cls: RV.INFO_HOVER });
+      activeInfoPopup.createSpan({ text: hoverText, cls: "popup-title" });
+      
+      // Sett basestyling (Matcher dine eksisterende glass-menyer)
+      activeInfoPopup.style.position = "absolute";
+      activeInfoPopup.style.zIndex = "var(--layer-menu)";
+      activeInfoPopup.style.pointerEvents = "none";
+      activeInfoPopup.style.background = "var(--background-secondary-alt)";
+      activeInfoPopup.style.border = "1px solid var(--border-color)";
+      activeInfoPopup.style.padding = "6px 10px";
+      activeInfoPopup.style.borderRadius = "4px";
+      activeInfoPopup.style.boxShadow = "0 2px 8px rgba(0, 0, 0, 0.25)";
+
+      // Trikset: Gjør den usynlig et millisekund for å måle den rå bredden live [dan]
+      activeInfoPopup.style.visibility = "hidden";
+      this.contentEl.appendChild(activeInfoPopup);
+
+      const popupWidth = activeInfoPopup.offsetWidth || 180;
+      const viewRect = this.contentEl.getBoundingClientRect();
+      const btnRect = target.getBoundingClientRect();
+      const padding = 10;
+
+      // Intelligent kantsjekk: Hvis høyre side er for trang, dytter vi den til venstre flanke [dan]
+      const vilKrasjePåHøyreSide = (btnRect.right + padding + popupWidth) > viewRect.right;
+
+      if (vilKrasjePåHøyreSide) {
+        activeInfoPopup.style.left = `${btnRect.left - viewRect.left - popupWidth - padding}px`;
+      } else {
+        activeInfoPopup.style.left = `${btnRect.right - viewRect.left + padding}px`;
+      }
+
+      // Sentrer vertikalt på Y-aksen nøyaktig som pluss/minus-knappen
+      activeInfoPopup.style.top = `${btnRect.top - viewRect.top - 15}px`;
+      activeInfoPopup.style.visibility = "visible";
+      
+      target.addClass('is-hovered');
+    });
+
+    // HOVER UT FRA INFO-KNAPPEN (Sletter popuputen for å forhindre minnelekkasjer!) [dan]
+    this.contentEl.on("mouseout", ".rv-info-btn", (event, target) => {
+      if (target) target.removeClass('is-hovered');
+      if (activeInfoPopup) {
+        activeInfoPopup.remove();
+        activeInfoPopup = null;
+      }
+    });
+
+  }
+
+  // #endregion
+
+  // #region LINK CLICK HANDLING
+
+  public setupInternalLinkHandler() {
+
+    // 1. CLICK
     this.contentEl.on("click", ".focusable-note-link", (event, target) => {
       event.preventDefault();
-
       const path = target.getAttribute("data-link-path");
-      if (path) {
-        this.onInternalLinkClicked(path);
-      }
+      if (path) this.onInternalLinkClicked(path);
     });
 
-    // MOUSEMOVE
-    this.contentEl.on("mousemove", ".focusable-note-link", (event: MouseEvent, target: HTMLElement) => {
+    // 2. MOUSEOVER
+    this.contentEl.on("mouseover", ".focusable-note-link", (event: MouseEvent, target: HTMLElement) => {
       this.lastMouseEvent = event;
       this.lastMouseTarget = target;
-      
+
+      // Hvis brukeren allerede holder nede Cmd/Ctrl når de glir inn over lenken
       if (event.metaKey && !target.hasClass('is-hovered')) {
         this.onMouseOverLink(event, target);
-        target.addClass('is-hovered')
+        target.addClass('is-hovered');
       }
     });
 
-    // MOUSELEAVE
-    this.contentEl.on("mouseleave", ".focusable-note-link", (event: MouseEvent, target: HTMLElement) => {
+    // 3. MOUSEENTER
+    this.contentEl.on("mouseenter", ".focusable-note-link", (event: MouseEvent, target: HTMLElement) => {
       target.removeClass('is-hovered');
       this.lastMouseEvent = null;
       this.lastMouseTarget = null;
     });
 
-    // KEYDOWN
+    // 4. KEYDOWN
     this.registerDomEvent(window, "keydown", (event: KeyboardEvent) => {
       if (event.key === "Meta") {
-        // SIKKERHETS-SJEKK: Er musen faktisk over denne lenken akkurat nå?
+
+        // Sjekker om musen faktisk ligger fysisk over vårt lagrede mål akkurat nå via standard :hover
         if (this.lastMouseTarget && this.lastMouseTarget.matches(':hover')) {
           if (this.lastMouseEvent && !this.lastMouseTarget.hasClass('is-hovered')) {
-            this.onMouseOverLink(this.lastMouseEvent, this.lastMouseTarget);
+            this.onMouseOverLink(this.buildMouseEvent(), this.lastMouseTarget);
             this.lastMouseTarget.addClass('is-hovered');
           }
-        } else {
-          // Hvis musen IKKE er over lenken lenger, nullstiller vi lagringen med en gang
-          this.lastMouseEvent = null;
-          this.lastMouseTarget = null;
         }
       }
     });
 
-    // KEYUP
+    // 5. KEYUP
     this.registerDomEvent(window, "keyup", (event: KeyboardEvent) => {
       if (event.key === "Meta") {
-        // Fjerner hover-effekten når Command slippes
         const elements = document.querySelectorAll(".focusable-note-link.is-hovered");
-        elements.forEach(el => el.classList.remove("is-hovered"));
+        elements.forEach(el => el.removeClass("is-hovered"));
       }
     });
-
   }
 
-  private setupPlusMinusBtnHandler() {
-    this.contentEl.on("click", `.${RV_CLASSES.PLUS_MINUS_BTN}`, (event, target) => {
-      event.preventDefault();
-      if (!target || !(target instanceof HTMLElement)) return;
-      this.onPlusMinusBtnClicked(target);
-    });
-
-    let activePopup: HTMLElement | null = null;
-
-    this.contentEl.on("mouseover", `.${RV_CLASSES.PLUS_MINUS_BTN}`, (event, target) => {
-      if (!target || !(target instanceof HTMLElement)) return;
-
-      // Hvis det mot formodning henger igjen en gammel popup, fjern den først
-      if (activePopup) { activePopup.remove(); activePopup = null; }
-
-      // Hent ut de to unike data-stemplene vi akkurat la på knappen i utils-en [dan]!
-      const count = target.getAttribute("data-count") || "?";
-      const tag = target.getAttribute("data-tag") || "Gruppe";
-  
-      // Sjekk om gruppen allerede er utvidet (hvis den har minus-tegn, er den expanded)
-      const isExpanded = target.textContent?.includes(RV_CLASSES.MINUS) ?? false;
-      const hoverText = tag 
-
-      // Bygg den lekre popupen ferskt i minnet (Bruker dine egne beskrivende klasser fra DOMUtils!)
-      activePopup = createDiv({ cls: RV_CLASSES.INFO_HOVER });
-
-      activePopup.createEl("span", { text: hoverText });
-
-      // Sett basestyling (Må gjøres FØR vi måler bredden!)
-      activePopup.style.position = "absolute";
-      activePopup.style.zIndex = "var(--layer-menu)";
-      activePopup.style.pointerEvents = "none";
-      activePopup.style.background = "var(--background-secondary-alt)";
-      activePopup.style.border = "1px solid var(--border-color)";
-      activePopup.style.padding = "6px 10px";
-      activePopup.style.borderRadius = "4px";
-
-      // --- NYTT: GJØR POPUPEN USYNLIG OG DYTT DEN INN FOR Å MÅLE DEN ---
-      activePopup.style.visibility = "hidden"; // Skjul den for brukeren et millisekund [dan]
-      this.contentEl.appendChild(activePopup);
-
-      // Nå kan vi måle nøyaktig hvor mange piksler bred popupen ble basert på teksten! [dan]
-      const popupWidth = activePopup.offsetWidth || 160; // Fallback til 160px hvis tom [dan]
-
-      // Hent de fysiske målene til knappen og selve Obsidian-visningen
-      const viewRect = this.contentEl.getBoundingClientRect();
-      const btnRect = target.getBoundingClientRect();
-
-      // Luftmargin mellom knappen og popup-boblen (10 piksler er kjempepent)
-      const padding = 10; 
-
-      const vilKrasjePåHøyreSide = (btnRect.right + padding + popupWidth) > viewRect.right;
-
-      if (vilKrasjePåHøyreSide) {
-        // === PLASSER PÅ VENSTRE FLANKE ===
-        activePopup.style.left = `${btnRect.left - viewRect.left - popupWidth - padding}px`;
-      } else {
-        // === PLASSER PÅ HØYRE FLANKE (Standard) ===
-        activePopup.style.left = `${btnRect.right - viewRect.left + padding}px`;
-      }
-
-      activePopup.style.top = `${btnRect.top - viewRect.top - 15}px`;
-      activePopup.style.visibility = "visible";
-      this.contentEl.appendChild(activePopup);
-    });
-
-    this.contentEl.on("mouseout", `.${RV_CLASSES.PLUS_MINUS_BTN}`, (event, target) => {
-      if (activePopup) { activePopup.remove(); activePopup = null; }
+  /** SMALL helper function */
+  private buildMouseEvent(): MouseEvent {
+    return new MouseEvent("mouseover", {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      metaKey: true, 
+      ctrlKey: true, 
+      clientX: this.lastMouseEvent ? this.lastMouseEvent.clientX : 0, 
+      clientY: this.lastMouseEvent ? this.lastMouseEvent.clientY : 0
     });
   }
-  
+
+  private onMouseOverLink(event: MouseEvent, targetBox: HTMLElement) {
+    const linktext = targetBox.getAttribute("data-link-path") || targetBox.getAttribute("data-href");
+    const sourcePath = targetBox.getAttribute("data-link-path");
+
+    if (linktext) {
+
+      this.app.workspace.trigger('hover-link', {
+        event: event,
+        source: RV.RELATED_NOTES_VIEW_TYPE,
+        targetEl: targetBox,
+        linktext: linktext,
+        sourcePath: sourcePath || linktext,
+        hoverParent: this
+      });
+      
+      targetBox.addClass('is-hovered');
+    }
+  }
+
+  /**
+   * Calls for update of related data model from user click.
+   * Opens selection in adjacent pane.
+   * @param internalLink 
+   */
+  private async onInternalLinkClicked(internalLink: string): Promise<void> {
+    const selectedFile = this.getFile(internalLink);
+    if (!selectedFile) return;
+
+    const currentCenter = this.plugin.relatedData.centerNote;
+    if (currentCenter && currentCenter.path === selectedFile.path) {      
+      this.areaManager.requestRedraw(); 
+      return; 
+    }
+
+    // Hvis det var en NY node, kjører vi den fulle, dype navigasjonen som før:
+    this.openLinkInAdjacentPane(internalLink);
+    await this.onFileChange(selectedFile);
+    this.areaManager.renderGraph();
+  }
+
   // #endregion
 }
