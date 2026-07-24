@@ -101,6 +101,13 @@ export class RelatedData {
         }
       }
       
+      // ==========================================================================
+      // 4. BEREGN AGN (BAITS) - NÅ ER DATAGRUNNLAGET GIGANTISK OG KOMPLETT!
+      // Siden PRE-LOAD loopen over akkurat fylte noteCache med alle noder, vil indexAllBaits() 
+      // nå klare å pakke ut agnene fra ALLE de 1. grads notene samtidig! baitCache blir fullstendig. [dan]
+      // ==========================================================================
+      this.indexAllBaits();   
+
       // 6. ETABLER RELASJONER
      this.determineFirstDegreeNotes(this.centerNote);
       await this.determineParentConnectionsAndSiblings(this.centerNote); 
