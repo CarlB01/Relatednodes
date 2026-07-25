@@ -239,10 +239,16 @@
   min-width: 0 !important;
   max-width: 100% !important; 
   box-sizing: border-box;
+
+  break-inside: avoid-column !important;
+  break-inside: avoid !important;
+  page-break-inside: avoid !important; /* For eldre rendering-motorer */
 }
 
 .item.rv-first-in-group {
   margin-top: 18px !important;
+  flex-direction: column !important;
+  overflow: visible !important;
 }
 
 .item.hidden {
@@ -255,8 +261,11 @@
 
 .rv-linkdiv {
   display: inline-flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
   align-items: center !important;
   justify-content: center !important;
+
   position: relative !important;
   width: fit-content;
   max-width: 100% !important;
@@ -404,6 +413,43 @@
 }
 
 /* ==========================================================================
+   EKSTRA SIKRING FOR DE ENKELTE ELEMENTENE INNI
+   Vi passer på at verken SVG-gatene eller ikoner får lov til å krympe eller 
+   skvises ut av kolonne-aksen sin [dan]!
+   ========================================================================== */
+.rv-linkdiv .rv-gate-svg {
+  flex-shrink: 0 !important; /* Nekter elementene å kollapse eller krympe [dan]! */
+}
+
+/* ==========================================================================
+   TEKST-SIKRING: Her tillater vi teksten å brekke vakkert over flere linjer!
+   Ved å gi den min-width: 0 og flex-shrink: 1, lærer vi nettleseren at 
+   lenken skal tilpasse seg bredden, og bruke dine brekk-regler live [dan]!
+   ========================================================================== */
+.rv-container .focusable-note-link {
+  /* Dine eksisterende regler for border, padding, text-align etc... */
+  
+  display: inline-block !important;
+  box-sizing: border-box;
+  
+  /* LØSNINGEN: Tillat lenken å krympe og tilpasse seg spalten elastisk */
+  flex-shrink: 1 !important;
+  flex-grow: 1 !important;
+  min-width: 0 !important; 
+
+  /* Dine uovervinnelige tekst-brekk regler blir nå aktivert i full kraft [dan]! */
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  word-break: break-word !important;
+  overflow: visible !important; 
+}
+
+.rv-container .focusable-note-link .rv-text-span {
+  display: inline !important; /* Endret fra inline-block til inline for perfekt tekst-wrap [dan]! */
+  pointer-events: none !important;
+}
+
+/* ==========================================================================
    ULTRAKOMPAKT ABSOLUTT BADGE-KNAPP (Tilpasset din opprettelsesmetode)
    ========================================================================== */
 
@@ -443,6 +489,26 @@
   border-color: var(--interactive-accent) !important;
   color: white !important;
   transform: scale(1.05); /* Vokser ørlite grann når musen treffer den [dan] */
+}
+
+/* SIKRING FOR PLUSS/MINUS-KNAPPEN PÅ INNSIDEN */
+.item.rv-first-in-group .rv-plusminus {
+  width: fit-content !important;
+  max-width: 100% !important;
+  text-align: center !important;
+  
+  /* Forbyr kolonnebrudd direkte på den indre knappen [dan] */
+  break-inside: avoid-column !important;
+  break-after: avoid-column !important;
+  overflow: visible !important; /* Lar den lekre 3D-skyggen din få flyte fritt! */
+}
+
+/* SIKRING FOR LENKEKAPSELEN PÅ INNSIDEN */
+.item.rv-first-in-group .rv-linkdiv {
+  width: fit-content !important;
+  max-width: 100% !important;
+  break-inside: avoid-column !important;
+  break-before: avoid-column !important;
 }
 
 /* ==========================================================================

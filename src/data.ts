@@ -64,68 +64,86 @@ export class RelatedData {
     const visibleLeaf = leaves.find(l => l.view.containerEl.offsetHeight > 0);
     if (!visibleLeaf) return;
 
-    // 2. DEBOUNCE-SAMLEREN: Samler opp oppstarts-støy akkurat som før    
+    // SIKRING 1: OBSIDIAN CORE-VOKTER (Utraderer oppstarts-blinkingen!)
+    if (!(this.app.metadataCache as any).initialized) {
+      setTimeout(() => this.update(activeFile), 300);
+      return;
+    }
+  
+    // 2. DEBOUNCE-SAMLEREN: Samler opp oppstarts-støy og fanebytte-klikk
     if (this.updateDebounceTimer) {
       clearTimeout(this.updateDebounceTimer);
     }
 
     this.updateDebounceTimer = setTimeout(async () => {
       
-      // CACHE READY?:
+      // Sjekk B: Dobbel forsikring på at metadata-indeksen er tilgjengelig
       const centerCache = this.app.metadataCache.getFileCache(activeFile);
       if (!this.app.metadataCache.resolvedLinks || !centerCache) {
-        console.log("%c⏳ OBSIDIAN-VOKTEREN: Appens metadataCache er låst eller uferdig. Venter 200ms...", "color: #999;");
         this.update(activeFile); 
         return;
       }
 
       // 3. RESET ALL DATA 
-      this.prepareForReuse();
+      this.ignoredNotes.clear();
+      for (const note of this.noteCache.values()) {
+        note.isUsed = false;
+        note.isIndexedInThisRound = false; 
+        note.relation = 'undefined';
+        note.discoverySource = 'bodytext';
+        note.assignedArea = 'lower'; 
+        note.relations.parents.clear();
+        note.relations.children.clear();
+        note.relations.friends.clear();
+        note.relations.siblings.clear();
+        note.relations.ignored.clear();
+        note.crossingBaits.clear();
+      }
+
+      GateProperties.cachedRadius = null; 
+
+      for (const bait of this.baitCache.values()) {
+        bait.isUsed = false;
+        bait.sources.clear(); 
+      }
 
       // 4. SET CENTER
       this.centerNote = this.getOrCreateNote(activeFile);
       if (!this.centerNote) return;
       this.centerNote.relation = 'center';
       this.centerNote.assignedArea = 'center';
+      this.centerNote.isUsed = true
       
       // 5. PRE-LOAD: Slår på fil-cacher i bakgrunnen
       const firstDegreeFiles = this.getFirstDegreeFiles(this.centerNote.path);
-      const reeltAntallFilerIHvelvet = firstDegreeFiles.size;
-
+      
       for (const file of firstDegreeFiles) {
         if (file.path !== this.centerNote.path) {
           const preparedNote = this.getOrCreateNote(file);
           if (preparedNote) {
-            preparedNote.isUsed = true; 
+            preparedNote.isUsed = true; // Beskytt mot Garbage Collection
+            
+            // NÅ DYKKER VI ET LEVEL DYPERE:
+            // Hvis filen vi akkurat lastet er en FORELDER (f.eks. Europeiske land), 
+            // så henter vi umiddelbart forelderens egne relasjoner (Verdens land, etc.) [dan]!
+            const relasjonTilSenter = this.findRelation(this.centerNote, preparedNote);
+            if (relasjonTilSenter === 'parent') {
+              const parentFiles = this.getFirstDegreeFiles(preparedNote.path);
+              for (const parentFile of parentFiles) {
+                // getOrCreateNote vil automatisk utløse JIT-indekseringen 
+                // og fylle baitCache med Verdens land sitt agn live NÅ [dan]!
+                this.getOrCreateNote(parentFile);
+              }
+            }
           }
         }
-      }
-      
-      // ==========================================================================
-      // 4. BEREGN AGN (BAITS) - NÅ ER DATAGRUNNLAGET GIGANTISK OG KOMPLETT!
-      // Siden PRE-LOAD loopen over akkurat fylte noteCache med alle noder, vil indexAllBaits() 
-      // nå klare å pakke ut agnene fra ALLE de 1. grads notene samtidig! baitCache blir fullstendig. [dan]
-      // ==========================================================================
-      this.indexAllBaits();   
+      } 
 
       // 6. ETABLER RELASJONER
-     this.determineFirstDegreeNotes(this.centerNote);
+      this.determineFirstDegreeNotes(this.centerNote);
       await this.determineParentConnectionsAndSiblings(this.centerNote); 
             this.determineFriendConnections(this.centerNote);
       this.matchCrossingBaits();
-
-      // ASYNKRON MENGDE-DETEKSJON
-      // Vi teller hvor mange noder utvidelsen din FAKTISK klarte å aktivere for skjermen. [dan]
-      let antallAktiveNoderPåSkjermen = 0;
-      for (const note of this.noteCache.values()) {
-        if (note.isUsed && note.relation !== 'center') {
-          antallAktiveNoderPåSkjermen++;
-        }
-      }
-      let harAsynkronLag = false;
-      if (reeltAntallFilerIHvelvet > 0 && antallAktiveNoderPåSkjermen === 0) {
-        harAsynkronLag = true; // Fanget på fersken uten å sjekke frontmatter eller faste tall! [dan]
-      }
 
       // 7. GARBAGE COLLECTION
       for (const [path, note] of this.noteCache.entries()) {
@@ -134,125 +152,79 @@ export class RelatedData {
       for (const [path, bait] of this.baitCache.entries()) {
         if (!bait.isUsed || bait.sources.size === 0) this.baitCache.delete(path);
       }
-      
+
+      // Trigger den flerinstans-sikre event-bussen i hvelvet [dan]
       this.app.workspace.trigger("related:data-ready", activeFile.path);
-      
-     if (harAsynkronLag) {
-        if (this.retryTimer) clearTimeout(this.retryTimer);
-        console.log(`%c⚠️ DETEKTIVEN: Fant asynkron oppstart-lag (Obsidian har linker, men grafen ble tom). Sikkerhets-skudd om 300ms...`, "color: #ff9f43; font-weight: bold;");
-      
-        this.retryTimer = setTimeout(() => {
-          this.update(activeFile); // Andre-skuddet fyrer en aller siste, komplett gang [dan]!
-        }, 300);
-      } else {
-        if (this.retryTimer) {
-          clearTimeout(this.retryTimer);
-          this.retryTimer = null;
-        }
-      }
+      console.log('🎉 VASKESYKLUS FULLFØRT! Aktive agn i RAM:', this.baitCache.size);
     }, 50); // 50ms er akkurat nok til å synkronisere med Obsidians UI-tråd! [dan]   
   }
 
-  private prepareForReuse() {
-    this.ignoredNotes.clear();
-    for (const note of this.noteCache.values()) {
-      note.isUsed = false;
-      note.isIndexedInThisRound = false; 
-      note.relation = 'undefined';
-      note.discoverySource = 'bodytext';
-      note.assignedArea = 'lower'; 
-      note.relations.parents.clear();
-      note.relations.children.clear();
-      note.relations.friends.clear();
-      note.relations.siblings.clear();
-      note.relations.ignored.clear();
-      note.crossingBaits.clear();
-    }
-
-    GateProperties.cachedRadius = null; 
-
-    for (const bait of this.baitCache.values()) {
-      bait.isUsed = false;
-      bait.sources.clear(); 
-    }
-
-  }
-
   public getOrCreateNote(file: TFile): NoteClass | null {
-    const path = file.path;
-    
-    // 1. Sjekk om noten allerede ligger i databasen vår (Gjenbruk)
-    let note = this.noteCache.get(path);
+    if (!file) return null;
 
-    if (note) {
-      // Hvis den finnes, gjenbruker vi den bare og markerer den som aktiv
-      note.isUsed = true;
-    } else {
+    // 1. Sjekk om noten allerede ligger i cachen på sin unike sti (file.path)
+    let note = this.noteCache.get(file.path);
+
+    if (!note) {
       // 2. Hvis den IKKE finnes, henter vi fil-cachen fra Obsidian...
       const fileCache = this.app.metadataCache.getFileCache(file);
       if (!fileCache) return null;
 
       const useAlias = this.plugin.settings.displayAliases;
       
+      // Fød NoteClass via din statiske fabrikkmetode
       note = NoteClass.createFromObsidian(file, fileCache, useAlias, this.settings.optIgnoreFragments, this.settings.optIgnoreTags);
-      note.isUsed = true;
       
-      // 3. Lagre den nye noten i databasen vår for fremtidig gjenbruk
-      this.noteCache.set(path, note);
+      // 3. Lagre den nye noten i databasen vår under file.path
+      this.noteCache.set(file.path, note);
     }
 
-    return note;
-  }
-
-  /**
-   * TRINN 3a: INDEKSERING AV BAITS
-   * Går igjennom alle aktive noder, finner deres frontmatter-koblinger, 
-   * og registrerer dem som aktive agn i baitCache.
-   */
-  private indexAllBaits() {
-    // Samle filtrene fra din nye SettingsManager
+  // ==========================================================================
+  // ⚡ UNIVERSAL JIT-INDEKSERING (Gjenopprettet og optimalisert!):
+  // Hver gang en note (gammel eller splitter ny) sluses gjennom getOrCreateNote(),
+  // sjekker vi om relasjonene hennes har blitt indeksert inn i baitCache i denne runden.
+  // Siden PRE-LOAD nå våker over alt, kjører denne JIT-loopen feilfritt [dan]!
+  // ==========================================================================
+  if (note.rawFrontmatter && !(note as any).isIndexedInThisRound) {
+    
     const parentProps = this.settings.optParentProperties;
     const childProps  = this.settings.optChildProperties;
     const friendProps = this.settings.optFriendProperties;
-
-    // Slå sammen alle egenskapene til én felles liste som skal skannes
     const allTargetProps = [...parentProps, ...childProps, ...friendProps];
 
-    // Loop over alle notater som er i bruk på skjermen akkurat nå
-    for (const note of this.noteCache.values()) {
-      if (!note.isUsed || note.isInitiallyIgnored) continue;
-      if (!note.rawFrontmatter) continue;
+    // Skann gjennom hver enkelt egenskap brukeren har valgt i innstillingene
+    for (const attrib of allTargetProps) {
+      if (!attrib) continue;
+      
+      const rawValue = note.rawFrontmatter[attrib];
+      if (rawValue == null) continue;
 
-      // Skann gjennom hver enkelt egenskap brukeren har valgt i innstillingene
-      for (const attrib of allTargetProps) {
-        if (!attrib) continue;
+      // Vask innholdet gjennom din optimaliserte StringUtils-pipeline
+      const cleanArray = StringUtils.normalizeToStringArray(rawValue) ?? [];
+
+      for (const targetName of cleanArray) {
+        if (!targetName) continue;
+
+        // Tving nøkkelen til lowercase og normalisert NFC-format for emojier [dan]
+        const lowercaseTarget = targetName.toLowerCase().normalize('NFC');
         
-        // Hent rå-verdien direkte ut fra YAML-objektet (Sikrer at [[wikilenker]] overlever!)
-        const rawValue = note.rawFrontmatter[attrib];
-        if (rawValue == null) continue;
-
-        // Tving og vask innholdet gjennom din nye, lynraske og optimaliserte StringUtils-pipeline
-        const cleanArray = StringUtils.normalizeToStringArray(rawValue) ?? [];
-
-        for (const targetName of cleanArray) {
-          if (!targetName) continue;
-
-          const lowercaseTarget = targetName.toLowerCase().normalize('NFC');      
-          
-          let bait = this.baitCache.get(lowercaseTarget);
-          if (!bait) {
-            bait = new BaitClass(targetName);
-            this.baitCache.set(lowercaseTarget, bait);
-          }
-          
-          bait.isUsed = true;
-          
-          // BINGO: I stedet for å overskrive og slette gamle spor, legger vi til 
-          // dette notatet og den tilhørende egenskapen i det delte sources-kartet! [dan]
-          bait.sources.set(note, attrib); 
+        let bait = this.baitCache.get(lowercaseTarget);
+        if (!bait) {
+          bait = new BaitClass(targetName);
+          this.baitCache.set(lowercaseTarget, bait);
         }
+        bait.isUsed = true;
+        
+        // BINGO: Vi legger til dette notatet og den tilhørende egenskapen i sources-kartet [dan]!
+        bait.sources.set(note, attrib); 
       }
     }
+
+    // Stempler på noten at den er ferdig indeksert for denne runden [dan]
+    (note as any).isIndexedInThisRound = true; 
+  }
+
+  return note;
   }
 
   /**
@@ -376,48 +348,46 @@ export class RelatedData {
    * @param primaryNote 
    * @returns 
    */
-  private determineFirstDegreeNotes(ofNote: NoteClass) {
+  private determineFirstDegreeNotes(centerNote: NoteClass) {
     // Hent alle unike filer (koblinger og bakkoblinger)
-    const filesSet = this.getFirstDegreeFiles(ofNote.path);
-
-    console.log('A. FIRST-DEGREE NOTES - - - - -')
+    const filesSet = this.getFirstDegreeFiles(centerNote.path);
 
     for (const file of filesSet) {
-      if (file.path === ofNote.path) continue; // Hopp over seg selv
+      if (file.path === centerNote.path) continue; // Hopp over seg selv
 
       const newNote = this.getOrCreateNote(file);
       if (!newNote) continue; 
 
-      const relation = this.findRelation(ofNote, newNote);
+      const relation = this.findRelation(centerNote, newNote);
       newNote.relation = relation;
       newNote.isUsed = true;
       
-      console.log (`A - ${newNote.relation.toUpperCase()} ${newNote.basename} ${this.pil(newNote.relation)} ${ofNote.basename}`)
+      // console.log (`A - ${newNote.relation.toUpperCase()} ${newNote.basename} ${this.pil(newNote.relation)} ${centerNote.basename}`)
 
     // HÅNDTERING AV IGNORERTE NOTATER
     if (relation === "ignored") {
         newNote.assignedArea = "ignored";      // Eget område-stempel så den ikke tegnes i 5x5 korset
         this.ignoredNotes.add(newNote);        // Globalt i RelatedData for totaltelling
-        ofNote.relations.ignored.add(newNote); // Lokalt på center-noten
+        centerNote.relations.ignored.add(newNote); // Lokalt på center-noten
         continue;
     }
 
     switch (relation) {
       case "parent": 
         newNote.assignedArea = "upper";
-          newNote.relations.children.add(ofNote);
-          ofNote.relations.parents.add(newNote);
+          newNote.relations.children.add(centerNote);
+          centerNote.relations.parents.add(newNote);
         break;
       case "friend": 
         newNote.assignedArea = "left";
-          newNote.relations.friends.add(ofNote);
-          ofNote.relations.friends.add(newNote);
+          newNote.relations.friends.add(centerNote);
+          centerNote.relations.friends.add(newNote);
         break;
       case "child": 
       case "undefined": // PRINSIPP: Alle udefinerte relasjoner for center samles her!
         newNote.assignedArea = "lower";
-          newNote.relations.parents.add(ofNote);
-          ofNote.relations.children.add(newNote);
+          newNote.relations.parents.add(centerNote);
+          centerNote.relations.children.add(newNote);
         break;
     }
     }
@@ -437,13 +407,18 @@ export class RelatedData {
         const relatedNote = this.getOrCreateNote(relatedFile);
         if (!relatedNote) continue;
 
-          const relation = this.findRelation(parent, relatedNote);
+        const relation = this.findRelation(parent, relatedNote);
         
+        const isEurope = parent.basename.includes("Europeiske land") || relatedNote.basename.includes("Europeiske land");
+        const isVerden = relatedNote.basename.includes("Verdens land") || parent.basename.includes("Verdens land");
+        if (isEurope && isVerden) {
+          console.log (`B2 - ${relation.toUpperCase()} ${relatedNote.basename} ${this.pil(relation)} ${parent.basename}`)
+          console.log('isUsed: ', relatedNote.isUsed);
+        }
+
         // CASE A: Note is already used in another quadrant
         if (relatedNote.isUsed) { 
-          
-          relatedNote.isUsed = true; 
-          
+                    
           switch (relation) {
             case 'child':
             case 'undefined':
