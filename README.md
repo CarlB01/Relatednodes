@@ -72,7 +72,7 @@ When Zsolt hinted at gatherings that it was time for a native implementation to 
 
 Below is the original conceptual blueprint mapping out how nodes cast multi-directional bidirectional anchors across the cache matrix:
 
-![Original Conceptual Blueprint](graph/concept.png)
+![Original Conceptual Blueprint](images/graph.png)
 ![define rules](images/baits.png)
 
 
