@@ -1,9 +1,10 @@
 {
-	"id": "relatednodes",
-	"name": "Related nodes",
-	"version": "0.0.5",
-	"minAppVersion": "0.15.0",
-	"description": "rebuilt classes",
-	"author": "CarlB01",
-	"isDesktopOnly": false
+  "id": "relatednodes",
+  "name": "myBrain",
+  "version": "1.0.0",
+  "minAppVersion": "1.13.0",
+  "description": "A high-performance semantic network graph displaying notes in structured Parents, Children, Friends, and Siblings quadrants.",
+  "author": "CarlB01",
+  "authorUrl": "https://github.com/CarlB01/myBrain",
+  "isDesktopOnly": false
 }
