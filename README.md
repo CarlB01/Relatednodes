@@ -36,6 +36,7 @@ When Zsolt hinted at gatherings that it was time for a native implementation to 
 
 **myBrain** organizes your knowledge in a predictable, focused layout.
 
+```text
         [ PARENTS ]         ◄── Upper Area
             ▲		     
         	│                
@@ -43,6 +44,7 @@ When Zsolt hinted at gatherings that it was time for a native implementation to 
             │
             ▼
         [ CHILDREN ]        ◄── Lower Area
+```
 
 ### Architectural Mapping Matrix
 
