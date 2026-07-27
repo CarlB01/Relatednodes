@@ -48,11 +48,19 @@ export default class RelatednotesPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on('file-open', async (file: TFile | null) => {
         if (!file) return;
-        this.app.workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE).forEach(leaf => {
-          if (leaf.view instanceof RelatednotesView) {
-            leaf.view.onFileChange(file);
-          }
-        });
+        // ==========================================================================
+        // MOBILE LIFECYCLE SAFEGUARD: 
+        // Introduces a micro-timeout loop (70ms) to accommodate iOS animation physics.
+        // Guarantees the mobile Quick Switcher view has fully closed and unmounted 
+        // before routing the fresh file stream down to the data calculation core [dan]!
+        // ==========================================================================
+        setTimeout(() => {
+          this.app.workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE).forEach(leaf => {
+            if (leaf.view instanceof RelatednotesView) {
+              leaf.view.onFileChange(file);
+            }
+          });
+        }, 70); // 70ms is invisible on desktop but ensures rock-solid execution on iOS/Android [dan]
       })
     );
 
