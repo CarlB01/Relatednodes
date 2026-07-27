@@ -1,50 +1,50 @@
 import { Plugin, Notice, WorkspaceLeaf, EventRef, TFile, TAbstractFile } from 'obsidian';
-import { SampleSettingTab } from "./SettingTab.js";
+import { SettingTab } from "./SettingTab.js";
 import { RelatednotesView } from './view.js';
 import { RV } from './constants.js';
-import { RelatedData } from './data.js';
+import { NetworkGraph } from './NetworkGraph.js';
 import { SettingsManager } from './SettingsManager.js';
 
 export default class RelatednotesPlugin extends Plugin {
-	declare settings: SettingsManager;
-	public relatedData!: RelatedData;
-	
-	private resolvedEventRef: EventRef | undefined;
+  declare settings: SettingsManager;
+  public relatedData!: NetworkGraph;
   
-	async onload() {
-		
-		await this.loadSettings();
+  private resolvedEventRef: EventRef | undefined;
+  
+  async onload() {
+    await this.loadSettings();
 
-		this.relatedData = new RelatedData(this, this.settings);
+    this.relatedData = new NetworkGraph(this, this.settings);
 
-		this.addSettingTab(new SampleSettingTab(this.app, this));
-	
-		// Registrer visningen din (Gjør det mulig å åpne både i sidebar og som stor tab!) [dan]
+    this.addSettingTab(new SettingTab(this.app, this));
+  
+    // Registers the plugin view architecture allowing it to open as a sidebar or main tab
     this.registerView(
       RV.RELATED_NOTES_VIEW_TYPE,
-      (leaf) => new RelatednotesView(leaf, this) // Vi sender med 'this' (pluginen) [dan]
+      (leaf) => new RelatednotesView(leaf, this)
     );
 
-		// BIND OPP ALLE GLOBALE LYTTERE HER (file-open, rename, resolve)
+    // Binds all global application listeners natively (file-open, rename, resolve)
     this.registerGlobalEvents();
 
-		// Ribbon icon to open your view
-		this.addRibbonIcon("apple", "Open Related Notes", () => {
-			this.activateRelatedNotesView();
-		});
+    // Ribbon icon to trigger view activation
+    this.addRibbonIcon("apple", "Open Related Notes", () => {
+      this.activateRelatedNotesView();
+    });
 
-		// Optional: Add a command
-		this.addCommand({
-			id: 'open-related-notes',
-			name: 'Open Related Notes View',
-			callback: () => this.activateRelatedNotesView(),
-		});		
+    // Native command palette registration
+    this.addCommand({
+      id: 'open-related-notes',
+      name: 'Open Related Notes View',
+      callback: () => this.activateRelatedNotesView(),
+    });    
+  }
 
-	};
-
-	private registerGlobalEvents() {
- 
-		// A. Når brukeren bytter fil i Obsidian, oppdaterer vi minne-cachen centralt [dan]
+  /**
+   * Binds global application lifecycle events to synchronize memory caches with vault mutations.
+   */
+  private registerGlobalEvents() {
+    // A. Intercepts note navigation events to synchronize the layout state centrally
     this.registerEvent(
       this.app.workspace.on('file-open', async (file: TFile | null) => {
         if (!file) return;
@@ -56,7 +56,7 @@ export default class RelatednotesPlugin extends Plugin {
       })
     );
 
-    // B. register when user renames a file
+    // B. Intercepts vault rename events to update internal key structures
     this.registerEvent(
       this.app.vault.on('rename', async (file: TAbstractFile, oldPath: string) => {
         if (!(file instanceof TFile)) return;
@@ -64,106 +64,121 @@ export default class RelatednotesPlugin extends Plugin {
       })
     );
 
-		// C: register when user updates/adds links to a relevant note
+    // ==========================================================================
+    // METADATA RESOLUTION EVENT ROUTING (Interceptor Pipeline)
+    // ==========================================================================
+
+    // C. Intercepts metadata resolution flags when a note finishes background parsing updates
     this.registerEvent(
-			this.app.metadataCache.on('resolve', async (file: TFile) => {
-				// 1. Be databasen fikse minnet asynkront
-				const dataBleOppdatert = await this.relatedData.handleFileResolve(file);
-				
-				// 2. Hvis dørvakten ga grønt lys og dataene ble endret: Oppdater skjermene!
-				if (dataBleOppdatert) {
-					this.app.workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE).forEach(leaf => {
-						if (leaf.view instanceof RelatednotesView) {
-							// Hvert unike vindu (sidebar/stor tab) tegner seg på nytt i minnet sitt
-							leaf.view.areaManager.renderGraph();
-						}
-					});
-				}
-			})
-		);
+      this.app.metadataCache.on('resolve', async (file: TFile) => {
+        const dataWasUpdated = await this.relatedData.handleFileResolve(file);
+        
+        if (dataWasUpdated) {
+          this.app.workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE).forEach(leaf => {
+            if (leaf.view instanceof RelatednotesView) {
+              const myView = leaf.view;
+
+              // Immediate operational guard blocking rendering loops during active cold-start periods
+              if (!myView.isFullyStarted) return; 
+
+              if (myView.resolveDebounceTimer) {
+                clearTimeout(myView.resolveDebounceTimer);
+              }
+              
+              // High-speed runtime cooldown provides near-instantaneous live layout updates as the user typing
+              myView.resolveDebounceTimer = setTimeout(() => {
+                if (myView.areaManager) {
+                  myView.areaManager.renderGraph(); 
+                }
+              }, 250); 
+            }
+          });
+        }
+      })
+    );
   }
 
-	async activateRelatedNotesView() {
-		// 1. SIKRING: Hvis Obsidian ikke er ferdig indeksert ennå, vent på 'resolved'
-		const isCacheReady = (this.app.metadataCache as any).initialized === true;
-		if (!isCacheReady) {
-			if (!this.resolvedEventRef) {
-				this.resolvedEventRef = this.app.metadataCache.on('resolved', () => {
-					this.activateRelatedNotesView();
-					this.unregisterResolvedEvent(); // KORRIGERT: Lagt til () så funksjonen faktisk kjører!
-				});
-				this.registerEvent(this.resolvedEventRef);
-			}
-			return; // Avbryt og vent på eventet
-		}
+  /**
+   * Activates the custom panel inside the primary viewport framework.
+   * Safeguards against initialization race conditions and prevents duplicated leaves.
+   */
+  async activateRelatedNotesView() {
+    // 1. TIMING SAFEGUARD: Defers activation if the core cache is still indexing on cold start
+		const isCacheReady = (this.app.metadataCache as typeof this.app.metadataCache & { initialized?: boolean }).initialized;
+    if (!isCacheReady) {
+      if (!this.resolvedEventRef) {
+        this.resolvedEventRef = this.app.metadataCache.on('resolved', () => {
+          this.activateRelatedNotesView();
+          this.unregisterResolvedEvent(); 
+        });
+        this.registerEvent(this.resolvedEventRef);
+      }
+      return; 
+    }
 
-		const { workspace } = this.app;
-		
-		// 2. SIKRING: Sjekk om visningen allerede finnes (Unngå duplikate faner)
-		let leaf = workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE)[0];
-		
-		if (leaf) {
-			// Visningen finnes allerede! Bare flytt fokus dit
-			workspace.revealLeaf(leaf);
-			return;
-		}
+    const { workspace } = this.app;
+    
+    // 2. DUPLICATE SAFEGUARD: Avoids redundant tabs by checking for existing active leaves
+    let leaf = workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE)[0];
+    
+    if (leaf) {
+      workspace.revealLeaf(leaf);
+      return;
+    }
 
-		// 3. OPPRETT NYTT PANEL: Siden ingen fane finnes, lager vi en ny i venstre sidefelt
-		// Hvis brukeren i stedet høyreklikker på ikonet og velger "Open in new tab", 
-		// vil Obsidian overstyre dette og åpne den i midten uansett, noe vår nye arkitektur takler perfekt!
-		let newLeaf: WorkspaceLeaf | null | undefined = workspace.getLeftLeaf(false);
+    // 3. MOUNT NEW PANEL: Instantiates a fresh leaf container inside the left sidebar split
+    let newLeaf: WorkspaceLeaf | null | undefined = workspace.getLeftLeaf(false);
 
-		if (newLeaf) {
-			await newLeaf.setViewState({
-				type: RV.RELATED_NOTES_VIEW_TYPE,
-				active: true,
-			});
-			
-			workspace.revealLeaf(newLeaf);
-			workspace.leftSplit?.expand(); // Brett ut venstre sidefelt i Obsidian
+    if (newLeaf) {
+      await newLeaf.setViewState({
+        type: RV.RELATED_NOTES_VIEW_TYPE,
+        active: true,
+      });
+      
+      workspace.revealLeaf(newLeaf);
+      workspace.leftSplit?.expand(); // Vertically expands the sidebar partition width
 
-			// FØRSTE DATA-FÔRING: Siden panelet akkurat ble åpnet ferskt, fôrer vi det 
-			// med den aktive filen brukeren står i akkurat nå med en gang!
-			const activeFile = this.app.workspace.getActiveFile();
-			if (activeFile) {
-				if (newLeaf.view instanceof RelatednotesView) {
-					newLeaf.view.onFileChange(activeFile);
-				}
-			}
-		} else {
-			new Notice("Could not create view leaf");
-		}
-	}
-	
-	onunload() {
-		this.unregisterResolvedEvent();
-	}
+      // INITIAL CONTEXT INJECTION: Feeds the newly instantiated leaf with the current active file
+      const activeFile = this.app.workspace.getActiveFile();
+      if (activeFile) {
+        if (newLeaf.view instanceof RelatednotesView) {
+          newLeaf.view.onFileChange(activeFile);
+        }
+      }
+    } else {
+      new Notice("Could not create view leaf");
+    }
+  }
+  
+  onunload() {
+    this.unregisterResolvedEvent();
+  }
 
-	// Hjelpefunksjon for å vaske og fjerne eventet manuelt
-	private unregisterResolvedEvent() {
-		if (this.resolvedEventRef) {
-			this.app.metadataCache.offref(this.resolvedEventRef);
-			this.resolvedEventRef = undefined; // Nullstill slik at den kan registreres igjen ved behov
-		}
-	}
+  /**
+   * Safe clean-up mechanism removing listeners to prevent reference leaks.
+   */
+  private unregisterResolvedEvent() {
+    if (this.resolvedEventRef) {
+      this.app.metadataCache.offref(this.resolvedEventRef);
+      this.resolvedEventRef = undefined; 
+    }
+  }
 
-	async loadSettings() {
-	// Fød en fersk SettingsManager (den setter opp alle standardverdier i constructor) [dan]
+  /**
+   * Initializes settings manager defaults and hydrates instances with disk state records.
+   */
+  async loadSettings() {
     this.settings = new SettingsManager();
     
-    // Hent lagrede rådata fra Obsidian-disken
     const loadedData = await this.loadData();
     
-    // Flett de lagrede dataene inn over standardverdiene i klassen [dan]
     Object.assign(this.settings, loadedData);
     
-    // Siden dataene akkurat ble flettet, ber vi settings om å vaske seg selv!
-    // Ingen parametere trengs, fordi den leser sine egne variabler (this.parentProperties osv.) [dan]
     this.settings.prepare();
-	}
+  }
 
-	async saveSettings() {
-		this.settings.prepare();
+  async saveSettings() {
+    this.settings.prepare();
     await this.saveData(this.settings);
-	}
+  }
 }

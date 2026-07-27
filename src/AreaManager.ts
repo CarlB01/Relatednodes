@@ -1,9 +1,8 @@
-import { RelatedData } from "./data.js";
-import { NoteClass } from "./NoteClass.js";
+import { NetworkGraph } from "./NetworkGraph.js";
+import { Node } from "./Node.js";
 import { Platform, Point } from "obsidian";
 import { DrawingUtils } from "./DrawingUtils.js";
-import { DOMUtils } from "./DOMUtils.js";
-import { GateProperties } from "./GateClass.js";
+import { Gate } from "./Gate.js";
 import { RV } from "./constants.js";
 import RelatednotesPlugin from "./main.js";
 
@@ -17,18 +16,16 @@ export class AreaManager {
   upper!: HTMLElement;
   lower!: HTMLElement;
 
-  private related: RelatedData;
+  private related: NetworkGraph;
   private plugin: RelatednotesPlugin;
 
-  // Den sentrale minne-cachen for SVG-linjene
+  // Centralized memory cache for the active SVG path lines
   private linkCache = new Map<string, { svgElement: SVGPathElement; used: boolean }>();
 
   private animationFrameId: number | null = null;
-  private debounceTimer: NodeJS.Timeout | null = null;
-
 
   constructor(
-    related: RelatedData,
+    related: NetworkGraph,
     parentEl: HTMLElement,
     plugin: RelatednotesPlugin
   ) {
@@ -42,37 +39,35 @@ export class AreaManager {
   }
 
   /**
-   * Planlegger en ny, frisk opptegning synkronisert med skjermens oppdatering (60Hz).
-   * Kalles automatisk ved rulling, vindusendringer og etter den store dytten til skjermen.
+   * Schedules a fresh redraw synchronized with the hardware screen refresh rate (60Hz).
+   * Automatically triggered by scroll vents, window resizing, and following initial DOM injection.
    */
   public requestRedraw() {
-    // Hvis det allerede er planlagt en tegning, avbryt det forrige varselet
+    // If a drawing is already scheduled, cancel the previous frame request
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
     }
 
-    // Planlegg en ny frame synkronisert med nettleseren/skjermen
+    // Schedule a new frame synchronized with the browser rendering engine
     this.animationFrameId = requestAnimationFrame(() => {
-
-      // Tvinger en liten micro-timeout slik at CSS Grid-rammene har landet 100% 
-      // på de ekte pikslene sine før vi gjør getBoundingClientRect()! [dan]
+      // Enforces a micro-timeout ensuring CSS Grid layouts have fully settled 
+      // on their concrete pixels before measuring geometry bounds
       setTimeout(() => {
         this.yieldIfLeftTall();
         this.yieldIfRightTall();
 
         if (this.related?.centerNote) {
-          this.drawAllGraphLines(); // Tegner strekene fjellstøtt på rett plass!
+          this.drawAllGraphLines(); // Renders the bezier curve network lines accurately
         }
-      }, 150); // 50ms er usynlig for det blotte øye, men en evighet for nettleser-geometri
+      }, 150); // 150ms allows browser reflow to settle without human-visible lag
 
-      // Nullstill ID-en så neste frame kan kjøre fritt
+      // Reset the animation frame ID to open the gate for the next request cycle
       this.animationFrameId = null;
     });
   }
 
-
   private setupScrollEventListeners() {
-    // En liste over alle områdene som har fått tildelt rulling i CSS-en din
+    // Collects all layout areas configured with layout-level scrolling
     const scrollableAreas = [this.upper, this.lower, this.left, this.right];
 
     for (const area of scrollableAreas) {
@@ -93,9 +88,9 @@ export class AreaManager {
   }
 
   /**
-   * JS update to CSS if (data-left-tall)
-   * Is called after graph is updated but before lines are drawn.
-   * Makes upper area yield left upper corner to left area.
+   * Evaluates layout height and updates CSS dataset flags (data-left-tall).
+   * Executed post graph data updates but preceding path vector rendering.
+   * Forces upper area layout constraints to yield the top-left quadrant to the left area.
    */
   yieldIfLeftTall() {
     const vc = this.containerEl;
@@ -104,7 +99,9 @@ export class AreaManager {
     if (!leftWrapper) return;
 
     const currentValue = vc.getAttribute(RV.LEFT_TALL);
-    const isLeftTall = leftWrapper.scrollHeight > this.center.offsetHeight;
+
+    // Add a strict 15px layout tolerance buffer to eradicate visual flickering thresholds
+    const isLeftTall = leftWrapper.scrollHeight > this.center.offsetHeight + 15;
     const newValue = isLeftTall ? "true" : "false";
 
     if (currentValue !== newValue) {
@@ -113,8 +110,8 @@ export class AreaManager {
   }
 
   /**
-   * JS update to CSS if (data-right-tall)
-   * As above - Makes lower area yield right lower corner to right area.
+   * Evaluates layout height and updates CSS dataset flags (data-right-tall).
+   * Operates symmetrically to yield the bottom-right quadrant to the right flanke area.
    */
   yieldIfRightTall() {
     const vc = this.containerEl;
@@ -123,7 +120,9 @@ export class AreaManager {
     if (!rightWrapper) return;
 
     const currentValue = vc.getAttribute(RV.RIGHT_TALL);
-    const isRightTall = rightWrapper.scrollHeight > (this.center.offsetHeight + this.upper.offsetHeight);
+
+    // Add a strict 15px layout tolerance buffer to eradicate visual flickering thresholds
+    const isRightTall = rightWrapper.scrollHeight > (this.center.offsetHeight + this.upper.offsetHeight + 15);
     const newValue = isRightTall ? "true" : "false";
 
     if (currentValue !== newValue) {
@@ -132,8 +131,8 @@ export class AreaManager {
   }
 
   /**
-   * Check how much backContainerSVG is off related to future container measures.
-   * @returns amount of pixels the drawing routine must adjust coords
+   * Evaluates coordinate translation offsets for the background SVG layer relative to global layout boundaries.
+   * @returns Coordinate translation delta points required to compensate canvas path generation.
    */
   private offBy(): Point | null {
     const isMobile = Platform.isMobile;
@@ -142,8 +141,8 @@ export class AreaManager {
 
     const rect = this.containerEl.getBoundingClientRect();
 
-    // SAFEGUARD 1: Avoid drawing if the container is hidden or currently off-screen (0x0 size)
-    // This stops drawings from completely breaking or vanishing
+    // SAFEGUARD: Terminate routine if the layout container is completely hidden or unrendered (0x0 scale)
+    // This stops vector calculations from collapsing or throwing math errors
     if (rect.width === 0 || rect.height === 0) {
       return null;
     }
@@ -152,7 +151,7 @@ export class AreaManager {
     let y = rect.top;
 
     if (isMobile) {
-      // SAFEGUARD 2: Include native window offset tracking
+      // MOBILE OVERRIDE: Tracks hardware-level window offsets natively on iOS/Android viewports
       x += window.scrollX || 0;
       y += window.scrollY || 0;
     } else {
@@ -163,6 +162,11 @@ export class AreaManager {
     return { x: x, y: y };
   }
 
+  /**
+   * Renders the comprehensive network graph across all quadrants symmetrically.
+   * Leverages a hardware-accelerated rendering shield class ("is-calculating") to isolate the DOM tree.
+   * Prevents layout-level reflows, column-squeezing, and flickering cycles while element blocks are generated.
+   */
   public renderGraph() {
     const centerNote = this.related.centerNote;
     if (!centerNote) return;
@@ -170,7 +174,13 @@ export class AreaManager {
     const related = this.related;
     const mainContainer = this.containerEl;
     mainContainer.empty();
-    mainContainer.className = "view-content rv-container";
+    
+    // ==========================================================================
+    // GEOMETRIC RENDERING SHIELD (Off-Screen Document Matrix Gating)
+    // Injects structural state token preventing Chromium layout engines from 
+    // computing visual row mutations while the cluster nodes populate in the dark.
+    // ==========================================================================
+    mainContainer.className = "view-content rv-container is-calculating";
 
     const fragment = document.createDocumentFragment();
     mainContainer.setAttribute(RV.LEFT_TALL, 'false');
@@ -184,110 +194,113 @@ export class AreaManager {
 
     this.backContainerSVG = fragment.createSvg("svg", { cls: RV.SVG_LAYER });
 
-    // 0. CENTER
+    // 0. CENTER CORE NODE
     this.renderQuadrant(this.center, [[centerNote]], "center");
     this.renderInfoBtnForCenterNode();
 
-    // 1. UPPER AREA (Kun 1 kolleksjon: Ekte parents. Undefined/Ignored holdes HELT utenfor)
+    // 1. UPPER AREA (Verified parent entities)
     const cleanParentsOnly = Array.from(centerNote.relations.parents).filter(n => n.relation === "parent");
     const sortedParents = related.getSortedNotesForQuadrant(cleanParentsOnly, false);
     this.renderQuadrant(this.upper, [sortedParents], "upper");
 
-    // 2. LEFT AREA (Kun 1 kolleksjon: Ekte friends. Undefined/Ignored holdes HELT utenfor)
+    // 2. LEFT AREA (Verified lateral friend entities)
     const cleanFriendsOnly = Array.from(centerNote.relations.friends).filter(n => n.relation === "friend");
     const sortedFriends = related.getSortedNotesForQuadrant(cleanFriendsOnly, false);
     this.renderQuadrant(this.left, [sortedFriends], "left");
 
-    // 3. LOWER AREA (Kolleksjon 1: Ekte barn. Kolleksjon 2: Senterets felles oppsamling av ALT udefinert)    
+    // 3. LOWER AREA (Tier 1: Explicit target children. Tier 2: Core baseline undefined mappings)
     const allNotesInCache = Array.from(related.noteCache.values()).filter(n => n.isUsed);
-
-    // Kolleksjon 1: Kun noder med den definerte relasjonen "child"
-    const childrenOnly = related.getSortedNotesForQuadrant(
-      allNotesInCache.filter(n => n.relation === "child"), false
-    );
-    // Kolleksjon 2: ALT udefinert i hele cachen (uansett om kilden var udefinert frontmatter eller bodytext!)
-    const totalUndefinedBucket = related.getSortedNotesForQuadrant(
-      allNotesInCache.filter(n => n.relation === "undefined"), false
-    );
+    const childrenOnly = related.getSortedNotesForQuadrant(allNotesInCache.filter(n => n.relation === "child"), false);
+    const totalUndefinedBucket = related.getSortedNotesForQuadrant(allNotesInCache.filter(n => n.relation === "undefined"), false);
     const lowerCollections = [childrenOnly, totalUndefinedBucket].filter(c => c.length > 0);
     this.renderQuadrant(this.lower, lowerCollections, "lower");
 
-    // 4. RIGHT AREA (Søsken-området: Skiller mellom kriterie-søsken og brødtekst/udefinerte søsken)
-    const rawSiblings = Array.from(centerNote.relations.siblings);
-
-    // Kolleksjon 1: Solide søsken som ble oppdaget via de brukerstyrte frontmatter-kriteriene hos parent
-    const solidSiblings = related.getSortedNotesForQuadrant(
-      rawSiblings.filter(n => n.relation === "sibling" || n.discoverySource === "frontmatter-kriterium"), true
-    );
-
-    // Kolleksjon 2: Søsken som ble funnet i parent/søskens brødtekst eller udefinerte frontmatter-egenskaper
-    const looseTextSiblings = related.getSortedNotesForQuadrant(
-      rawSiblings.filter(n => n.relation === "undefined" || n.discoverySource === "bodytext" || n.discoverySource === "frontmatter-udefinert"), true
-    );
-    const siblingCollections = [solidSiblings, looseTextSiblings].filter(c => c.length > 0);
+    // 4. RIGHT AREA (Tier 1: Metadata-verified siblings. Tier 2: Bodytext contextual siblings)
+    const siblings = related.getSortedNotesForQuadrant(allNotesInCache.filter(n => n.relation === "sibling"), true);
+    const undefinedSiblings = related.getSortedNotesForQuadrant(allNotesInCache.filter(n => n.relation === "undefined-sibling"), true);
+    const siblingCollections = [siblings, undefinedSiblings].filter(c => c.length > 0);
     this.renderQuadrant(this.right, siblingCollections, "right");
 
     mainContainer.appendChild(fragment);
 
-    // NÅ er områdene fysisk tilstede, og vi kobler på lytterne og linjene i samme mikrosekund:
+    // Binds event listeners directly to the initialized layout container frames
     this.setupScrollEventListeners();
-    this.requestRedraw();
+    
+    // Evaluate geometric boundary heights exactly once while layout metrics are hidden
+    this.yieldIfLeftTall();
+    this.yieldIfRightTall();
+
+    // ==========================================================================
+    // SYNCHRONOUS VECTOR COUPLING (Knuser tidsgapet på linjene!)
+    // By invoking drawAllGraphLines() directly right here, we force the Bezier 
+    // paths to compile inside memory BEFORE the layout becomes visible.
+    // When the frame drops the shield, nodes and lines appear simultaneously [dan]!
+    // ==========================================================================
+    if (this.related?.centerNote) {
+      this.drawAllGraphLines(); // Tegner strekene synkront med en gang mens teppet er nede! [dan]
+    }
+
+    // Drops the computational shield precisely on the next browser paint cycle
+    requestAnimationFrame(() => {
+      mainContainer.classList.remove('is-calculating');
+      // Vi kaller fortsatt requestRedraw her som en ekstra forsikring for mobile safeguards, 
+      // men siden strekene allerede ER tegnet, vil brukeren oppleve 0 nanosekunder forsinkelse! [dan]
+      this.requestRedraw(); 
+    });
   }
 
   private renderQuadrant(
     area: HTMLElement,
-    collections: NoteClass[][], // Tar imot de rå kolleksjonene (f.eks. [[children], [undefined]])
+    collections: Node[][], 
     areaName: "upper" | "lower" | "left" | "right" | "center"
   ) {
-    area.empty(); // Obsidians native, lynraske tømming
+    area.empty(); // Leverages Obsidian's native high-performance DOM clearing
     const noteCount = collections.flat().length;
     if (noteCount === 0) return;
 
-    // 1. OPPRETT DET USYNLIGE FRAGMENTET I MINNET
+    // 1. ALLOCATE VIRTUAL MEMORY CANVAS FRAGMENT
     const areaFragment = document.createDocumentFragment();
     const collectionWrapper = areaFragment.createDiv(RV.COLLECTION_WRAPPER);
 
-    // Vi looper gjennom de overordnede kolleksjonene (f.eks. maks 2 i lower area)
+    // Map through high-level collections (e.g., maximum of 2 tiered layers in lower area)
     collections.forEach(collection => {
       if (collection.length === 0) return;
 
-      // PRINSIPP: Hver kolleksjon får sin egen etasje-stabler (.rv-area-collections). 
-      // Siden disse stables vertikalt i CSS, vil Kolleksjon 2 legge seg vakkert UNDER Kolleksjon 1!
+      // CSS vertical tier engine stacks secondary collection rows directly underneath primary clusters safely
       const areaCollectionDiv = collectionWrapper.createDiv({ cls: RV.COLLECTION });
 
-      // Hver kolleksjon får sin egen kolonneflyt (.rv-columns-wrapper)
+      // Mounts individual horizontal multi-column layout flows
       const colWrapDiv = areaCollectionDiv.createDiv({ cls: RV.COL_WRAPPER });
 
-      // Vi grupperer notene i denne kolleksjonen etter tag!
+      // Group active nodes inside this specific collection dynamically by frontmatter tags
       const tagGroupedNotes = this.related.groupByFirstTag(collection);
 
       tagGroupedNotes.forEach(group => {
-        // Hver unike tag-gruppe får sin egen "usynlige" gruppe-DIV (.rv-groups)
+        // Collapses column breaks across shared clusters by injecting virtual element wrappers
         const groupDiv = colWrapDiv.createDiv({ cls: RV.GROUPS });
 
-        const groupNotes = group.notes; // Array/liste med alle notene i denne tag-gruppen
+        const groupNotes = group.notes; 
         const overGrensen = groupNotes.length > 4 && noteCount > 20;
 
-        //Bygg knappen, a-lenken og de 3 portene ferdig i minnet
+        // Build button nodes, hyperlink paths, and gate anchors directly inside memory space
         groupNotes.forEach((note, index) => {
-          // STEMPEL: Sikringen settes på nøyaktig riktig sted
+          // Binds geometrical viewport targets to node data fields
           note.assignedArea = areaName;
 
-          // RENDRE: Bygg knappen, a-lenken og de 3 portene ferdig i minnet
           const noteEl = note.render();
           if (overGrensen && index > 0 && this.plugin.settings.groupsCollapsed) {
             noteEl.classList.add('hidden');
-          };
+          }
           groupDiv.appendChild(noteEl);
 
-          // Region-referanser for portene
+          // Geometrical tracking bounds mapped to the active quadrant layout wrapper
           if (note.upperGate) note.upperGate.areaElement = area;
           if (note.lowerGate) note.lowerGate.areaElement = area;
           if (note.friendGate) note.friendGate.areaElement = area;
         });
 
         if (overGrensen) {
-          // 1. KORRIGERT & TYPESIKKERT: Hent ut den aller første noten fra listen safely
+          // Typesafe extraction of the initial root node anchoring the expandable cluster
           const firstNote = groupNotes[0];
 
           if (firstNote && firstNote.div) {
@@ -295,21 +308,23 @@ export class AreaManager {
 
             firstNoteDiv.classList.add('rv-first-in-group');
 
-            const plusMinusBtn = DOMUtils.buildPlusMinusBtn(firstNoteDiv, group, overGrensen);
+            const plusMinusBtn = this.buildPlusMinusBtn(firstNoteDiv, group, overGrensen);
 
-            // Dytt knappen absolutt posisjonert inn på den første noten [dan]
+            // Appends the toggle switch absolutely anchored above the root note frame
             firstNoteDiv.appendChild(plusMinusBtn);
           }
         }
       });
     });
 
-    // 3. Den store dytten til skjermen
+    // 3. Mounts the fully evaluated virtual fragment layout directly to the visible viewport screen
     area.appendChild(areaFragment);
   }
 
-  // INNI AreaManager.ts
-
+    /**
+   * Evaluates layout geography and draws vector paths across all active nodes.
+   * Leverages localized structural memory caches to execute path tracking in O(1) velocity.
+   */
   drawAllGraphLines() {
     const centerNote = this.related.centerNote;
     if (!centerNote) return;
@@ -320,7 +335,7 @@ export class AreaManager {
     const links = this.linkCache;
     const canvas = this.backContainerSVG;
 
-    // 1. START-FASE: Hent aktive noder og nullstill porter
+    // 1. INITIALIZATION: Collect visible canvas nodes and clear active gate states
     const visibleNotes = Array.from(this.related.noteCache.values())
       .filter(n => n.isUsed && n.assignedArea !== "ignored");
 
@@ -334,64 +349,18 @@ export class AreaManager {
       note.friendGate.svg?.classList.remove('is-connected');
     }
     
-    const canDraw = (from: GateProperties, to: GateProperties) => {
+    // Core geometry safeguard validating if target layout elements have established concrete screen coordinates
+    const canDraw = (from: Gate, to: Gate) => {
       if (!from || !to || !from.svg || !to.svg || !from.parentNote.div || !to.parentNote.div) return false;
       
-      // SIKRING: Sjekk at nodene faktisk har fått en reell plassering i vinduet.
-      // Hvis de måles til 0 på absolutt alt, venter vi på at debounce-timeren vår 
-      // tegner dem på nytt om 150ms når de har brettet seg ut [dan]!
       const rA = from.svg.getBoundingClientRect();
       const rB = to.svg.getBoundingClientRect();
       return rA.width > 0 || rB.width > 0;
     };
 
-    const harEkteFysiskLink = (a: NoteClass, b: NoteClass): boolean => {
-      const resolvedLinks = this.plugin.app.metadataCache.resolvedLinks;
-      const unresolvedLinks = this.plugin.app.metadataCache.unresolvedLinks;
-      
-      const sjekkKobling = (fraPath: string, tilBasename: string): boolean => {
-        const resObj = resolvedLinks[fraPath];
-        if (resObj) {
-          // KORRIGERT FOR STORSKALA: I stedet for eksakt matching, sjekker vi om stien 
-          // inneholder eller slutter på filnavnet (tar høyde for .dokumenter, aliaser etc.)! [dan]
-          const tilNameLower = tilBasename.toLowerCase();
-          const harTreff = Object.keys(resObj).some(path => {
-            const pLower = path.toLowerCase();
-            return pLower.includes(tilNameLower) || pLower.endsWith(`/${tilNameLower}.md`);
-          });
-          if (harTreff) return true;
-        }
-
-        const unresObj = unresolvedLinks[fraPath];
-        if (unresObj && typeof unresObj === 'object') {
-          const tilNameLower = tilBasename.toLowerCase();
-          const harTreff = Object.keys(unresObj).some(key => key.toLowerCase().includes(tilNameLower));
-          if (harTreff) return true;
-        }
-        return false;
-      };
-
-      // Sjekk to-veis i Obsidians registre
-      if (sjekkKobling(a.path, b.basename) || sjekkKobling(b.path, a.basename)) return true;
-
-      // Sjekk 3: Sjekk din egen feilfrie sources-cache (Gjort case- og punktum-insensitiv!) [dan]
-      const nameALower = a.basename.toLowerCase();
-      const nameBLower = b.basename.toLowerCase();
-
-      for (const [baitName, bait] of this.related.baitCache.entries()) {
-        if (!bait.isUsed) continue;
-        // Hvis agnet treffer en av nodene delvis (f.feks. "autisme" matcher "autisme.dokumenter") [dan]
-        if (baitName.includes(nameALower) || nameALower.includes(baitName)) {
-          if (bait.sources.has(b)) return true;
-        }
-        if (baitName.includes(nameBLower) || nameBLower.includes(baitName)) {
-          if (bait.sources.has(a)) return true;
-        }
-      }
-
-      return false;
-    };
-
+    // ==========================================================================
+    // 2. THE GEOMETRICAL VECTOR RENDERING TRACE (Strictly 3 clean rules)
+    // ==========================================================================
     for (let i = 0; i < visibleNotes.length; i++) {
       const nodeA = visibleNotes[i];
       if (!nodeA) continue;
@@ -400,28 +369,7 @@ export class AreaManager {
         const nodeB = visibleNotes[j];
         if (!nodeB) continue;
 
-        if (!harEkteFysiskLink(nodeA, nodeB)) continue;
-
-        // Sjekk A: Er de registrert som direkte venner eller søsken i minnekartene?
-        const erDirekteVennerEllerSøsken = nodeA.relations.friends.has(nodeB) || nodeB.relations.friends.has(nodeA) ||
-                                          nodeA.relations.siblings.has(nodeB) || nodeB.relations.siblings.has(nodeA);
-
-        // Sjekk B: Deler de et KRYSSENDE agn (tverrgående kobling) som IKKE tilhører center-noten?
-        const lowercaseCenterName = centerNote.basename.toLowerCase();
-        
-        const delerEkteKryssendeAgn = nodeA.crossingBaits.size > 0 && Array.from(nodeA.crossingBaits).some(bait => {
-          // DØRVAKT: Hvis agnet de deler matcher navnet på senternoten, 
-          // returnerer vi false! Dette eliminerer de indirekte linjene fullstendig [dan].
-          if (bait.targetName.toLowerCase() === lowercaseCenterName) return false;
-          
-          // Hvis de deler et ANNET agn (f.eks. "the clan" eller et felles prosjekt), godkjenner vi det!
-          return nodeB.crossingBaits.has(bait);
-        });
-        
-        const erGyldigHorisontal = erDirekteVennerEllerSøsken || delerEkteKryssendeAgn;
-
- 
-        // REGEL 1: Er Node A biologisk forelder til Node B? (A har B i barn, eller B har A i foreldre) [dan]
+        // RULE 1: Is Node A a biological parent to Node B? (Loddrett tracking down the spine)
         if (nodeA.relations.children.has(nodeB) || nodeB.relations.parents.has(nodeA)) {
           if (canDraw(nodeA.lowerGate, nodeB.upperGate)) {
             DrawingUtils.drawLink(nodeA.lowerGate, nodeB.upperGate, links, offBy, canvas);
@@ -429,7 +377,7 @@ export class AreaManager {
             nodeB.upperGate.svg!.classList.add('is-connected');
           }
         } 
-        // REGEL 2: Er Node B biologisk forelder til Node A? [dan]
+        // RULE 2: Is Node B a biological parent to Node A? (Loddrett tracking up the spine)
         else if (nodeB.relations.children.has(nodeA) || nodeA.relations.parents.has(nodeB)) {
           if (canDraw(nodeB.lowerGate, nodeA.upperGate)) {
             DrawingUtils.drawLink(nodeB.lowerGate, nodeA.upperGate, links, offBy, canvas);
@@ -437,8 +385,8 @@ export class AreaManager {
             nodeA.upperGate.svg!.classList.add('is-connected');
           }
         } 
-        // REGEL 3: Horisontale relasjoner (Friends, søsken, crossing baits) [dan]
-        else if (erGyldigHorisontal) {
+        // RULE 3: Horizontal flanke connections (Symmetrically validated cross-quadrant friends)
+        else if (nodeA.relations.friends.has(nodeB) || nodeB.relations.friends.has(nodeA)) {
           if (canDraw(nodeA.friendGate, nodeB.friendGate)) {
             DrawingUtils.drawLink(nodeA.friendGate, nodeB.friendGate, links, offBy, canvas);
             nodeA.friendGate.svg!.classList.add('is-connected');
@@ -448,88 +396,79 @@ export class AreaManager {
       }
     }  
 
-    // 3. OPPRYDDINGS-FASE
+    // 3. GARBAGE COLLECTION HARVESTING: Purges dead bezier paths from the HTML DOM tree
     for (const [key, link] of this.linkCache.entries()) {
       if (!link.used) {
         link.svgElement.remove(); 
         this.linkCache.delete(key); 
       }
     }
-
   }
 
-  private harEkteFysiskLink(a: NoteClass, b: NoteClass): boolean {
-    const resolvedLinks = this.plugin.app.metadataCache.resolvedLinks;
-    const unresolvedLinks = this.plugin.app.metadataCache.unresolvedLinks;
-    
-    const sjekkKobling = (fraPath: string, tilBasename: string): boolean => {
-      const resObj = resolvedLinks[fraPath];
-      if (resObj) {
-        const tilNameLower = tilBasename.toLowerCase();
-        const harTreff = Object.keys(resObj).some(path => {
-          const pLower = path.toLowerCase();
-          return pLower.includes(tilNameLower) || pLower.endsWith(`/${tilNameLower}.md`);
-        });
-        if (harTreff) return true;
-      }
-
-      const unresObj = unresolvedLinks[fraPath];
-      if (unresObj && typeof unresObj === 'object') {
-        const tilNameLower = tilBasename.toLowerCase();
-        const harTreff = Object.keys(unresObj).some(key => key.toLowerCase().includes(tilNameLower));
-        if (harTreff) return true;
-      }
-      return false;
-    };
-
-    if (sjekkKobling(a.path, b.basename) || sjekkKobling(b.path, a.basename)) return true;
-
-    const nameALower = a.basename.toLowerCase();
-    const nameBLower = b.basename.toLowerCase();
-
-    for (const [baitName, bait] of this.related.baitCache.entries()) {
-      if (!bait.isUsed) continue;
-      if (baitName.includes(nameALower) || nameALower.includes(baitName)) {
-        if (bait.sources.has(b)) return true;
-      }
-      if (baitName.includes(nameBLower) || nameBLower.includes(nameBLower)) {
-        if (bait.sources.has(a)) return true;
-      }
-    }
-
-    return false;
-  };
-
+  /**
+   * Compiles and mounts the elastic info satellite toggle button onto the center element.
+   * Encapsulates total metrics regarding suppressed data nodes to enrich metadata discovery.
+   */
   private renderInfoBtnForCenterNode() {
     const centerNote = this.related.centerNote;
     if (!centerNote) return;
 
-    const centerDiv = centerNote.div; // HTML-elementet til senternoten (.item)
+    const centerDiv = centerNote.div; 
 
     if (centerDiv) {
-      // 1. Fjern en eventuell gammel info-knapp fra forrige rendering
+      // 1. Flush obsolete info switches inherited from previous navigation states
       const gammelBtn = centerDiv.querySelector('.rv-info-btn');
       if (gammelBtn) gammelBtn.remove();
 
-      // 2. TELL IGNORERTE NODER: Vi skanner cachen for å se hvor mange som ble ignorert i denne runden [dan]
+      // 2. COUNTER: Totals all layout records condemned or flagged as ignored in the active cycle
       const antallIgnorert = Array.from(this.related.noteCache.values())
         .filter(n => n.assignedArea === "ignored" || n.isInitiallyIgnored === true).length;
 
-      // 3. AKTIVERES KUN DERSOM DET FINNES IGNORERTE NODER [dan]
+      // 3. CONDITIONAL INJECTION: Activates only if ignored items are detected in memory bounds
       if (antallIgnorert > 0) {
-        // Opprett den nye info-knappen som en del av senternotens DIV
         const infoBtn = centerDiv.createDiv("rv-plusminus rv-info-btn");
 
-        // Vi bruker den internasjonale nøytrale "i"-en som symbol for info [dan]
+        // Deploys the international standardized symbol for info metadata nodes
         infoBtn.textContent = "i";
 
-        // Metadata: Stempler på antallet direkte som et data-attributt slik at hover-lytteren kan lese det live [dan]!
+        // Stamps the raw count directly as an HTML dataset attribute for hover telemetry consumption
         infoBtn.setAttribute("data-ignored-count", antallIgnorert.toString());
 
-        // Plasser den på senternoten
         centerDiv.appendChild(infoBtn);
       }
     }
   }
 
+  /**
+   * Compiles and mounts the tactile expandable/collapsible toggle badge control.
+   * Integrates seamless data attributes forwarding parameters down to active third-party style hooks.
+   * @param firstNoteDiv The root parent HTMLElement anchoring the node block.
+   * @param group Struct containing the current tag identifier and collection array.
+   * @param startsClosed Lifecycle constraint indicating the initial visibility rendering threshold.
+   */
+  private buildPlusMinusBtn(
+    firstNoteDiv: HTMLElement, 
+    group: { tag: string, notes: Node[] }, 
+    startsClosed: boolean 
+  ): HTMLElement {
+    const count = group.notes.length.toString();
+
+    // remove '#' from tag for visual improvement
+    const cleanTagName = group.tag.replace(/^#/, "");
+
+    // Instantiates the toggle badge matching explicit configuration layouts
+    const button = firstNoteDiv.createDiv(`${RV.PLUS_MINUS_BTN} ${RV.SUPERCHARGED_ATTRIB} ${RV.BORDERED} ${RV.ROUNDED}`);
+    
+    button.textContent = startsClosed 
+      ? `${RV.PLUS}${cleanTagName}(${count})` 
+      : `${RV.MINUS}${cleanTagName}(${count})`; 
+
+    // Inject data metrics enabling high-speed hover telemetry calculations
+    button.setAttribute("data-count", count);
+    button.setAttribute("data-tag", group.tag);
+    button.setAttribute('data-link-tags', group.tag);
+
+    return button;
+  }
 }
+

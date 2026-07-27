@@ -1,6 +1,11 @@
+/**
+ * Configuration and Settings State Manager for minBrain Related Notes Network.
+ * Handles migration mapping, runtime parsing, and low-latency array hydration.
+ */
 export class SettingsManager {
-  // === DINE EKSTE STANDARDVERDIER FLYTTET HIT! ===
-  // Klassens variabler fungerer nå BÅDE som grensesnitt (types) og som fallback (defaults)
+  // ==========================================================================
+  // Core Configuration State Fields (Acts as both Types and Runtime Defaults)
+  // ==========================================================================
   public parentProperties: string = 'tilhører, nasjonalitet';
   public parentTags: string = '#samling, #👥gruppe';
   public childProperties: string = 'barn, medlemmer';
@@ -12,7 +17,9 @@ export class SettingsManager {
   public displayAliases: boolean = false;
   public groupsCollapsed: boolean = false;
 
-  // === B. DE OPTIMALISERTE LISTENE (Ferdigtygde arrays for grafloopen) ===
+  // ==========================================================================
+  // Pre-Compiled Hydrated Arrays (Low-latency cache targets for the graph loop)
+  // ==========================================================================
   public optParentProperties: string[] = [];
   public optChildProperties: string[] = [];
   public optFriendProperties: string[] = [];
@@ -28,22 +35,23 @@ export class SettingsManager {
   }
 
   /**
-   * Denne bodde før i main.ts. Nå lever den her og har direkte tilgang til dataene!
+   * Hydrates pre-compiled tracking caches synchronously from serialized data fields.
+   * Strips out carriage returns and enforces lowercase normalization where applicable.
    */
   public prepare() {
-    // Oppdatert hjelpefunksjon: Fjerner usynlige linjeskift (\n, \r) og trimmer elementene safely!
+    // Utility pipeline parsing string configurations into optimized structural array arrays
     const parseStr = (str: string) => {
       if (!str) return [];
-      const cleanStr = str.replace(/[\r\n]+/g, ""); // Stripper bort absolutt alle linjeskift!
+      const cleanStr = str.replace(/[\r\n]+/g, ""); // Purges structural newline characters entirely
       return cleanStr.split(",").map(s => s.trim()).filter(Boolean);
     };
 
-    // 1. Properties (Case-sensitive)
+    // 1. Structural Field Properties (Preserved case-sensitive for YAML mapping precision)
     this.optParentProperties = parseStr(this.parentProperties);
     this.optChildProperties  = parseStr(this.childProperties);
     this.optFriendProperties = parseStr(this.friendProperties);
 
-    // 2. Tags og Fragmenter (Alltid lowercase for rask, case-insensitiv matching)
+    // 2. Tag Blocks and Fragments (Lowercased to achieve high-velocity case-insensitive matching)
     this.optParentTags      = parseStr(this.parentTags).map(t => t.toLowerCase());
     this.optChildTags       = parseStr(this.childTags).map(t => t.toLowerCase());
     this.optFriendTags      = parseStr(this.friendTags).map(t => t.toLowerCase());

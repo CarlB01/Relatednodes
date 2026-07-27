@@ -10,7 +10,7 @@
     "@typescript-eslint/parser": "^8.0.0",
     "builtin-modules": "^5.2.0",
     "esbuild": "^0.28.0",
-    "obsidian": "latest",
+    "obsidian": "^1.13.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.0.0"
   },

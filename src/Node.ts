@@ -1,58 +1,59 @@
 import { CachedMetadata, parseFrontMatterAliases, parseFrontMatterStringArray, parseFrontMatterTags, TFile } from "obsidian";
-import { GateProperties } from "./GateClass";
+import { Gate } from "./Gate";
 import { StringUtils } from "./StringUtils";
-import { BaitClass } from "./BaitClass";
+import { Anchor } from "./Anchor";
 import { RV } from "./constants";
 
 /**
- * UNDEFINED: fungerer i praksis som en elastisk "sekkerelasjon" 
- * som oppfører seg ulikt basert på hvilken runde den ble oppdaget i:
- *  - I første runde: Den er en direkte, uklassifisert kobling til senternoten \(\rightarrow \) 
- *     -> Plasseres i bunn (lowerGate) sammen med barn (children). 
- *  - I andre runde: Den er en uklassifisert kobling til en av foreldrene 
- *    (men ikke en venn eller forelder av forelderen). 
- *     -> Plasseres til høyre (siblingGate) sammen med søsken (siblings).
+ * Architectural classification labels defining graph data routing and quadrant placement:
+ *  - "center": The active origin node anchoring the visible view frame.
+ *  - "parent": Verified upstream semantic source container.
+ *  - "child": Verified downstream semantic target node.
+ *  - "friend": Lateral semantic connection cross-quadrant.
+ *  - "sibling": Verified metadata-driven horizontal sibling node.
+ *  - "undefined": Fallback bucket routing direct center links to the lower area.
+ *  - "undefined-sibling": Fallback bucket routing indirect parent links to the right flanke area.
+ *  - "ignored": Suppressed vault nodes matching blacklist metrics.
  */
-export type Relation = "center" | "parent" | "child" | "friend"| "sibling" | "undefined" | "ignored";
+export type Relation = "center" | "parent" | "child" | "friend"| "sibling" | "undefined" | "undefined-sibling" | "ignored";
 
-export class NoteClass {  
+export class Node {  
   connectionCount: number = 0;
   sharedLinksWithStart: number = 0;
-	info: string = "";
+  info: string = "";
   path: string;
   basename: string;
   displayText: string;
   readonly aliases: string[];
-  readonly tags: string[]; // Ferdig vasket i lowercase for lynrask matching!  
-  readonly isInitiallyIgnored: boolean
+  readonly tags: string[]; // Sanitized in lowercase keys for high-velocity O(1) matching passes  
+  readonly isInitiallyIgnored: boolean;
   readonly rawFrontmatter: any;
   
-  isUsed: boolean = false; // flag for re-use
-  isIndexedInThisRound: boolean = false; 
-
-  // Stemplene som bestemmer ruting og kolleksjoner
-	relation: Relation = "undefined";
+  isUsed: boolean = false; // Lifecycle flag managing item element instance recycling
+  public isIndexedInThisRound: boolean = false; // Typesafe JIT pass flag tracking JIT passes safely
+  
+  // Evaluation stamps instructing rendering quadrants and structural collection buckets
+  relation: Relation = "undefined";
   discoverySource: "frontmatter-kriterium" | "frontmatter-udefinert" | "bodytext" = "bodytext";
   assignedArea: "upper" | "lower" | "left" | "right" | "center" | "ignored" = "lower";
 
-  // connections
-  public crossingBaits = new Set<BaitClass>();
+  // Connections memory arrays
+  public crossingBaits = new Set<Anchor>();
   
-  // De 3 faste portene
-  upperGate: GateProperties;
-  lowerGate: GateProperties;
-  friendGate: GateProperties;
+  // Anchor port definitions
+  upperGate: Gate;
+  lowerGate: Gate;
+  friendGate: Gate;
   
   public linkDivRef: HTMLElement | null = null;
   public div: HTMLElement | null = null;
   
-  // Relations-sets
+  // Specialized structural memory sets
   relations = {
-    parents: new Set<NoteClass>(),
-    children: new Set<NoteClass>(),
-    friends: new Set<NoteClass>(),
-    siblings: new Set<NoteClass>(),
-    ignored: new Set<NoteClass>()
+    parents: new Set<Node>(),
+    children: new Set<Node>(),
+    friends: new Set<Node>(),
+    ignored: new Set<Node>()
   };
 
   constructor(
@@ -72,19 +73,22 @@ export class NoteClass {
     this.isInitiallyIgnored = isInitiallyIgnored;
     this.rawFrontmatter = frontmatter;
 
-    // 'friend' starter som 'left' som standard, men overstyres i render() basert på kvadrant
-    this.upperGate  = new GateProperties(this, 'up');
-    this.lowerGate  = new GateProperties(this, 'down');
-    this.friendGate = new GateProperties(this, 'left');
+    // Lateral flanke starts defaulted to the 'left' vector, but can be updated via render calculations
+    this.upperGate  = new Gate(this, 'up');
+    this.lowerGate  = new Gate(this, 'down');
+    this.friendGate = new Gate(this, 'left');
   }
 
+  /**
+   * Static factory builder parsing core Obsidian structures to compile concrete Node models.
+   */
   public static createFromObsidian(
     file: TFile, 
     cache: CachedMetadata, 
     useAlias: boolean,
     optIgnoreFragments: string[],
     optIgnoreTags: string[]
-  ): NoteClass {
+  ): Node {
     const path = file.path;
     const basename = file.basename;
     const frontmatter = cache.frontmatter || null;
@@ -98,18 +102,17 @@ export class NoteClass {
     const isIgnored = StringUtils.foundPart(path, optIgnoreFragments) || 
                       StringUtils.hasAnyOf(cleanLowercaseTags, optIgnoreTags);
 
-    return new NoteClass(path, basename, displayText, nativeAliases, cleanLowercaseTags, isIgnored, frontmatter);
+    return new Node(path, basename, displayText, nativeAliases, cleanLowercaseTags, isIgnored, frontmatter);
   }
 
   /**
-   * Oppretter eller gjenbruker det visuelle note-elementet i DOM-en
-   * med friendGate-div plassert i henhold til direction 'left' eller 'right'.
+   * Generates or safely recycles individual target node elements inside the physical DOM window.
+   * Handles relative direction adjustments dynamically preceding element appending.
    */
   public render(): HTMLElement {
-  
     let itemDiv = this.div;
       
-    // 1. REUSE or CREATE
+    // 1. REUSE OR CREATE STATE
     if (itemDiv) {
       itemDiv.innerHTML = "";
       itemDiv.className = "item"; 
@@ -132,15 +135,14 @@ export class NoteClass {
 
     linkEl.createSpan( { text: this.displayText, cls: 'rv-text-span'} );
 
-    
-    // 3. FRIENDGATE DIRECTION
+    // 3. EVALUATE GEOMETRICAL FLANKE ORIENTATION
     if (this.assignedArea === "left") {
-      this.friendGate.direction = 'right'; // Vennen peker inn mot høyre (mot center)
+      this.friendGate.direction = 'right'; // Routes friend links inward toward the center layout axis
     } else {
-      this.friendGate.direction = 'left';  // Topp, bunn og senter peker mot venstre flanke standard
+      this.friendGate.direction = 'left';  // Standard default for upper, lower, and core nodes
     }
     
-    // 4. GENERER 3 PORTER
+    // 4. INJECT THREE INDIVIDUAL PORT VECTOR ELEMENTS
     const topSVG    = this.upperGate.render();
     const bottomSVG = this.lowerGate.render();
     const friendSVG = this.friendGate.render();
@@ -164,5 +166,4 @@ export class NoteClass {
 
     return itemDiv;
   }
-
 }
