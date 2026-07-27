@@ -1,90 +1,124 @@
-# Obsidian Sample Plugin
+# myBrain for Obsidian
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+[![Obsidian Plugin](https://shields.io)](https://obsidian.md)
+[![GitHub Release](https://shields.io)](https://github.com)
+[![License: MIT](https://shields.io)](https://opensource.org)
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+> "Structure is liberation. Your notes belong to you, and your graph should think the way you do."
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+**myBrain** is a high-performance, strictly native semantic network graph for Obsidian. Inspired by the pioneering concept of *TheBrain* (Harlan) and engineered as a modern, lightweight, native successor to Zsolt's legendary *ExcaliBrain*, it maps your vault into a dynamic, fluid, and predictable vertical spine and lateral flank infrastructure. 
 
-## First time developing plugins?
+Built 100% from scratch utilizing only Obsidian's native internal API, **myBrain** delivers immediate, flicker-free rendering loops over large-scale vaults exceeding 20,000 notes—all while keeping your markdown files completely offline, local, and private.
 
-Quick starting guide for new plugin devs:
+![myBrain Interface Showcase](images/showcase.gif) *(Place an animated GIF or screenshot of your view running here)*
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+---
 
-## Releasing new releases
+## 🗺️ The Core Vision & Story
 
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
+For decades, the semantic power of mapping information into strict **Parents, Children, Friends, and Siblings** relationships belonged to closed, proprietary database silos. As a healthcare professional navigating intensive daily workflows, I searched for alternative architectures that combined this specific cognitive layout with local, secure data ownership. 
 
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
+When Licat and Silver launched Obsidian, it felt like home. When Zsolt introduced *ExcaliBrain*, it was a revelation. I even had the privilege of collaborating briefly with Zsolt to help adapt its behavior toward sidebar layouts and mobile touchscreens. 
 
-## Adding your plugin to the community plugin list
+However, as the years passed, it became clear that a graph framework bolted onto a heavy vector drawing canvas (*Excalidraw*) introduced rigid limitations. It restricted downstream interface interactions like native contextual popup menus, localized styling, drag-and-drop mechanics, or integration with decrypting tools like *Meld Encrypt*. 
 
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
+When Zsolt hinted at gatherings that it was time for a native implementation to take over, I accepted the challenge. I went back to the drawing board—mapping out how nodes could dynamically project multi-directional network anchors ("baits") using links and backlinks so that *"everyone discovers everyone"*. 
 
-## How to use
+**myBrain** is the result: a clean, uncompromising, lightning-fast native implementation designed to bring cognitive structure back to the user.
 
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
+---
 
-## Manually installing the plugin
+## 🎨 Conceptual Architecture
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+Unlike standard chaotic force-directed link graphs, **myBrain** routes information into a highly organized, predictable layout matrix relative to your active focused note:
 
-## Improve code quality with eslint
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
+## 🎨 Conceptual Architecture
 
-## Funding URL
+Unlike standard chaotic force-directed link graphs, **myBrain** routes information into a highly organized, predictable layout matrix relative to your active focused note.
 
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+```text
+         		[ PARENTS ]
+            	  	▲			\
+        	      	│			[ SIBLINGS ]
+ [ FRIENDS ] ◄► [ CENTER NOTE ]
+              		│
+              		▼
+        		[ CHILDREN ]
+			
 ```
 
-If you have multiple URLs, you can also do:
+### Architectural Mapping Matrix
 
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
+| Quadrant Area | Target Content Routing | Sourcing Logic |
+| :--- | :--- | :--- |
+| **`[ PARENTS ]`** *(Upper)* | Native structural ancestors and collection headers. | Sourced explicitly via your configured properties/tags. |
+| **`[ FRIENDS ]`** *(Left)* | Reciprocal lateral relationships and peer connections. | Routed horizontally via direct cross-links. |
+| **`[ CENTER NOTE ]`** | The active focus anchor context of the current viewport. | Binds the primary origin coordinates live. |
+| **`[ CHILDREN ]`** *(Lower)* | Downstream target children and unmapped core links. | Sourced from child fields and raw bodytext tokens. |
+| **`[ SIBLINGS ]`** *(Right)* | Peer cluster nodes sharing a mutual parent anchor. | Tier 1: Verified frontmatter. Tier 2: Bodytext siblings. |
+
+---
+
+## 🚀 Key Features
+
+* **Instant Migration for ExcaliBrain Users:** If your data is already shaped for ExcaliBrain, it is 100% compatible with **myBrain**. Your years of structured tags and YAML properties will render instantly on day one!
+* **Pure Native Performance (O(1) JIT Cache):** No heavy database queries or text parsing chains during navigation. The engine utilizes an advanced asynchronous Just-In-Time (JIT) memory mesh. redrawing networks over massive 20,000-item vaults in under a few microseconds.
+* **Flicker-Free "Iron-clad" Rendering:** Employs an off-screen render curtain that stabilizes column expansions and layout shifts in total darkness before gracefully illuminating elements simultaneously.
+* **Supercharged Links Ready:** Designed to natively blend with your custom theme environments. It respects your existing tag-based font colors, customized icons, and appearance rules out of the box.
+* **Fully Responsive & Searchable Panel:** Fully optimized for both desktop sidebars and native iOS/Android sliding mobile drawers, utilizing an elastic SVG layout. Fully compatible with Obsidian's modern searchable plugin settings.
+
+---
+
+## 📐 The Design & Blueprint
+
+Below is the original conceptual blueprint mapping out how nodes cast multi-directional bidirectional anchors across the cache matrix:
+
+![Original Conceptual Blueprint](images/concept.png) *(Place your original Excalidraw design drawing here!)*
+
+---
+
+## ⚙️ Configuration & Metadata Rules
+
+You can fully customize which YAML properties or frontmatter tags dictate the layout quadrants inside the plugin settings panel.
+
+### Example Frontmatter Structure:
+```yaml
+---
+tags:
+  - #collection
+title: "Europe"
+parents: "World Countries"
+children:
+  - "Norway"
+  - "Belgium"
+  - "Italy"
+partner: "European Union"
+---
 ```
+* **Parents Quadrant:** Triggered by frontmatter properties like `parent` or tags like `#major`.
+* **Children Quadrant:** Triggered by properties like `child` or `members`.
+* **Friends Quadrant:** Routed laterally from fields like `partner`.
+* **Siblings Quadrant:** Discovered dynamically by finding other items sharing a mutual parent element.
 
-## API Documentation
+---
 
-See https://docs.obsidian.md
+## 🔮 Roadmap & Future Horizons
+
+This is only the baseline foundation of a completely native semantic framework. Planned milestones include:
+- [ ] Interactive context popup menus to add parents/children on the fly.
+- [ ] Multi-generation expansion toggles to view grandparents/grandchildren rows.
+- [ ] Inline node image decoding when targeted hyperlink references represent image assets.
+- [ ] Specialized inline visualizers to handle decrypted content blocks protected by *Meld Encrypt* (i hope).
+
+---
+
+## 🤝 Acknowledgments
+
+This plugin would not exist without the immense inspiration, code legacy studies, and cognitive frameworks pioneered by:
+* **Harlan and the creators of TheBrain** for proving that structured association is a beautiful way to organize human knowledge.
+* **Zsolt Viczián** for creating *ExcaliBrain*, for the short and motivating period of collaboration, and for inspiring the native renaissance of this structure.
+* **Licat and Silver** for giving the world Obsidian, an extensible, local-first ecosystem where we can build anything.
+
+---
+
+*Developed with passion by a healthcare worker who loves graphs and believes semantic structure should belong to everyone. If you enjoy this work, consider starring the repository!*
