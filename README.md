@@ -6,7 +6,7 @@
 
 > "Structure is liberation. Your notes belong to you, and your graph should think the way you do."
 
-**myBrain** is a high-performance, strictly native semantic network graph for Obsidian. Inspired by the pioneering concept of *TheBrain* (Harlan) and engineered as a modern, lightweight, native successor to Zsolt's legendary *ExcaliBrain*, it maps your vault into a dynamic, fluid, and predictable vertical spine and lateral flank infrastructure. 
+**myBrain** is a high-performance, native semantic network graph for Obsidian, designed for speed and clarity. It maps your vault into a predictable vertical and lateral structure inspired by *TheBrain* and *ExcaliBrain*, built entirely from scratch using Obsidian’s internal API for optimal performance, even with 20,000+ notes.
 
 Built 100% from scratch utilizing only Obsidian's native internal API, **myBrain** delivers immediate, flicker-free rendering loops over large-scale vaults exceeding 20,000 notes—all while keeping your markdown files completely offline, local, and private.
 
@@ -28,34 +28,31 @@ When Zsolt hinted at gatherings that it was time for a native implementation to 
 
 ---
 
+## 🗺️ The Core Vision
+
+**myBrain** brings strict, contextual structure (Parents, Children, Friends, Siblings) to Obsidian without the overhead of heavy vector canvases, allowing for a faster, more integrated experience.
+
 ## 🎨 Conceptual Architecture
 
-Unlike standard chaotic force-directed link graphs, **myBrain** routes information into a highly organized, predictable layout matrix relative to your active focused note:
+**myBrain** organizes your knowledge in a predictable, focused layout.
 
-## 🎨 Conceptual Architecture
-
-Unlike standard chaotic force-directed link graphs, **myBrain** routes information into a highly organized, predictable layout matrix relative to your active focused note.
-
-```text
-         		[ PARENTS ]
-            	  	▲			\
-        	      	│			[ SIBLINGS ]
- [ FRIENDS ] ◄► [ CENTER NOTE ]
-              		│
-              		▼
-        		[ CHILDREN ]
-			
-```
+        [ PARENTS ]         ◄── Upper Area
+            ▲		     
+        	│                
+ [ FRIENDS ] ◄► [ CENTER]   [ SIBLINGS]
+            │
+            ▼
+        [ CHILDREN ]        ◄── Lower Area
 
 ### Architectural Mapping Matrix
 
-| Quadrant Area | Target Content Routing | Sourcing Logic |
-| :--- | :--- | :--- |
-| **`[ PARENTS ]`** *(Upper)* | Native structural ancestors and collection headers. | Sourced explicitly via your configured properties/tags. |
-| **`[ FRIENDS ]`** *(Left)* | Reciprocal lateral relationships and peer connections. | Routed horizontally via direct cross-links. |
-| **`[ CENTER NOTE ]`** | The active focus anchor context of the current viewport. | Binds the primary origin coordinates live. |
-| **`[ CHILDREN ]`** *(Lower)* | Downstream target children and unmapped core links. | Sourced from child fields and raw bodytext tokens. |
-| **`[ SIBLINGS ]`** *(Right)* | Peer cluster nodes sharing a mutual parent anchor. | Tier 1: Verified frontmatter. Tier 2: Bodytext siblings. |
+| Quadrant | Sourcing Logic |
+| :--- | :--- |
+| **`[ PARENTS ]`** | Upper area; direct structural ancestors. |
+| **`[ FRIENDS ]`** | Left area; reciprocal, lateral peer connections. |
+| **`[ CENTER ]`** | The active note and current context. |
+| **`[ CHILDREN ]`** | Lower area; downstream targets and core links. |
+| **`[ SIBLINGS ]`** | Right area; peers sharing a mutual parent. |
 
 ---
 
@@ -73,7 +70,10 @@ Unlike standard chaotic force-directed link graphs, **myBrain** routes informati
 
 Below is the original conceptual blueprint mapping out how nodes cast multi-directional bidirectional anchors across the cache matrix:
 
-![Original Conceptual Blueprint](images/concept.png) *(Place your original Excalidraw design drawing here!)*
+![Original Conceptual Blueprint](images/sketch draft.png)
+![define rules](images/myBrain concept 1.png)
+![hmm.. baits .. and anchors..](images/make a bait (anchors) system.png)
+
 
 ---
 
