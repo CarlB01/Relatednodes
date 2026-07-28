@@ -1,17 +1,16 @@
 # myBrain for Obsidian
 
 [![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-%23483699.svg?logo=obsidian&logoColor=white)](https://obsidian.md)
-[![GitHub Release](https://img.shields.io/github/v/release/CarlB01/myBrain)](https://github.com/CarlB01/myBrain/releases)
+[![Release](https://img.shields.io/github/v/release/CarlB01/myBrain)](https://github.com/CarlB01/myBrain/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/CarlB01/myBrain/blob/master/LICENSE)
 [![Downloads](https://img.shields.io/github/downloads/CarlB01/myBrain/total)](https://github.com/CarlB01/myBrain/releases)
 [![Stars](https://img.shields.io/github/stars/CarlB01/myBrain)](https://github.com/CarlB01/myBrain/stargazers)
-[![Last Commit](https://img.shields.io/github/last-commit/CarlB01/myBrain)](https://github.com/CarlB01/myBrain/commits/master)
 
 > "Structure is liberation. Your notes belong to you, and your graph should think the way you do."
 
-**myBrain** is a high-performance, strictly native semantic network graph view for Obsidian, engineered for maximum speed, structural predictive clarity, and absolute local data ownership. 
+**myBrain** is a high-performance, strictly native semantic network graph for Obsidian.
 
-Built 100% from scratch utilizing exclusively Obsidian's internal native API, **myBrain** delivers immediate, flicker-free rendering loops over large-scale vaults exceeding 20,000 notes—all while keeping your markdown files completely offline, local, and private.
+It organizes your notes into a clean and predictable layout with **Parents · Friends · Center · Children · Siblings** — built for speed, clarity and large vaults.
 
 ![myBrain Interface Showcase](images/mybraindemo.gif)
 
