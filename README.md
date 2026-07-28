@@ -7,21 +7,6 @@
 [![Stars](https://img.shields.io/github/stars/CarlB01/myBrain)](https://github.com/CarlB01/myBrain/stargazers)
 [![Last Commit](https://img.shields.io/github/last-commit/CarlB01/myBrain)](https://github.com/CarlB01/myBrain/commits/master)
 
-
-
-```text
-				   [ PARENTS ]
-       					│
-  [ FRIENDS ]  ◄►  [ CENTER ]  ◄►  [ SIBLINGS ]
-       					│
-				   [ CHILDREN ]
-```
-# myBrain for Obsidian
-
-[![Obsidian Plugin](https://shields.io)](https://obsidian.md)
-[![GitHub Release](https://shields.io)](https://github.com)
-[![License: MIT](https://shields.io)](https://github.com)
-
 > "Structure is liberation. Your notes belong to you, and your graph should think the way you do."
 
 **myBrain** is a high-performance, strictly native semantic network graph view for Obsidian, engineered for maximum speed, structural predictive clarity, and absolute local data ownership. 
@@ -51,18 +36,14 @@ All node partitions, column expansions, and quadrant assignments are managed **1
 ## 🎨 Conceptual Layout Matrix
 
 ```text
-              ▲
-              │
-         [ PARENTS ]      ◄── Upper Area: Sourced from properties/tags
-              ▲
-              │
- [ FRIENDS ] ◄► [ CENTER NOTE ] ◄── Horizontal flank peer connections
-              │
-              ▼
-        [ CHILDREN ]     ◄── Lower Area: Target kids & undefined core links
-              │
-              ▼
-        [ SIBLINGS ]     ◄── Right Area: Metadata-verified & bodytext siblings
+               [ PARENTS ]
+                    │  \
+                    │   - - - ┐
+                    ▼         ▼
+  [ FRIENDS ] ◄► [ CENTER ]  [ SIBLINGS ]
+                    │
+                    ▼
+               [ CHILDREN ]
 ```
 
 ### Architectural Mapping Matrix
@@ -112,7 +93,3 @@ This plugin would not exist without the immense inspiration, code legacy studies
 
 *Developed with passion by a healthcare worker who loves graphs and believes semantic structure should belong to everyone. If you enjoy this work, consider starring the repository!*
 
-
----
-
-*Developed with passion by a healthcare worker who loves graphs and believes semantic structure should belong to everyone. If you enjoy this work, consider starring the repository!*
