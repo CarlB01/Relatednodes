@@ -12,7 +12,13 @@
 
 It organizes your notes into a clean and predictable layout with **Parents · Friends · Center · Children · Siblings** — built for speed, clarity and large vaults.
 
+**Typical display**
+
 <img src="images/mybrain2.gif" alt="myBrain typical display" style="max-width: 100%; width: 500px; height: auto; border-radius: 8px;">
+
+**In a crowded environment**
+
+<img src="images/mybraindemo.gif" alt="myBrain denser example" style="max-width: 100%; width: 500px; height: auto; border-radius: 8px;">
 
 ---
 
@@ -70,7 +76,6 @@ All node partitions, column expansions, and quadrant assignments are managed **1
                     ▼
                [ CHILDREN ]
 ```
-
 ### Architectural Mapping Matrix
 
 | Quadrant Area | Target Content Routing | Sourcing Logic |
@@ -81,33 +86,22 @@ All node partitions, column expansions, and quadrant assignments are managed **1
 | **`[ CHILDREN ]`** *(Lower)* | Downstream target children and unmapped core links. | Sourced from child fields and raw bodytext tokens. |
 | **`[ SIBLINGS ]`** *(Right)* | Peer cluster nodes sharing a mutual parent anchor. | Tier 1: Verified frontmatter. Tier 2: Bodytext siblings. |
 
+### How undefined nodes are handled
+- Links from the center note that are not explicitly defined as children are treated as **undefined** and automatically gathered at the **bottom of the lower area**.
+- In the **Siblings** group, undefined siblings are sorted **last**.
 
-### Example with denser data
-The same layout also works well with larger, messier real-world vaults:
-
-<img src="images/mybraindemo.gif" 
-     alt="myBrain denser example" 
-     style="max-width: 100%; height: auto; border-radius: 8px;">
+### Collapse groups
+When a quadrant contains many nodes of the same type, they can optionally be **collapsed** with a **+/- button** to keep the view clean and readable.
 
 ---
 
-## How undefined nodes are handled
-
-Links from the center note that are not explicitly defined as children are treated as undefined and automatically gathered at the bottom of the lower area.
-In the Siblings group, undefined siblings are sorted last.
-
-### Collapse groups
-When a quadrant contains many nodes of the same type, they can optionally be collapsed with a +/- button to keep the view clean and readable.
-
-
-
 ## 📰 The Backstory & Legacy
 
-For decades, the semantic power of mapping information into strict **Parents, Children, Friends, and Siblings** relationships belonged to closed, proprietary database silos. As a healthcare professional navigating intensive daily workflows, I searched for alternative architectures that combined this specific cognitive layout with local, secure data ownership. 
+For decades, the semantic power of mapping information into strict **Parents, Children, Friends, and Siblings** relationships belonged to closed, proprietary database silos. As a healthcare professional navigating intensive daily workflows, I searched for alternative architectures that combined this specific cognitive layout with local, secure data ownership.
 
-When Licat and Silver launched Obsidian, it felt like home. When Zsolt introduced *ExcaliBrain*, it was a revelation. I even had the privilege of collaborating briefly with Zsolt to help adapt its behavior toward mobile touchscreens and sidebar layouts. 
+When Licat and Silver launched Obsidian, it felt like home. When Zsolt introduced *ExcaliBrain*, it was a revelation. I even had the privilege of collaborating briefly with Zsolt to help adapt its behavior toward mobile touchscreens and sidebar layouts.
 
-However, as the years passed, it became clear that a graph framework bolted onto a heavy vector drawing canvas (*Excalidraw*) introduced rigid limitations. It restricted downstream interface interactions like native contextual popup menus, localized styling, drag-and-drop mechanics, or integration with decrypting tools like *Meld Encrypt*. 
+However, as the years passed, it became clear that a graph framework bolted onto a heavy vector drawing canvas (*Excalidraw*) introduced rigid limitations. It restricted downstream interface interactions like native contextual popup menus, localized styling, drag-and-drop mechanics, or integration with decrypting tools like *Meld Encrypt*.
 
 When Zsolt hinted at gatherings that it was time for a native implementation to take over, I accepted the challenge. I went back to the drawing board—mapping out how nodes could dynamically project multi-directional network anchors using links and backlinks. If you are an *ExcaliBrain* user, your files are **already 100% compatible** with **myBrain**. Your years of structured data will render beautifully on day one.
 
@@ -118,6 +112,7 @@ When Zsolt hinted at gatherings that it was time for a native implementation to 
 ## 🔮 Roadmap & Future Horizons
 
 This is only the baseline foundation of a completely native semantic framework. Planned milestones include:
+
 - [ ] Interactive context popup menus to add parents/children on the fly.
 - [ ] Multi-generation expansion toggles to view grandparents/grandchildren rows.
 - [ ] Inline node image decoding when targeted hyperlink references represent image assets.
@@ -128,6 +123,7 @@ This is only the baseline foundation of a completely native semantic framework. 
 ## 🤝 Acknowledgments
 
 This plugin would not exist without the immense inspiration, code legacy studies, and cognitive frameworks pioneered by:
+
 * **Harlan and the creators of TheBrain** for proving that structured association is a beautiful way to organize human knowledge.
 * **Zsolt Viczián** for creating *ExcaliBrain*, for the short and motivating period of collaboration, and for inspiring the native renaissance of this structure.
 * **Licat and Silver** for giving the world Obsidian, an extensible, local-first ecosystem where we can build anything.
@@ -135,4 +131,3 @@ This plugin would not exist without the immense inspiration, code legacy studies
 ---
 
 *Developed with passion by a healthcare worker who loves graphs and believes semantic structure should belong to everyone. If you enjoy this work, consider starring the repository!*
-
