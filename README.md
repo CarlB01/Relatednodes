@@ -12,6 +12,9 @@
 
 It organizes your notes into a clean and predictable layout with **Parents · Friends · Center · Children · Siblings** — built for speed, clarity and large vaults.
 
+Typical display
+
+<img src="images/mybrain2.gif" alt="myBrain Interface Showcase" width="400" style="max-width: 100%; height: auto; border-radius: 8px;">
 
 
 In a crowded environment 
