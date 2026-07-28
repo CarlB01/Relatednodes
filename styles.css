@@ -223,7 +223,6 @@
   box-sizing: border-box;
 
   /* Strict fragmentation shields forbidding column breakage mid-cell */
-  break-inside: avoid-column !important;
   break-inside: avoid !important;
   page-break-inside: avoid !important; 
 }
@@ -315,6 +314,12 @@
   stroke-width: var(--rv-line-width) !important;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* Safely unmounts hidden path connections from rendering cycles when out of bounds */
+.rv-container .is-hidden,
+svg.is-hidden {
+  display: none !important; /* Enforces absolute hidden state natively in CSS [dan] */
 }
 
 /* ==========================================================================
@@ -484,6 +489,7 @@
    ========================================================================== */
 
 .rv-info-hover {
+  position: absolute !important; 
   z-index: var(--layer-menu) !important;
   pointer-events: none !important;
   background-color: var(--background-secondary-alt) !important;
@@ -493,9 +499,34 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
 }
 
+/* ==========================================================================
+   COMPLIANT MEASURING SHIELD (Moved from JavaScript visibility triggers)
+   ========================================================================== */
+
+/* Keeps the element dimensionally active for JS offsets while masking visibility [dan] */
+.rv-info-hover.is-measuring {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
 .rv-info-hover .popup-title {
   font-weight: 500;
   color: var(--text-muted);
+}
+
+/* ==========================================================================
+   15. AUTOMATIC TEXTAREA RESIZER (Moved from inline JavaScript style commands)
+   ========================================================================== */
+
+/* Styles myBrain's auto-expanding text areas without conflicting with other plugins */
+textarea.rv-setting-textarea {
+  width: 100% !important;
+  min-width: 150px !important;
+  min-height: 50px !important;
+  max-height: 350px !important;
+  resize: none !important;
+  overflow-y: auto !important;
+  field-sizing: content !important;
 }
 
 /* ==========================================================================

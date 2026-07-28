@@ -6,11 +6,11 @@ export class SettingsManager {
   // ==========================================================================
   // Core Configuration State Fields (Acts as both Types and Runtime Defaults)
   // ==========================================================================
-  public parentProperties: string = 'parents, nationality';
-  public parentTags: string = '#thing, #👥group';
-  public childProperties: string = 'children, members';
+  public parentProperties: string = 'up, parents, nationality';
+  public parentTags: string = '#boss, #👥group';
+  public childProperties: string = 'down, children, members';
   public childTags: string = '#text, #coffee';
-  public friendProperties: string = 'partner';
+  public friendProperties: string = 'partner, friend';
   public friendTags: string = '';
   public ignoreTags: string = '#excalidraw';
   public ignoreNameFragments: string = '@';

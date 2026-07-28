@@ -1,4 +1,4 @@
-import { CachedMetadata, parseFrontMatterAliases, parseFrontMatterStringArray, parseFrontMatterTags, TFile } from "obsidian";
+import { CachedMetadata, parseFrontMatterAliases, parseFrontMatterTags, TFile } from "obsidian";
 import { Gate } from "./Gate";
 import { StringUtils } from "./StringUtils";
 import { Anchor } from "./Anchor";
@@ -63,7 +63,7 @@ export class Node {
     aliases: string[], 
     tags: string[], 
     isInitiallyIgnored: boolean,
-    frontmatter: any | null
+    frontmatter: import("obsidian").FrontMatterCache | null
   ) {
     this.path = path;
     this.basename = basename;

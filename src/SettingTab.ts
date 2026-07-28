@@ -1,75 +1,7 @@
 import MyBrainPlugin from "./main.js";
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, PluginSettingTab, SettingDefinition, SettingDefinitionItem } from "obsidian";
 import { RV } from "./constants.js";
 import { MyBrainView } from "./view.js";
-
-type settingsParamsTypes = "text" | "textArea";
-
-interface settingsParams {
-  name: string;
-  desc: string; 
-  type: settingsParamsTypes;
-  placeHolder: string;
-}
-
-// ==========================================================================
-// Centralized Settings Parameter Constants
-// ==========================================================================
-
-const SETTING_PARAMS_GENERAL: settingsParams = {
-  name: "",
-  desc: "",
-  type: "textArea",
-  placeHolder: "Comma separated list"
-};
-
-const SETTING_PARENT_PROPS: settingsParams = {
-  ...SETTING_PARAMS_GENERAL,
-  name: "Parents Properties",
-  desc: "Links found inside these frontmatter properties will be treated as parents.",
-};
-
-const SETTING_PARENT_TAGS: settingsParams = {
-  ...SETTING_PARAMS_GENERAL,
-  name: "Parents Tags",
-  desc: "Notes containing these #tags will automatically be routed to the upper parent quadrant.",
-};
-
-const SETTING_CHILD_PROPS: settingsParams = {
-  ...SETTING_PARAMS_GENERAL,
-  name: "Children Properties",
-  desc: "Links found inside these frontmatter properties will be treated as children.",
-};
-      
-const SETTING_CHILD_TAGS: settingsParams = {
-  ...SETTING_PARAMS_GENERAL,
-  name: "Children Tags",
-  desc: "Neighbour notes containing these #tags will be routed to the lower child quadrant.",
-};
-
-const SETTING_FRIEND_PROPS: settingsParams = {
-  ...SETTING_PARAMS_GENERAL,
-  name: "Friend Properties",
-  desc: "Links found inside these frontmatter properties will be treated as lateral friends.",
-};
-      
-const SETTING_FRIEND_TAGS: settingsParams = {
-  ...SETTING_PARAMS_GENERAL,
-  name: "Friend Tags",
-  desc: "Neighbour notes containing these #tags will be routed to the left flanke quadrant.",
-};
-
-const SETTING_IGNORE_TAGS: settingsParams = {
-  ...SETTING_PARAMS_GENERAL,
-  name: "Ignore Following Tags",
-  desc: "Notes matching these specific #tags will be completely suppressed from the graph network.",
-};
-
-const SETTING_IGNOREFRAGMENTS_TAGS: settingsParams = {
-  ...SETTING_PARAMS_GENERAL,
-  name: "Ignore Filename Fragments",
-  desc: "Notes matching these string file fragments will be completely suppressed from the graph network.",
-};
 
 export class SettingTab extends PluginSettingTab {
   plugin: MyBrainPlugin;
@@ -80,150 +12,203 @@ export class SettingTab extends PluginSettingTab {
   }
 
   /**
+   * Declares the full structural configuration scheme for Obsidian's global database indexing framework.
+   * Natively registers each parameter with the application core to ensure reliable settings search indexing.
+   */
+
+
+  override getSettingDefinitions(): SettingDefinitionItem[] {
+    return [
+      {
+        type: "group",
+        heading: "Semantic hierarchies & metadata links",
+        items: [
+          {
+            name: "Parents properties",
+            desc: "Links found inside these frontmatter properties will be treated as parents.",
+            control: {
+              type: "textarea",
+              key: "parentProperties",
+              placeholder: "Comma separated list",
+              rows: 5,
+            },
+          },
+          {
+            name: "Parents tags",
+            desc: "Notes containing these #tags will automatically be routed to the upper parent quadrant.",
+            control: {
+              type: "textarea",
+              key: "parentTags",
+              placeholder: "Comma separated list",
+              rows: 2,
+            },
+          },
+          {
+            name: "Children properties",
+            desc: "Links found inside these frontmatter properties will be treated as children.",
+            control: {
+              type: "textarea",
+              key: "childProperties",
+              placeholder: "Comma separated list",
+              rows: 5,
+            },
+          },
+          {
+            name: "Children tags",
+            desc: "Notes containing these #tags will be routed to the lower child quadrant.",
+            control: {
+              type: "textarea",
+              key: "childTags",
+              placeholder: "Comma separated list",
+              rows: 2,
+            },
+          },
+          {
+            name: "Friends properties",
+            desc: "Links found inside these frontmatter properties will be treated as lateral friends.",
+            control: {
+              type: "textarea",
+              key: "friendProperties",
+              placeholder: "Comma separated list",
+              rows: 3,
+            },
+          },
+          {
+            name: "Friends tags",
+            desc: "Notes containing these #tags will be routed to the left quadrant.",
+            control: {
+              type: "textarea",
+              key: "friendTags",
+              placeholder: "Comma separated list",
+              rows: 2
+            },
+          },
+        ],
+      },
+      {
+        type: "group",
+        heading: "Blacklist & exclusion filters",
+        items: [
+          {
+            name: "Ignore following tags",
+            desc: "Notes matching these specific #tags will be completely suppressed from the graph network.",
+            control: {
+              type: "text",
+              key: "ignoreTags",
+              placeholder: "Comma separated list",
+            },
+          },
+          {
+            name: "Ignore filename fragments",
+            desc: "Notes matching these string file fragments will be completely suppressed from the graph network.",
+            control: {
+              type: "text",
+              key: "ignoreNameFragments",
+              placeholder: "Comma separated list",
+            },
+          },
+        ],
+      },
+      {
+        type: "group",
+        heading: "Display behavior",
+        items: [
+          {
+            name: "Display primary alias as name",
+            desc: "Toggle this option to render note aliases instead of raw filenames when present.",
+            control: {
+              type: "toggle",
+              key: "displayAliases",
+            },
+          },
+          {
+            name: "Collapse large node groups as default",
+            desc: "Automatically toggle larger grouped clusters into compact expanded button layers.",
+            control: {
+              type: "toggle",
+              key: "groupsCollapsed",
+            },
+          },
+        ],
+      },
+    ];
+  }
+
+  /**
    * Renders the settings tab user interface view components.
+   * Invokes the native core template pipeline and maps customized presentation CSS class names.
    */
   display(): void {
     const { containerEl } = this;
     containerEl.empty();
 
-    // ------------------------------------------------------------------------
-    // SECTION 1: SEMANTIC HIERARCHIES
-    // ------------------------------------------------------------------------
-    new Setting(containerEl)
-      .setName("Semantic Hierarchies & Metadata Links")
-      .setHeading();
+    // Executes the native structural settings layout renderer engine automatically
+    super.display();
 
-    this.createAutoResizeTextSetting(
-      containerEl,
-      SETTING_PARENT_PROPS,
-      this.plugin.settings!.parentProperties ?? "",
-      async (value) => {
-        this.plugin.settings!.parentProperties = value;
-        await this.plugin.saveSettings();
-      }
-    );
-
-    this.createAutoResizeTextSetting(
-      containerEl,
-      SETTING_PARENT_TAGS,
-      this.plugin.settings!.parentTags ?? "",
-      async (value) => {
-        this.plugin.settings!.parentTags = value;
-        await this.plugin.saveSettings();
-      }
-    );
-
-    this.createAutoResizeTextSetting(
-      containerEl,
-      SETTING_CHILD_PROPS,
-      this.plugin.settings!.childProperties ?? "",
-      async (value) => {
-        this.plugin.settings!.childProperties = value;
-        await this.plugin.saveSettings();
-      }
-    );
-
-    this.createAutoResizeTextSetting(
-      containerEl,
-      SETTING_CHILD_TAGS,
-      this.plugin.settings!.childTags ?? "",
-      async (value) => {
-        this.plugin.settings!.childTags = value;
-        await this.plugin.saveSettings();
-      }
-    );
-
-    this.createAutoResizeTextSetting(
-      containerEl,
-      SETTING_FRIEND_PROPS,
-      this.plugin.settings!.friendProperties ?? "",
-      async (value) => {
-        this.plugin.settings!.friendProperties = value;
-        await this.plugin.saveSettings();
-      }
-    );
-
-    this.createAutoResizeTextSetting(
-      containerEl,
-      SETTING_FRIEND_TAGS,
-      this.plugin.settings!.friendTags ?? "",
-      async (value) => {
-        this.plugin.settings!.friendTags = value;
-        await this.plugin.saveSettings();
-      }
-    );
-
-    // ------------------------------------------------------------------------
-    // SECTION 2: EXCLUSION FILTERS
-    // ------------------------------------------------------------------------
-    new Setting(containerEl)
-      .setName("Blacklist & Exclusion Filters")
-      .setHeading();
-
-    this.createAutoResizeTextSetting(
-      containerEl,
-      SETTING_IGNORE_TAGS,
-      this.plugin.settings!.ignoreTags ?? "",
-      async (value) => {
-        this.plugin.settings!.ignoreTags = value;
-        await this.plugin.saveSettings();
-      }
-    );
-
-    this.createAutoResizeTextSetting(
-      containerEl,
-      SETTING_IGNOREFRAGMENTS_TAGS,
-      this.plugin.settings!.ignoreNameFragments ?? "",
-      async (value) => {
-        this.plugin.settings!.ignoreNameFragments = value;
-        await this.plugin.saveSettings();
-      }
-    );
-
-    // ------------------------------------------------------------------------
-    // SECTION 3: DISPLAY BEHAVIOR
-    // ------------------------------------------------------------------------
-    new Setting(containerEl)
-			.setName('Display Primary Alias as Name')
-			.setDesc('Toggle this option to render note aliases instead of raw filenames when present.')
-			.addToggle(toggle => toggle
-					.setValue(this.plugin.settings.displayAliases)
-					.onChange(async (value) => {
-							this.plugin.settings.displayAliases = value;
-							await this.plugin.saveSettings();
-					})
-			);
-
-		new Setting(containerEl)
-			.setName('Collapse Large Node Groups as Default')
-			.setDesc('Automatically toggle larger grouped clusters into compact expanded button layers.')
-			.addToggle(toggle => toggle
-					.setValue(this.plugin.settings.groupsCollapsed)
-					.onChange(async (value) => {
-							this.plugin.settings.groupsCollapsed = value;
-							await this.plugin.saveSettings();
-					})
-    	);
+    // Enforce optimized elastic textarea layouts safely via style sheet class hooks
+    containerEl.querySelectorAll("textarea").forEach((el) => {
+      el.addClass("rv-setting-textarea");
+    });
   }
 
-  private createAutoResizeTextSetting(
-    containerEl: HTMLElement,
-    useParams: settingsParams,
-    currentValue: string,
-    onChange: (value: string) => void | Promise<void>
-  ): Setting {
-    const setting = new Setting(containerEl)
-      .setName(useParams.name)
-      .setDesc(useParams.desc || "");
+  /**
+   * Triggers automatically when the user exits the settings control tab pane panel.
+   * Normalizes list inputs alphabetically, wipes the stale memory graphs cache, and triggers live view redraws.
+   */
+  hide(): void {
+    const settings = this.plugin.settings;
 
-    this.addAutoResizeTextArea(setting, this.sortItems(currentValue), onChange);
-    return setting;
+    // Alphabetically compile and wash raw configuration sequences prior to disk writes
+    settings.parentProperties = this.sortItems(settings.parentProperties);
+    settings.parentTags = this.sortItems(settings.parentTags);
+    settings.childProperties = this.sortItems(settings.childProperties);
+    settings.childTags = this.sortItems(settings.childTags);
+    settings.friendProperties = this.sortItems(settings.friendProperties);
+    settings.friendTags = this.sortItems(settings.friendTags);
+    settings.ignoreTags = this.sortItems(settings.ignoreTags);
+    settings.ignoreNameFragments = this.sortItems(settings.ignoreNameFragments);
+
+    // Commit the sorted layout mutations down to the device configuration database layers
+    this.plugin.saveSettings().then(async () => {
+      
+      // Clear the network cache completely since filter structures mutated
+      if (this.plugin.networkGraph && this.plugin.networkGraph.noteCache) {
+        this.plugin.networkGraph.noteCache.clear();
+      }
+
+      // Hot-reloads all active leaves using our official application views identifiers
+      this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(async (leaf) => {
+        if (leaf.view instanceof MyBrainView) {
+          const myView = leaf.view;
+          const activeFile = this.app.workspace.getActiveFile();
+          
+          if (activeFile) {
+            // Temporarily lift execution slots to bypass the initial onFileChange shield cleanly
+            const historicalGateState = myView.isFullyStarted;
+            myView.isFullyStarted = true; 
+
+            await myView.onFileChange(activeFile);
+            
+            // Restore the authentic runtime gate perimeter safely
+            myView.isFullyStarted = historicalGateState || true;
+
+            if (myView.areaManager) {
+              myView.areaManager.renderGraph(); // Redraws the view with your brand new filters instantly!
+            }
+          }
+        }
+      });
+    });
+
+    // Execute the super boundary cleanup synchronously to satisfy the strict signature return criteria
+    super.hide();
   }
 
   /**
    * Sorts item tokens alphabetically using localized string comparison logic.
    */
   private sortItems(items: string): string {
+    if (!items) return "";
     return items
       .split(',')
       .map(f => f.trim())
@@ -236,87 +221,4 @@ export class SettingTab extends PluginSettingTab {
         })
       ).join(', ');
   }
-
-  /**
-   * Generates a stylized, hardware-responsive auto-growing TextArea node component.
-   */
-  private addAutoResizeTextArea(
-    setting: Setting,
-    value: string,
-    onChange: (value: string) => void | Promise<void>
-  ): void {
-    setting.addTextArea((textArea) => {
-      textArea
-          .setValue(value)
-          .setPlaceholder(SETTING_PARAMS_GENERAL.placeHolder)
-          .onChange(async (newValue) => {
-              await onChange(newValue);
-          });
-
-      const el = textArea.inputEl;
-
-      el.style.width = "100%";
-      el.style.minWidth = "150px";
-      el.style.minHeight = "50px";
-      el.style.maxHeight = "350px";        
-      el.style.resize = "none";
-      el.style.overflowY = "auto";
-      // @ts-ignore fieldSizing is not yet in global DOM types
-      el.style.fieldSizing = "content";    
-
-      const autoResize = () => {
-        el.style.height = "auto";
-        el.style.height = `${el.scrollHeight}px`;
-      };
-
-      this.plugin.registerDomEvent(el, "input", autoResize);
-      this.plugin.registerDomEvent(el, "focus", autoResize);
-
-      setTimeout(autoResize, 10);
-    });
-  }
-
-  /**
-   * Triggers automatically when the user exits the settings control tab pane panel.
-   * Forces a complete database cache wipe and pushes a hot-reloading update pass onto open views [dan].
-   */
-  async hide() {
-    // 1. Core runtime storage commit and filters compilation pass
-    await this.plugin.saveSettings();
-
-    // ==========================================================================
-    // HOT-RELOAD CACHE PURGE (The Settings Freeze Cure):
-    // Since settings definitions mutated, the entire historical memory cache is stale.
-    // We wipe the noteCache completely to force a comprehensive re-index pass [dan]!
-    // ==========================================================================
-    if (this.plugin.networkGraph && this.plugin.networkGraph.noteCache) {
-      this.plugin.networkGraph.noteCache.clear(); // Clears all 20,000 items instantly from RAM [dan]
-    }
-
-    // Hot-reloads all active leaves using our official application views identifiers
-    this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(async (leaf) => {
-      if (leaf.view instanceof MyBrainView) {
-        const myView = leaf.view;
-        const activeFile = this.app.workspace.getActiveFile();
-        
-        if (activeFile) {
-          // EXPRESS BYPASS: Temporarily flip execution slots to bypass the initial onFileChange shield [dan]
-          const historicalGateState = myView.isFullyStarted;
-          myView.isFullyStarted = true; 
-
-          await myView.onFileChange(activeFile);
-          
-          // Restore the authentic runtime gate perimeter safely
-          myView.isFullyStarted = historicalGateState || true;
-
-          if (myView.areaManager) {
-            myView.areaManager.renderGraph(); // Redraws the view with your brand new filters instantly [dan]!
-          }
-        }
-      }
-    });
-
-    super.hide();
-  }
-
 }

@@ -49,7 +49,7 @@ export class AreaManager {
     }
 
     // Schedule a new frame synchronized with the browser rendering engine
-    this.animationFrameId = requestAnimationFrame(() => {
+    this.animationFrameId = window.requestAnimationFrame(() => {
       // Enforces a micro-timeout ensuring CSS Grid layouts have fully settled 
       // on their concrete pixels before measuring geometry bounds
       setTimeout(() => {
@@ -241,7 +241,7 @@ export class AreaManager {
     }
 
     // Drops the computational shield precisely on the next browser paint cycle
-    requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => {
       mainContainer.classList.remove('is-calculating');
       // Vi kaller fortsatt requestRedraw her som en ekstra forsikring for mobile safeguards, 
       // men siden strekene allerede ER tegnet, vil brukeren oppleve 0 nanosekunder forsinkelse! [dan]

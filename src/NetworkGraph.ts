@@ -57,8 +57,10 @@ export class NetworkGraph {
   }
 
   /**
-   * Orchestrates the primary asynchronous calculation cycle for active vault nodes.
+   * Orchestrates the primary asynchronous calculation cycle for active vault notes.
    * Completely debounced to handle intensive tab-switching or cold-start indexing overhead.
+   * COMPLIANT REFACTOR: Silences floating promise warnings via explicit void operators [dan].
+   * @param activeFile The targeted TFile record currently being opened or focused.
    */
   async update(activeFile: TFile | null) {
     if (!activeFile) return;
@@ -71,20 +73,26 @@ export class NetworkGraph {
     // 2. COLDSTART GUARD: Holds off pipeline processing until Obsidian Core has completed full initialization 
     const isCacheReady = (this.app.metadataCache as typeof this.app.metadataCache & { initialized?: boolean }).initialized;
     if (!isCacheReady) {
-      setTimeout(() => this.update(activeFile), 300);
+      // ==========================================================================
+      // COMPLIANT VOID SIGNALLING: Prefixes the call with the native 'void' operator.
+      // This informs the compiler that the promise return tracking is bypassed by design [dan].
+      // ==========================================================================
+      setTimeout(() => void this.update(activeFile), 300);
       return;
     }
   
     // 3. DEBOUNCE THROTTLING: Clear previous updates to neutralize click stutter or rapid navigation
     if (this.updateDebounceTimer) {
-      clearTimeout(this.updateDebounceTimer);
+      window.clearTimeout(this.updateDebounceTimer);
     }
 
     this.updateDebounceTimer = setTimeout(async () => {
       // Validates that metadata indexes are accessible before launching the core vaskesyklus
       const centerCache = this.app.metadataCache.getFileCache(activeFile);
       if (!this.app.metadataCache.resolvedLinks || !centerCache) {
-        this.update(activeFile); 
+        // SAFE TIME CUSHION: Replaces the aggressive instant recursive loop with a stable 150ms timeout.
+        // Silences the floating promise check cleanly via the void syntax wrapper [dan]!
+        setTimeout(() => void this.update(activeFile), 150); 
         return;
       }
 
@@ -149,7 +157,7 @@ export class NetworkGraph {
       await this.determineParentConnectionsAndSiblings(this.centerNote); 
       this.determineCrossNetworkConnections(this.centerNote);
 
-      // 8. GARBAGE COLLECTION: Contstantly sweeps dead or unrendered instances from RAM
+      // 8. GARBAGE COLLECTION: Constantly sweeps dead or unrendered instances from RAM
       for (const [path, note] of this.noteCache.entries()) {
         if (!note.isUsed) this.noteCache.delete(path); 
       }
@@ -161,6 +169,7 @@ export class NetworkGraph {
       this.app.workspace.trigger("graph:data-ready", activeFile.path);
     }, 50); // 50ms ensures absolute sync with Obsidian's UI thread loops
   }
+
 
 
   /**
@@ -546,9 +555,13 @@ export class NetworkGraph {
     }
 
     const targetName = otherNote.basename;
-    const finnesIFm = (centerNote.rawFrontmatter && Object.values(centerNote.rawFrontmatter).toString().includes(targetName)) ||
-                      (otherNote.rawFrontmatter && Object.values(otherNote.rawFrontmatter).toString().includes(centerNote.basename));
+    
+    const centerFm = centerNote.rawFrontmatter;
+    const otherFm = otherNote.rawFrontmatter;
 
+    // Checks properties securely using native JavaScript array inclusion filters
+    const finnesIFm = (centerFm && Object.keys(centerFm).some(key => String(centerFm[key]).includes(targetName))) ||
+                      (otherFm && Object.keys(otherFm).some(key => String(otherFm[key]).includes(centerNote.basename)));
     if (finnesIFm) {
       otherNote.discoverySource = "frontmatter-udefinert";
     } else {
@@ -689,6 +702,7 @@ export class NetworkGraph {
   /**
    * Intercepts Obsidian file renaming events to synchronize cached system indexes live.
    * Employs strict NFC Unicode normalization keys to secure anchor integrity across mutations.
+   * COMPLIANT REFACTOR: Silences floating promise warnings via explicit void operators [dan].
    * @param file The targeted TFile record currently being renamed or relocated.
    * @param oldPath The absolute historical system path hash originating before the modification.
    */
@@ -726,10 +740,15 @@ export class NetworkGraph {
     if (this.centerNote) {
       const currentCenterFile = this.app.vault.getFileByPath(this.centerNote.path);
       if (currentCenterFile) {
-        this.update(currentCenterFile); 
+        // ==========================================================================
+        // COMPLIANT VOID SIGNALLING: Prefixes the call with the native 'void' operator.
+        // This informs the compiler that the promise return tracking is bypassed by design [dan].
+        // ==========================================================================
+        void this.update(currentCenterFile); 
       }
     }
   }
+
 
   /**
    * Intercepts file resolution events triggered when a user writes inside an active note editor pane.

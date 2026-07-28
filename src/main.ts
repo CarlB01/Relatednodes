@@ -155,7 +155,7 @@ export default class MyBrainPlugin extends Plugin {
             // STANDARD RUNTIME COOLDOWN (For background notes changes)
             if (dataWasUpdated) {
               if (myView.resolveDebounceTimer) {
-                clearTimeout(myView.resolveDebounceTimer);
+                window.clearTimeout(myView.resolveDebounceTimer);
               }
               
               myView.resolveDebounceTimer = setTimeout(() => {

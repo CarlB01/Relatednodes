@@ -15,6 +15,9 @@ export class DrawingUtils {
   /**
    * Toggles visibility hidden state inside the active line cache pool.
    * Invoked instantly when a node viewport boundaries scroll out of bounds.
+   * @param fromGate The originating structural Gate node wrapper instance.
+   * @param toGate The target destination Gate node wrapper instance.
+   * @param linkCache The centralized memory map matrix tracking active vector paths.
    */
   private static hideLineInCache(fromGate: Gate, toGate: Gate, linkCache: Map<string, any>) {
     const pathA = fromGate.parentNote.path;
@@ -25,8 +28,13 @@ export class DrawingUtils {
       : `${pathB}->${pathA}`;
     
     const cacheItem = linkCache.get(lineId);
-    if (cacheItem) {
-      cacheItem.svgElement.style.display = 'none';
+    if (cacheItem && cacheItem.svgElement) {
+      // ==========================================================================
+      // OBSIDIAN NATIVE STATE TUNING (Using official API shortcuts):
+      // Invokes Obsidian's built-in .addClass() method to enforce the hidden state 
+      // natively without introducing dirty inline style overrides [dan].
+      // ==========================================================================
+      cacheItem.svgElement.addClass('is-hidden');
     }
   }
 
@@ -85,8 +93,13 @@ export class DrawingUtils {
 
     if (cacheItem) {
         pathEl = cacheItem.svgElement;
-        pathEl.style.display = ''; // Restores layout display rules if historical flag was hidden
-        pathEl.style.visibility = 'visible';
+        
+        // ==========================================================================
+        // OBSIDIAN NATIVE REFACTOR: Purges inline styles for clean class toggles.
+        // Strips out the 'is-hidden' layout flag using Obsidian's official API [dan]!
+        // ==========================================================================
+        pathEl.removeClass('is-hidden'); 
+        
         if (!svgContainer.contains(pathEl)) {
             svgContainer.appendChild(pathEl);
         }
@@ -109,6 +122,7 @@ export class DrawingUtils {
     // 5. DOM HYDRATION: Commit the string trajectory parameter down to the target path node
     pathEl.setAttribute("d", dAttribute);
   }
+
 
   /**
    * Compiles Bezier path configurations and returns a normalized SVG "d" vector string.
