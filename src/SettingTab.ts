@@ -1,7 +1,7 @@
-import RelatednotesPlugin from "./main.js";
+import MyBrainPlugin from "./main.js";
 import { App, PluginSettingTab, Setting } from "obsidian";
 import { RV } from "./constants.js";
-import { RelatednotesView } from "./view.js";
+import { MyBrainView } from "./view.js";
 
 type settingsParamsTypes = "text" | "textArea";
 
@@ -72,9 +72,9 @@ const SETTING_IGNOREFRAGMENTS_TAGS: settingsParams = {
 };
 
 export class SettingTab extends PluginSettingTab {
-  plugin: RelatednotesPlugin;
+  plugin: MyBrainPlugin;
 
-  constructor(app: App, plugin: RelatednotesPlugin) {
+  constructor(app: App, plugin: MyBrainPlugin) {
     super(app, plugin);
     this.plugin = plugin;
   }
@@ -284,8 +284,8 @@ export class SettingTab extends PluginSettingTab {
     await this.plugin.saveSettings();
 
     // Hot-reloads all active leaves using our official application views identifiers
-    this.app.workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE).forEach(leaf => {
-      if (leaf.view instanceof RelatednotesView) {
+    this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
+      if (leaf.view instanceof MyBrainView) {
         // Triggers database cache update passes and forces a clean redrawing cycle
         const activeFile = this.app.workspace.getActiveFile();
         if (activeFile) {

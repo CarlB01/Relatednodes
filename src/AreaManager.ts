@@ -4,7 +4,7 @@ import { Platform, Point } from "obsidian";
 import { DrawingUtils } from "./DrawingUtils.js";
 import { Gate } from "./Gate.js";
 import { RV } from "./constants.js";
-import RelatednotesPlugin from "./main.js";
+import MyBrainPlugin from "./main.js";
 
 export class AreaManager {
   containerEl: HTMLElement;
@@ -16,8 +16,8 @@ export class AreaManager {
   upper!: HTMLElement;
   lower!: HTMLElement;
 
-  private related: NetworkGraph;
-  private plugin: RelatednotesPlugin;
+  private graph: NetworkGraph;
+  private plugin: MyBrainPlugin;
 
   // Centralized memory cache for the active SVG path lines
   private linkCache = new Map<string, { svgElement: SVGPathElement; used: boolean }>();
@@ -25,11 +25,11 @@ export class AreaManager {
   private animationFrameId: number | null = null;
 
   constructor(
-    related: NetworkGraph,
+    graph: NetworkGraph,
     parentEl: HTMLElement,
-    plugin: RelatednotesPlugin
+    plugin: MyBrainPlugin
   ) {
-    this.related = related;
+    this.graph = graph;
     this.containerEl = parentEl;
     this.plugin = plugin;
   }
@@ -56,7 +56,7 @@ export class AreaManager {
         this.yieldIfLeftTall();
         this.yieldIfRightTall();
 
-        if (this.related?.centerNote) {
+        if (this.graph?.centerNote) {
           this.drawAllGraphLines(); // Renders the bezier curve network lines accurately
         }
       }, 150); // 150ms allows browser reflow to settle without human-visible lag
@@ -168,10 +168,10 @@ export class AreaManager {
    * Prevents layout-level reflows, column-squeezing, and flickering cycles while element blocks are generated.
    */
   public renderGraph() {
-    const centerNote = this.related.centerNote;
+    const centerNote = this.graph.centerNote;
     if (!centerNote) return;
 
-    const related = this.related;
+    const graph = this.graph;
     const mainContainer = this.containerEl;
     mainContainer.empty();
     
@@ -200,24 +200,24 @@ export class AreaManager {
 
     // 1. UPPER AREA (Verified parent entities)
     const cleanParentsOnly = Array.from(centerNote.relations.parents).filter(n => n.relation === "parent");
-    const sortedParents = related.getSortedNotesForQuadrant(cleanParentsOnly, false);
+    const sortedParents = graph.getSortedNotesForQuadrant(cleanParentsOnly, false);
     this.renderQuadrant(this.upper, [sortedParents], "upper");
 
     // 2. LEFT AREA (Verified lateral friend entities)
     const cleanFriendsOnly = Array.from(centerNote.relations.friends).filter(n => n.relation === "friend");
-    const sortedFriends = related.getSortedNotesForQuadrant(cleanFriendsOnly, false);
+    const sortedFriends = graph.getSortedNotesForQuadrant(cleanFriendsOnly, false);
     this.renderQuadrant(this.left, [sortedFriends], "left");
 
     // 3. LOWER AREA (Tier 1: Explicit target children. Tier 2: Core baseline undefined mappings)
-    const allNotesInCache = Array.from(related.noteCache.values()).filter(n => n.isUsed);
-    const childrenOnly = related.getSortedNotesForQuadrant(allNotesInCache.filter(n => n.relation === "child"), false);
-    const totalUndefinedBucket = related.getSortedNotesForQuadrant(allNotesInCache.filter(n => n.relation === "undefined"), false);
+    const allNotesInCache = Array.from(graph.noteCache.values()).filter(n => n.isUsed);
+    const childrenOnly = graph.getSortedNotesForQuadrant(allNotesInCache.filter(n => n.relation === "child"), false);
+    const totalUndefinedBucket = graph.getSortedNotesForQuadrant(allNotesInCache.filter(n => n.relation === "undefined"), false);
     const lowerCollections = [childrenOnly, totalUndefinedBucket].filter(c => c.length > 0);
     this.renderQuadrant(this.lower, lowerCollections, "lower");
 
     // 4. RIGHT AREA (Tier 1: Metadata-verified siblings. Tier 2: Bodytext contextual siblings)
-    const siblings = related.getSortedNotesForQuadrant(allNotesInCache.filter(n => n.relation === "sibling"), true);
-    const undefinedSiblings = related.getSortedNotesForQuadrant(allNotesInCache.filter(n => n.relation === "undefined-sibling"), true);
+    const siblings = graph.getSortedNotesForQuadrant(allNotesInCache.filter(n => n.relation === "sibling"), true);
+    const undefinedSiblings = graph.getSortedNotesForQuadrant(allNotesInCache.filter(n => n.relation === "undefined-sibling"), true);
     const siblingCollections = [siblings, undefinedSiblings].filter(c => c.length > 0);
     this.renderQuadrant(this.right, siblingCollections, "right");
 
@@ -236,7 +236,7 @@ export class AreaManager {
     // paths to compile inside memory BEFORE the layout becomes visible.
     // When the frame drops the shield, nodes and lines appear simultaneously [dan]!
     // ==========================================================================
-    if (this.related?.centerNote) {
+    if (this.graph?.centerNote) {
       this.drawAllGraphLines(); // Tegner strekene synkront med en gang mens teppet er nede! [dan]
     }
 
@@ -273,7 +273,7 @@ export class AreaManager {
       const colWrapDiv = areaCollectionDiv.createDiv({ cls: RV.COL_WRAPPER });
 
       // Group active nodes inside this specific collection dynamically by frontmatter tags
-      const tagGroupedNotes = this.related.groupByFirstTag(collection);
+      const tagGroupedNotes = this.graph.groupByFirstTag(collection);
 
       tagGroupedNotes.forEach(group => {
         // Collapses column breaks across shared clusters by injecting virtual element wrappers
@@ -326,7 +326,7 @@ export class AreaManager {
    * Leverages localized structural memory caches to execute path tracking in O(1) velocity.
    */
   drawAllGraphLines() {
-    const centerNote = this.related.centerNote;
+    const centerNote = this.graph.centerNote;
     if (!centerNote) return;
     
     const offBy = this.offBy();
@@ -336,7 +336,7 @@ export class AreaManager {
     const canvas = this.backContainerSVG;
 
     // 1. INITIALIZATION: Collect visible canvas nodes and clear active gate states
-    const visibleNotes = Array.from(this.related.noteCache.values())
+    const visibleNotes = Array.from(this.graph.noteCache.values())
       .filter(n => n.isUsed && n.assignedArea !== "ignored");
 
     for (const link of links.values()) {
@@ -410,7 +410,7 @@ export class AreaManager {
    * Encapsulates total metrics regarding suppressed data nodes to enrich metadata discovery.
    */
   private renderInfoBtnForCenterNode() {
-    const centerNote = this.related.centerNote;
+    const centerNote = this.graph.centerNote;
     if (!centerNote) return;
 
     const centerDiv = centerNote.div; 
@@ -421,7 +421,7 @@ export class AreaManager {
       if (gammelBtn) gammelBtn.remove();
 
       // 2. COUNTER: Totals all layout records condemned or flagged as ignored in the active cycle
-      const antallIgnorert = Array.from(this.related.noteCache.values())
+      const antallIgnorert = Array.from(this.graph.noteCache.values())
         .filter(n => n.assignedArea === "ignored" || n.isInitiallyIgnored === true).length;
 
       // 3. CONDITIONAL INJECTION: Activates only if ignored items are detected in memory bounds

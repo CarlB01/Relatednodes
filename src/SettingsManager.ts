@@ -1,5 +1,5 @@
 /**
- * Configuration and Settings State Manager for minBrain Related Notes Network.
+ * Configuration and Settings State Manager for myBrain Graph Notes Network.
  * Handles migration mapping, runtime parsing, and low-latency array hydration.
  */
 export class SettingsManager {

@@ -122,7 +122,7 @@
 }
 
 .rv-area.lower .rv-collection-wrapper {
-  height: clamp(10px, 100%, 65vh) !important;
+  height: clamp(10px, 100%, 55vh) !important;
   max-height: 65vh !important; 
   align-items: center;
   justify-content: flex-start !important;

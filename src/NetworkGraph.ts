@@ -1,5 +1,5 @@
 import { App, BasesEntry, TFile } from "obsidian";
-import RelatednotesPlugin from "./main.js";
+import MyBrainPlugin from "./main.js";
 import { Node, Relation } from "./Node.js";
 import { StringUtils } from "./StringUtils.js";
 import { Anchor } from "./Anchor.js";
@@ -18,7 +18,7 @@ const relationOrder: Record<Relation, number> = {
   "ignored": 7,
 };
 
-export interface RelatedNoteGroup {
+export interface GraphNodeGroup {
   key: string;
   isDefined: boolean;
   entries: BasesEntry[];
@@ -42,13 +42,13 @@ export class NetworkGraph {
   centerNote: Node | null = null;
 
   private app: App; 
-  private plugin: RelatednotesPlugin;
+  private plugin: MyBrainPlugin;
   private settings: SettingsManager;
 
   private updateDebounceTimer: NodeJS.Timeout | null = null;
 
   constructor(
-    plugin: RelatednotesPlugin,
+    plugin: MyBrainPlugin,
     settingsManager: SettingsManager
   ) {
     this.plugin = plugin;
@@ -64,7 +64,7 @@ export class NetworkGraph {
     if (!activeFile) return;
 
     // 1. VIEWPORT SAFEGUARD: Immediate exit if the network side-panel leaf is minimized or hidden
-    const leaves = this.plugin.app.workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE);
+    const leaves = this.plugin.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE);
     const visibleLeaf = leaves.find(l => l.view.containerEl.offsetHeight > 0);
     if (!visibleLeaf) return;
 
@@ -158,7 +158,7 @@ export class NetworkGraph {
       }
 
       // Dispatches event downstream to notify the multi-instance view bus
-      this.app.workspace.trigger("related:data-ready", activeFile.path);
+      this.app.workspace.trigger("graph:data-ready", activeFile.path);
     }, 50); // 50ms ensures absolute sync with Obsidian's UI thread loops
   }
 
@@ -296,56 +296,56 @@ export class NetworkGraph {
     if (parents.size === 0) return;
 
     for (const parent of parents) {
-      const allRelatedFiles = this.getFirstDegreeFiles(parent.path);
+      const allGraphFiles = this.getFirstDegreeFiles(parent.path);
 
-      for (const relatedFile of allRelatedFiles) {
-        if (relatedFile.path === parent.path) continue; // Skip self references
-        if (relatedFile.path === centerNote.path) continue; // Skip origin center node
+      for (const graphFile of allGraphFiles) {
+        if (graphFile.path === parent.path) continue; // Skip self references
+        if (graphFile.path === centerNote.path) continue; // Skip origin center node
         
-        const relatedNote = this.getOrCreateNote(relatedFile);
-        if (!relatedNote) continue;
+        const graphNode = this.getOrCreateNote(graphFile);
+        if (!graphNode) continue;
 
-        const relation = this.findRelation(parent, relatedNote);
+        const relation = this.findRelation(parent, graphNode);
         
         // ==========================================================================
         // CASE A: Target instance is already allocated to a dedicated viewport quadrant
         // ==========================================================================
-        if (relatedNote.isUsed) { 
+        if (graphNode.isUsed) { 
           switch (relation) {
             case 'child':
             case 'undefined':
               // Commits the vertical relational connection up towards the parent collection
-              parent.relations.children.add(relatedNote);
-              relatedNote.relations.parents.add(parent);
+              parent.relations.children.add(graphNode);
+              graphNode.relations.parents.add(parent);
               
               // CRITICAL RESTORATION: Enforces that existing active 1st-degree nodes 
               // preserve their structural membership mapping to the center node framework
-              if (relatedNote.relation === 'child') {
-                centerNote.relations.children.add(relatedNote);
-              } else if (relatedNote.relation === 'parent') {
-                centerNote.relations.parents.add(relatedNote);
-              } else if (relatedNote.relation === 'friend') {
-                centerNote.relations.friends.add(relatedNote);
+              if (graphNode.relation === 'child') {
+                centerNote.relations.children.add(graphNode);
+              } else if (graphNode.relation === 'parent') {
+                centerNote.relations.parents.add(graphNode);
+              } else if (graphNode.relation === 'friend') {
+                centerNote.relations.friends.add(graphNode);
               }
               break;
 
             case 'parent':
-              parent.relations.parents.add(relatedNote);
-              relatedNote.relations.children.add(parent);
+              parent.relations.parents.add(graphNode);
+              graphNode.relations.children.add(parent);
               
               // Safeguards upstream parent links connecting to the origin note
-              if (relatedNote.relation === 'parent') {
-                centerNote.relations.parents.add(relatedNote);
+              if (graphNode.relation === 'parent') {
+                centerNote.relations.parents.add(graphNode);
               }
               break;
 
             case 'friend': 
-              parent.relations.friends.add(relatedNote);
-              relatedNote.relations.friends.add(parent);
+              parent.relations.friends.add(graphNode);
+              graphNode.relations.friends.add(parent);
 
               // Safeguards downstream friend links connecting to the origin note
-              if (relatedNote.relation === 'friend') {
-                centerNote.relations.friends.add(relatedNote);
+              if (graphNode.relation === 'friend') {
+                centerNote.relations.friends.add(graphNode);
               }
               break;
           }
@@ -359,22 +359,22 @@ export class NetworkGraph {
         if (relation === 'friend') continue; // Intercepts parent-level friend leakage
 
         // Commits lifecycle flags to register layout rendering bounds
-        relatedNote.isUsed = true; 
-        relatedNote.assignedArea = 'right'; // Binds instance target coordinates to the right quadrant
+        graphNode.isUsed = true; 
+        graphNode.assignedArea = 'right'; // Binds instance target coordinates to the right quadrant
         
         // Evaluate if connection originated from an explicit metadata entry inside parent frontmatter
-        const lowercaseSiblingName = relatedNote.basename.toLowerCase().normalize('NFC');
+        const lowercaseSiblingName = graphNode.basename.toLowerCase().normalize('NFC');
         const parentBait = this.anchorCache.get(lowercaseSiblingName);
         const isRealFrontmatterLink = parentBait && parentBait.sources.has(parent);
 
         if (isRealFrontmatterLink) {
-          relatedNote.relation = "sibling"; // Collection 1: Verified frontmatter siblings
+          graphNode.relation = "sibling"; // Collection 1: Verified frontmatter siblings
         } else {
-          relatedNote.relation = "undefined-sibling"; // Collection 2: Bodytext context discovery siblings
+          graphNode.relation = "undefined-sibling"; // Collection 2: Bodytext context discovery siblings
         }
 
-        parent.relations.children.add(relatedNote);
-        relatedNote.relations.parents.add(parent);
+        parent.relations.children.add(graphNode);
+        graphNode.relations.parents.add(parent);
       }
     }
   }

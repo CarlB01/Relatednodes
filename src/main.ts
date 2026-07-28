@@ -1,42 +1,42 @@
 import { Plugin, Notice, WorkspaceLeaf, EventRef, TFile, TAbstractFile } from 'obsidian';
 import { SettingTab } from "./SettingTab.js";
-import { RelatednotesView } from './view.js';
+import { MyBrainView } from './view.js';
 import { RV } from './constants.js';
 import { NetworkGraph } from './NetworkGraph.js';
 import { SettingsManager } from './SettingsManager.js';
 
-export default class RelatednotesPlugin extends Plugin {
+export default class MyBrainPlugin extends Plugin {
   declare settings: SettingsManager;
-  public relatedData!: NetworkGraph;
+  public networkGraph!: NetworkGraph;
   
   private resolvedEventRef: EventRef | undefined;
   
   async onload() {
     await this.loadSettings();
 
-    this.relatedData = new NetworkGraph(this, this.settings);
+    this.networkGraph = new NetworkGraph(this, this.settings);
 
     this.addSettingTab(new SettingTab(this.app, this));
   
     // Registers the plugin view architecture allowing it to open as a sidebar or main tab
     this.registerView(
-      RV.RELATED_NOTES_VIEW_TYPE,
-      (leaf) => new RelatednotesView(leaf, this)
+      RV.MYBRAIN_VIEW_TYPE,
+      (leaf) => new MyBrainView(leaf, this)
     );
 
     // Binds all global application listeners natively (file-open, rename, resolve)
     this.registerGlobalEvents();
 
     // Ribbon icon to trigger view activation
-    this.addRibbonIcon("apple", "Open Related Notes", () => {
-      this.activateRelatedNotesView();
+    this.addRibbonIcon(RV.ICON, "Open myBrain", () => {
+      this.activateGraphView();
     });
 
     // Native command palette registration
     this.addCommand({
-      id: 'open-related-notes',
-      name: 'Open Related Notes View',
-      callback: () => this.activateRelatedNotesView(),
+      id: 'open-mybrain',
+      name: 'Open myBrain View',
+      callback: () => this.activateGraphView(),
     });    
   }
 
@@ -51,8 +51,8 @@ export default class RelatednotesPlugin extends Plugin {
         
         // Micro-timeout accommodating mobile touch-screen navigation animation sequences safely
         setTimeout(() => {
-          this.app.workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE).forEach(leaf => {
-            if (leaf.view instanceof RelatednotesView) {
+          this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
+            if (leaf.view instanceof MyBrainView) {
               leaf.view.onFileChange(file);
             }
           });
@@ -60,11 +60,55 @@ export default class RelatednotesPlugin extends Plugin {
       })
     );
 
-    // B. Intercepts vault rename events to update internal key structures
+        // ==========================================================================
+    // CORE WORKSPACE MONITOR EVENTS (Vault Mutations Pipeline)
+    // ==========================================================================
+
+    // ==========================================================================
+    // CORE WORKSPACE MONITOR EVENTS (Vault Mutations Pipeline)
+    // ==========================================================================
+
+    // B. Registers when the user renames an active file inside the vault
     this.registerEvent(
       this.app.vault.on('rename', async (file: TAbstractFile, oldPath: string) => {
         if (!(file instanceof TFile)) return;
-        this.relatedData.handleFileRename(file, oldPath);
+        
+        // ==========================================================================
+        // FORCE CACHE PURGE (The Ultimate Rename Cache Cure):
+        // Before updating memory paths, we must physically wipe the stale node object 
+        // from the repository cache mapping array [dan]. This guarantees that the engine 
+        // cannot recycle the old title string brent fast in memory [dan]!
+        // ==========================================================================
+        if (this.networkGraph && this.networkGraph.noteCache) {
+          this.networkGraph.noteCache.delete(oldPath);
+          this.networkGraph.noteCache.delete(file.path);
+        }
+
+        // Execute background database memory path mapping updates safely
+        this.networkGraph.handleFileRename(file, oldPath);
+
+        this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(async (leaf) => {
+          if (leaf.view instanceof MyBrainView) {
+            const myView = leaf.view;
+
+            if (!myView.isFullyStarted) return;
+
+            // Verify if the renamed file matches the currently tracked layout pathway bounds
+            const wasCurrentlyVisibleFileRenamed = oldPath === (myView as any).currentFilePath;
+
+            if (wasCurrentlyVisibleFileRenamed) {
+              // Commit the brand new absolute pathway down to the view controller slots
+              (myView as any).currentFilePath = file.path;
+              
+              // Force the data core to build a completely fresh node with the new filename [dan]!
+              await this.networkGraph.update(file);
+              
+              if (myView.areaManager) {
+                myView.areaManager.renderGraph(); // Smashes the stale text title instantly
+              }
+            }
+          }
+        });
       })
     );
 
@@ -75,44 +119,69 @@ export default class RelatednotesPlugin extends Plugin {
     // C. Intercepts metadata resolution flags when a note finishes background parsing updates
     this.registerEvent(
       this.app.metadataCache.on('resolve', async (file: TFile) => {
-        const dataWasUpdated = await this.relatedData.handleFileResolve(file);
+        // Asynchronously resolves metadata data models mapping localized token keys
+        const dataWasUpdated = await this.networkGraph.handleFileResolve(file);
         
-        if (dataWasUpdated) {
-          this.app.workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE).forEach(leaf => {
-            if (leaf.view instanceof RelatednotesView) {
-              const myView = leaf.view;
+        this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(async (leaf) => {
+          if (leaf.view instanceof MyBrainView) {
+            const myView = leaf.view;
 
-              // Immediate operational guard blocking rendering loops during active cold-start periods
-              if (!myView.isFullyStarted) return; 
+            // Strictly drop rendering sweeps while the cold-start shield is active
+            if (!myView.isFullyStarted) return; 
 
+            // Check if the metadata resolving right now belongs to the active center note
+            const isEditingCurrentlyVisibleFile = file.path === (myView as any).currentFilePath;
+
+            if (isEditingCurrentlyVisibleFile) {
+              // ==========================================================================
+              // METADATA CACHE PURGE (The Ultimate Alias & Frontmatter Cure):
+              // Prior to reloading, we physically wipe the active node object from RAM [dan].
+              // This forces the core factories to rebuild the node and parse the fresh 
+              // frontmatter aliases array directly from Obsidian's database layers [dan]!
+              // ==========================================================================
+              if (this.networkGraph && this.networkGraph.noteCache) {
+                this.networkGraph.noteCache.delete(file.path);
+              }
+
+              // Force the data core to build a completely fresh node with the new frontmatter aliases [dan]!
+              await this.networkGraph.update(file);
+              
+              if (myView.areaManager) {
+                myView.areaManager.renderGraph(); // Redraws the graph synchronously
+              }
+              return; 
+            }
+
+            // STANDARD RUNTIME COOLDOWN (For background notes changes)
+            if (dataWasUpdated) {
               if (myView.resolveDebounceTimer) {
                 clearTimeout(myView.resolveDebounceTimer);
               }
               
-              // High-speed runtime cooldown provides near-instantaneous live layout updates as the user typing
               myView.resolveDebounceTimer = setTimeout(() => {
                 if (myView.areaManager) {
                   myView.areaManager.renderGraph(); 
                 }
-              }, 250); 
+              }, 250);
             }
-          });
-        }
+          }
+        });
       })
     );
+   
   }
 
   /**
    * Activates the custom panel inside the primary viewport framework.
    * Safeguards against initialization race conditions and prevents duplicated leaves.
    */
-  async activateRelatedNotesView() {
+  async activateGraphView() {
     // 1. TIMING SAFEGUARD: Defers activation if the core cache is still indexing on cold start
 		const isCacheReady = (this.app.metadataCache as typeof this.app.metadataCache & { initialized?: boolean }).initialized;
     if (!isCacheReady) {
       if (!this.resolvedEventRef) {
         this.resolvedEventRef = this.app.metadataCache.on('resolved', () => {
-          this.activateRelatedNotesView();
+          this.activateGraphView();
           this.unregisterResolvedEvent(); 
         });
         this.registerEvent(this.resolvedEventRef);
@@ -123,7 +192,7 @@ export default class RelatednotesPlugin extends Plugin {
     const { workspace } = this.app;
     
     // 2. DUPLICATE SAFEGUARD: Avoids redundant tabs by checking for existing active leaves
-    let leaf = workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE)[0];
+    let leaf = workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE)[0];
     
     if (leaf) {
       workspace.revealLeaf(leaf);
@@ -135,7 +204,7 @@ export default class RelatednotesPlugin extends Plugin {
 
     if (newLeaf) {
       await newLeaf.setViewState({
-        type: RV.RELATED_NOTES_VIEW_TYPE,
+        type: RV.MYBRAIN_VIEW_TYPE,
         active: true,
       });
       
@@ -145,7 +214,7 @@ export default class RelatednotesPlugin extends Plugin {
       // INITIAL CONTEXT INJECTION: Feeds the newly instantiated leaf with the current active file
       const activeFile = this.app.workspace.getActiveFile();
       if (activeFile) {
-        if (newLeaf.view instanceof RelatednotesView) {
+        if (newLeaf.view instanceof MyBrainView) {
           newLeaf.view.onFileChange(activeFile);
         }
       }

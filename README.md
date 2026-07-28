@@ -13,7 +13,7 @@
 
 Built 100% from scratch utilizing exclusively Obsidian's internal native API, **myBrain** delivers immediate, flicker-free rendering loops over large-scale vaults exceeding 20,000 notes—all while keeping your markdown files completely offline, local, and private.
 
-![myBrain Interface Showcase](images/showcase.gif)
+![myBrain Interface Showcase](images/mybraindemo.gif)
 
 ---
 

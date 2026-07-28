@@ -1,21 +1,21 @@
 /**
- * Global Constants Dictionary for minBrain Related Notes Network.
+ * Global Constants Dictionary for myBrain Graph Nodes Network.
  * Structured cleanly into architectural categories for production release.
  */
 export const RV = {
   // ==========================================================================
   // Obsidian View Identifiers
   // ==========================================================================
-  RELATED_NOTES_VIEW_TYPE: 'mybrain-view',
+  MYBRAIN_VIEW_TYPE: 'mybrain-view',
   
   // Core application visual node icon
-  ICON: 'brain',
+  ICON: 'sparkle',
 
   // ==========================================================================
   // High-Level DOM Containers
   // ==========================================================================
   CONTAINER: 'rv-container',
-  RELATED_VIEW_CONTAINER: 'rv-container',
+  MYBRAIN_CONTAINER: 'rv-container',
   SVG_LAYER: 'rv-svg-layer',
   
   // ==========================================================================

@@ -1,11 +1,11 @@
-import RelatednotesPlugin from './main.js';
+import myBrainPlugin from './main.js';
 import { HoverPopover, TFile, WorkspaceLeaf, HoverParent, MarkdownView, FileView, Platform, ItemView, TAbstractFile, App} from 'obsidian';
 import { AreaManager } from './AreaManager.js';
 import { RV } from './constants.js';
 
-export class RelatednotesView extends ItemView implements HoverParent {
+export class MyBrainView extends ItemView implements HoverParent {
 
-  private plugin: RelatednotesPlugin;
+  private plugin: myBrainPlugin;
   app: App;
   public areaManager!: AreaManager;
   
@@ -18,7 +18,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
   /** Public visibility state constraint protecting viewport boundaries from early lifecycle pops */
   public isFullyStarted: boolean = false;
 
-  constructor(leaf: WorkspaceLeaf, plugin: RelatednotesPlugin) {
+  constructor(leaf: WorkspaceLeaf, plugin: myBrainPlugin) {
     super(leaf);
     this.plugin = plugin;
     this.app = plugin.app;
@@ -28,8 +28,8 @@ export class RelatednotesView extends ItemView implements HoverParent {
   // VIEW IDENTIFIERS & META ATTRIBUTES
   // ==========================================================================
   
-  getViewType(): string { return RV.RELATED_NOTES_VIEW_TYPE; }
-  getDisplayText(): string { return "Related Notes"; }
+  getViewType(): string { return RV.MYBRAIN_VIEW_TYPE; }
+  getDisplayText(): string { return "myBrain"; }
 
   /**
    * Robust high-velocity file resolver parsing incoming strings using multi-layered fallbacks.
@@ -111,7 +111,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
     const file = this.getFile(filename);
     if (!file) return;
 
-    const centerNote = this.plugin.relatedData.centerNote;
+    const centerNote = this.plugin.networkGraph.centerNote;
     if (!centerNote) return;
     
     // Safely reads the concrete absolute file reference mapped to the historical central node
@@ -145,7 +145,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
   private async setFocusOnSelf() {
     const { workspace } = this.app;
     
-    const leaves = this.app.workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE); 
+    const leaves = this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE); 
     const targetLeaf = leaves[0];
 
     if (targetLeaf === undefined) return;
@@ -190,7 +190,6 @@ export class RelatednotesView extends ItemView implements HoverParent {
     // Instantiates a clean, localized welcome element cluster using predefined global variables [dan]
     const welcomeDiv = containerEl.createDiv({ cls: "rv-welcome-container" });
     welcomeDiv.createEl("p", { text: RV.WELCOME, cls: "rv-welcome-text" });
-    console.log('displayWelcome er fullført!')
   }
 
   // ==========================================================================
@@ -204,7 +203,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
    */
   async onOpen() {
     this.contentEl.empty();
-    this.areaManager = new AreaManager(this.plugin.relatedData, this.contentEl, this.plugin);
+    this.areaManager = new AreaManager(this.plugin.networkGraph, this.contentEl, this.plugin);
     this.areaManager.initiate();
 
     this.registerWorkspaceLayoutChanges();
@@ -283,7 +282,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
     }
 
     this.currentFilePath = file.path; 
-    await this.plugin.relatedData.update(file); 
+    await this.plugin.networkGraph.update(file); 
   }
 
   /**
@@ -366,7 +365,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
    * Registers custom view identifiers within Obsidian Core to bind downstream Page Preview modifiers.
    */
   private registerHoverLinkSource() {
-    this.plugin.registerHoverLinkSource(RV.RELATED_NOTES_VIEW_TYPE, {
+    this.plugin.registerHoverLinkSource(RV.MYBRAIN_VIEW_TYPE, {
       display: 'My custom Hover', 
       defaultMod: false,          
     });
@@ -379,7 +378,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
    */
   private setupDataReadyHandler() {
     this.plugin.registerEvent(
-      this.app.workspace.on("related:data-ready" as any, ((vasketPath: string) => {
+      this.app.workspace.on("graph:data-ready" as any, ((vasketPath: string) => {
         if (vasketPath === this.currentFilePath && this.areaManager) {
           this.areaManager.renderGraph(); 
         }
@@ -628,7 +627,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
     if (linktext) {
       this.app.workspace.trigger('hover-link', {
         event: event,
-        source: RV.RELATED_NOTES_VIEW_TYPE,
+        source: RV.MYBRAIN_VIEW_TYPE,
         targetEl: targetBox,
         linktext: linktext,
         sourcePath: sourcePath || linktext,
@@ -648,7 +647,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
     const selectedFile = this.getFile(internalLink);
     if (!selectedFile) return;
 
-    const currentCenter = this.plugin.relatedData.centerNote;
+    const currentCenter = this.plugin.networkGraph.centerNote;
     if (currentCenter && currentCenter.path === selectedFile.path) {      
       this.areaManager.requestRedraw(); 
       return; 
