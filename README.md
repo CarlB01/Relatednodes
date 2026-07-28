@@ -12,14 +12,32 @@
 
 It organizes your notes into a clean and predictable layout with **Parents · Friends · Center · Children · Siblings** — built for speed, clarity and large vaults.
 
-Typical display
+<img src="images/mybrain2.gif" alt="myBrain typical display" style="max-width: 100%; width: 500px; height: auto; border-radius: 8px;">
 
-<img src="images/mybrain2.gif" alt="myBrain Interface Showcase" width="400" style="max-width: 100%; height: auto; border-radius: 8px;">
+---
 
+## 📦 Installation
 
-In a crowded environment 
+### Option 1: Community Plugins (recommended – after approval)
+1. Open **Settings → Community Plugins**
+2. Search for **myBrain**
+3. Click **Install**, then **Enable**
 
-<img src="images/mybraindemo.gif" alt="myBrain Interface Showcase" width="400" style="max-width: 100%; height: auto; border-radius: 8px;">
+### Option 2: BRAT (beta / before approval)
+1. Install the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin
+2. Open **Settings → BRAT → Add Beta plugin**
+3. Enter: `CarlB01/myBrain`
+4. Click **Add Plugin**
+
+### Option 3: Manual installation
+1. Download the latest release from [Releases](https://github.com/CarlB01/myBrain/releases)
+2. Create the folder `.obsidian/plugins/mybrain/` in your vault
+3. Place these files in the folder:
+   - `main.js`
+   - `manifest.json`
+   - `styles.css`
+4. Restart Obsidian (or reload plugins)
+5. Enable **myBrain** under Community Plugins
 
 ---
 
@@ -28,8 +46,9 @@ In a crowded environment
 Unlike standard chaotic force-directed link graphs, **myBrain** routes information into a highly organized, predictable layout matrix relative to your active focused note.
 
 ### 📐 100% Hardware-Accelerated CSS Grid
-All node partitions, column expansions, and quadrant assignments are managed **100% by native, hardware-accelerated CSS Grid infrastructure** instead of heavy, laggy JavaScript calculation matrices. 
-* **Zero Layout-Squeezing:** Nodes are generated in a protective off-screen render curtain (`.is-calculating`) to completely isolate DOM reflows. 
+All node partitions, column expansions, and quadrant assignments are managed **100% by native, hardware-accelerated CSS Grid infrastructure** instead of heavy, laggy JavaScript calculation matrices.
+
+* **Zero Layout-Squeezing:** Nodes are generated in a protective off-screen render curtain (`.is-calculating`) to completely isolate DOM reflows.
 * **Predictable Layouts:** Quadrants expand fluidly only when needed, preserving snappier multi-direction responses.
 * **Supercharged Links Ready:** Respects your existing tag-based font colors, customized icons, and core appearance settings natively out of the box.
 
@@ -62,7 +81,25 @@ All node partitions, column expansions, and quadrant assignments are managed **1
 | **`[ CHILDREN ]`** *(Lower)* | Downstream target children and unmapped core links. | Sourced from child fields and raw bodytext tokens. |
 | **`[ SIBLINGS ]`** *(Right)* | Peer cluster nodes sharing a mutual parent anchor. | Tier 1: Verified frontmatter. Tier 2: Bodytext siblings. |
 
+
+### Example with denser data
+The same layout also works well with larger, messier real-world vaults:
+
+<img src="images/mybraindemo.gif" 
+     alt="myBrain denser example" 
+     style="max-width: 100%; height: auto; border-radius: 8px;">
+
 ---
+
+## How undefined nodes are handled
+
+Links from the center note that are not explicitly defined as children are treated as undefined and automatically gathered at the bottom of the lower area.
+In the Siblings group, undefined siblings are sorted last.
+
+### Collapse groups
+When a quadrant contains many nodes of the same type, they can optionally be collapsed with a +/- button to keep the view clean and readable.
+
+
 
 ## 📰 The Backstory & Legacy
 
