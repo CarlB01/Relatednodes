@@ -1,7 +1,7 @@
 {
   "id": "relatednodes",
   "name": "myBrain",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minAppVersion": "1.13.0",
   "description": "A high-performance semantic network graph displaying notes in structured Parents, Children, Friends, and Siblings quadrants.",
   "author": "CarlB01",

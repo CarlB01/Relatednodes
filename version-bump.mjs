@@ -1,17 +1,46 @@
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync } from 'fs';
 
-const targetVersion = process.env.npm_package_version;
+const filesToUpdate = ['manifest.json', 'package.json'];
 
-// read minAppVersion from manifest.json and bump version to target version
-const manifest = JSON.parse(readFileSync("manifest.json", "utf8"));
-const { minAppVersion } = manifest;
-manifest.version = targetVersion;
-writeFileSync("manifest.json", JSON.stringify(manifest, null, "\t"));
+function bumpVersion() {
+    // Les manifest.json
+    let manifest = JSON.parse(readFileSync('manifest.json', 'utf8'));
+    const oldVersion = manifest.version;
 
-// update versions.json with target version and minAppVersion from manifest.json
-// but only if the target version is not already in versions.json
-const versions = JSON.parse(readFileSync('versions.json', 'utf8'));
-if (!Object.values(versions).includes(minAppVersion)) {
-    versions[targetVersion] = minAppVersion;
-    writeFileSync('versions.json', JSON.stringify(versions, null, '\t'));
+    // Øk patch-versjonen (1.0.0 → 1.0.1)
+    const [major, minor, patch] = oldVersion.split('.').map(Number);
+    const newVersion = `${major}.${minor}.${patch + 1}`;
+
+    console.log(`🔄 Bumper versjon: ${oldVersion} → ${newVersion}`);
+
+    // Oppdater manifest.json
+    manifest.version = newVersion;
+    writeFileSync('manifest.json', JSON.stringify(manifest, null, 2) + '\n');
+
+    // Oppdater package.json hvis den finnes
+    try {
+        let pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+        pkg.version = newVersion;
+        writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+    } catch (e) {
+        console.log('⚠️  package.json ble ikke funnet');
+    }
+
+    // Oppdater versions.json
+    let versions = {};
+    try {
+        versions = JSON.parse(readFileSync('versions.json', 'utf8'));
+    } catch (e) {
+        console.log('📄 Oppretter ny versions.json');
+    }
+
+    // Legg til ny versjon med minAppVersion fra manifest
+    versions[newVersion] = manifest.minAppVersion || "1.13.0";
+    
+    writeFileSync('versions.json', JSON.stringify(versions, null, 2) + '\n');
+
+    console.log(`✅ Ferdig! Versjon oppdatert til ${newVersion}`);
+    console.log(`📌 versions.json oppdatert med "${newVersion}": "${manifest.minAppVersion}"`);
 }
+
+bumpVersion();
