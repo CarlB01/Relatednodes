@@ -6,8 +6,6 @@
 [![Downloads](https://img.shields.io/github/downloads/CarlB01/myBrain/total)](https://github.com/CarlB01/myBrain/releases)
 [![Stars](https://img.shields.io/github/stars/CarlB01/myBrain)](https://github.com/CarlB01/myBrain/stargazers)
 
-# myBrain for Obsidian
-
 > "Structure is liberation. Your notes belong to you, and your graph should think the way you do."
 
 **myBrain** is a high-performance, strictly native semantic network graph for Obsidian.
