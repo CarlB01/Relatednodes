@@ -2,7 +2,35 @@
 
 [![Obsidian Plugin](https://shields.io)](https://obsidian.md)
 [![GitHub Release](https://shields.io)](https://github.com)
-[![License: MIT](https://shields.io)](https://opensource.org)
+[![License: MIT](https://shields.io)](https://github.com)
+
+**myBrain** is a high-performance, strictly native semantic network graph view for Obsidian, engineered for maximum speed, structural clarity, and local data ownership.
+
+## ⚡ Technical Core Features
+*   **CSS Grid:** Optimized node placements via native CSS.
+*   **Performance:** Fast rendering with JIT cache.
+*   **Compatibility:** Native integration with ExcaliBrain structures.
+
+## 📰 The Backstory & Legacy
+*Se kildekoden for den fulle historien om min inspirasjon fra TheBrain og Zsolt Viczián, samt overgangen til en nativ løsning.*
+
+## ⚙️ Configuration & Metadata
+Se kildekoden for eksempler på YAML-oppsett for foreldre, barn, venner og søsken.
+
+## 🤝 Acknowledgments
+Takk til Zsolt Viczián for ExcaliBrain og inspirasjon til denne native implementeringen.
+
+
+
+# myBrain for Obsidian
+
+[![Obsidian Plugin](https://shields.io)](https://obsidian.md)
+
+<!-- 2. Live GitHub Release Badge (Dynamically tracks your latest tag metrics in orange) -->
+[![GitHub Release](https://shields.io)](https://github.com)
+
+<!-- 3. Legal License Badge (Maps a native yellow shield linking straight to your MIT legal file) -->
+[![License: MIT](https://shields.io)](https://github.com)
 
 > "Structure is liberation. Your notes belong to you, and your graph should think the way you do."
 
