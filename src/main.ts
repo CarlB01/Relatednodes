@@ -48,12 +48,8 @@ export default class RelatednotesPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on('file-open', async (file: TFile | null) => {
         if (!file) return;
-        // ==========================================================================
-        // MOBILE LIFECYCLE SAFEGUARD: 
-        // Introduces a micro-timeout loop (70ms) to accommodate iOS animation physics.
-        // Guarantees the mobile Quick Switcher view has fully closed and unmounted 
-        // before routing the fresh file stream down to the data calculation core [dan]!
-        // ==========================================================================
+        
+        // Micro-timeout accommodating mobile touch-screen navigation animation sequences safely
         setTimeout(() => {
           this.app.workspace.getLeavesOfType(RV.RELATED_NOTES_VIEW_TYPE).forEach(leaf => {
             if (leaf.view instanceof RelatednotesView) {

@@ -197,9 +197,10 @@ export class RelatednotesView extends ItemView implements HoverParent {
   // APPLICATION LIFECYCLE RECEPTORS & HOOKS
   // ==========================================================================
 
-/**
+  /**
    * Executed when the view workspace partition leaf is physically mounted.
-   * Instantiates geometrical layout controllers and seals structural cold-start execution gates.
+   * RECONCILED GOLDEN GUARD: Forces the animated welcome frame to stand as an unyielding
+   * iron curtain until Obsidian Core completely concludes its 20,000-item metadata index sweep.
    */
   async onOpen() {
     this.contentEl.empty();
@@ -215,27 +216,26 @@ export class RelatednotesView extends ItemView implements HoverParent {
     this.setupPlusMinusBtnHandler();
     this.setupInfoBtnHandler();
   
-    // Enforce an absolute visual shield immediately to mask historical disk layout data
+    // Enforce an absolute visual shield immediately to block half-baked node blips during indexing
     this.displayWelcome();
 
-    // COLD-START LIFECYCLE GATE: Fires exclusively when Obsidian Core database scanning loops conclude
+    // COLD-START LIFECYCLE GATE: Fires exclusively when Obsidian Core database validation passes finalize
     this.plugin.registerEvent(
       this.app.metadataCache.on('resolved', async () => {
         if (this.isFullyStarted) return; 
         
-        // Open the primary execution gate now that the 20,000 items metadata matrix is fully ready
+        // Open the primary execution gate now that the massive metadata matrix is 100% stable
         this.isFullyStarted = true; 
         
         const activeFile = this.getMostRecentMarkdownFile();
         if (activeFile) {
-          // Triggers data hydration pass only after the security perimeter is verified open
           await this.onFileChange(activeFile);
-          this.areaManager.renderGraph(); 
+          this.areaManager.renderGraph(); // Smoothly illuminates the synchronized grid matrix
         }
       })
     );
 
-    // WARM-START LIFECYCLE FALLBACK: Safe initialization sequence fallback if view opens long post startup
+    // WARM-START LIFECYCLE FALLBACK: Safe activation sequence if the pane is manually opened post-boot
     setTimeout(async () => {
       const isCacheReady = (this.app.metadataCache as typeof this.app.metadataCache & { initialized?: boolean }).initialized === true;
       if (isCacheReady && !this.isFullyStarted) {
@@ -270,12 +270,14 @@ export class RelatednotesView extends ItemView implements HoverParent {
 
   /**
    * Hot-reloads memory structures when the focused file target changes context.
-   * COMPLETED ENTRY GUARD: Drops any background file streams unless the application state is fully started.
+   * RECONCILED GOLDEN GUARD: Keeps the initial welcome shield intact during cold starts
+   * by dropping background file streams until the core application is fully initialized.
+   * @param file The targeted TFile record currently being opened or focused.
    */
   async onFileChange(file: TFile | null) {
     if (!file) return;
 
-    // HARDWARE INITIALIZATION FILTER: Blocks incoming streams from rasering the welcome jernteppe
+    // HARDWARE INITIALIZATION FILTER: Safeguards the startup visual shield from premature data leaks
     if (!this.isFullyStarted) {
       return; 
     }
@@ -284,7 +286,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
     await this.plugin.relatedData.update(file); 
   }
 
-    /**
+  /**
    * Orchestrates the dynamic layout mutation expansion and collapse toggling when a cluster badge is clicked.
    * Modifies inline visibility tokens safely and demands an instant Bezier curve recalculation from AreaManager [dan].
    */
@@ -411,15 +413,48 @@ export class RelatednotesView extends ItemView implements HoverParent {
 	
   /**
    * Establishes advanced tracking mechanics guarding view visibility and layout shifts.
+   * UNIVERSAL SYNC ENGINE: Captures the exact microsecond the side pane returns from being hidden.
+   * Instantly screens out out-dated "ghost" graphs if a file context switch occurred in hiding.
+   * PRODUCTION SAFEGUARD: Safely enters sleep states during core application cold-start indexing.
    */
   private setupVisibilitySafeguards() {
-    // LAYOUT ENTRY DETECTOR: Evaluates exactly when the side panel container enters visible screen fractions
     const visibilityObserver = new IntersectionObserver((entries) => {
       for (let entry of entries) {
         if (entry.isIntersecting) {
-          // Introduces a micro-timeout shielding calculations from animation stutter [dan]
+          
+          // ==========================================================================
+          // COLD-START PROTECTION GUARD (Knuser oppstarts-frys på senternoden!):
+          // If the core application is still executing its initial 20,000-item sweep,
+          // abort this observer routine completely. This guarantees that your animated 
+          // welcome jernteppe holds its ground in total, absolute ro [dan]!
+          // ==========================================================================
+          if (!this.isFullyStarted) {
+            return;
+          }
+
+          const activeFile = this.getMostRecentMarkdownFile();
+          if (activeFile) {
+            
+            // Evaluates if the visible file footprint mutated while the container was hidden
+            const harByttetNotatISkjul = activeFile.path !== this.currentFilePath;
+            
+            if (harByttetNotatISkjul && this.areaManager && this.areaManager.containerEl) {
+              this.areaManager.containerEl.className = "view-content rv-container is-calculating";
+            }
+
+            const historicalGateState = this.isFullyStarted;
+            this.isFullyStarted = true; 
+            
+            this.onFileChange(activeFile).then(() => {
+              this.isFullyStarted = historicalGateState || true; 
+              
+              if (this.areaManager) {
+                this.areaManager.renderGraph(); 
+              }
+            });
+          }
+
           setTimeout(() => {
-            // Defers rendering calculations until the main thread loop becomes entirely idle
             if ('requestIdleCallback' in window) {
                 window.requestIdleCallback(() => {
                   this.areaManager.requestRedraw();
@@ -437,7 +472,7 @@ export class RelatednotesView extends ItemView implements HoverParent {
     visibilityObserver.observe(this.areaManager.containerEl);
     this.register(() => visibilityObserver.disconnect());
 
-    // PANEL SWAP MONITOR: Refreshes vector paths when user focus switches between leaf workspace partitions
+    // PANEL SWAP MONITOR
     this.registerEvent(
       this.app.workspace.on('active-leaf-change', (leaf: WorkspaceLeaf | null) => {
         this.onActiveLeafChanged(leaf);
