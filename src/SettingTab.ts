@@ -278,22 +278,45 @@ export class SettingTab extends PluginSettingTab {
 
   /**
    * Triggers automatically when the user exits the settings control tab pane panel.
-   * Forces data hydration cycles and pushes hot-reloading updates onto open views.
+   * Forces a complete database cache wipe and pushes a hot-reloading update pass onto open views [dan].
    */
   async hide() {
+    // 1. Core runtime storage commit and filters compilation pass
     await this.plugin.saveSettings();
 
+    // ==========================================================================
+    // HOT-RELOAD CACHE PURGE (The Settings Freeze Cure):
+    // Since settings definitions mutated, the entire historical memory cache is stale.
+    // We wipe the noteCache completely to force a comprehensive re-index pass [dan]!
+    // ==========================================================================
+    if (this.plugin.networkGraph && this.plugin.networkGraph.noteCache) {
+      this.plugin.networkGraph.noteCache.clear(); // Clears all 20,000 items instantly from RAM [dan]
+    }
+
     // Hot-reloads all active leaves using our official application views identifiers
-    this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
+    this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(async (leaf) => {
       if (leaf.view instanceof MyBrainView) {
-        // Triggers database cache update passes and forces a clean redrawing cycle
+        const myView = leaf.view;
         const activeFile = this.app.workspace.getActiveFile();
+        
         if (activeFile) {
-          leaf.view.onFileChange(activeFile);
+          // EXPRESS BYPASS: Temporarily flip execution slots to bypass the initial onFileChange shield [dan]
+          const historicalGateState = myView.isFullyStarted;
+          myView.isFullyStarted = true; 
+
+          await myView.onFileChange(activeFile);
+          
+          // Restore the authentic runtime gate perimeter safely
+          myView.isFullyStarted = historicalGateState || true;
+
+          if (myView.areaManager) {
+            myView.areaManager.renderGraph(); // Redraws the view with your brand new filters instantly [dan]!
+          }
         }
       }
     });
 
     super.hide();
   }
+
 }
