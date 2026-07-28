@@ -6,11 +6,10 @@ export const RV = {
   // ==========================================================================
   // Obsidian View Identifiers
   // ==========================================================================
-  RELATED_NOTES_VIEW_TYPE: 'relatednotes-view',
-  RELATED_SIDEBAR_PANEL_TYPE: 'related-sidebar-view',
-
+  RELATED_NOTES_VIEW_TYPE: 'mybrain-view',
+  
   // Core application visual node icon
-  ICON: 'lucide-apple',
+  ICON: 'brain',
 
   // ==========================================================================
   // High-Level DOM Containers
