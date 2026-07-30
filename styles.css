@@ -240,6 +240,9 @@
     box-sizing: border-box;
     margin: 0 auto;
   }
+  .rv-area.center .rv-columns-wrapper {
+    padding-right: 1.4em; /* Gir nøyaktig nok plass til info-knappen i senter [dan] */
+  }
 
   /* GUARD 1: Centering fix deployed ONLY when there is strictly ONE single group/node block total */
   .rv-columns-wrapper:has(> .rv-groups:only-child) {
