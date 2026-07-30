@@ -1,20 +1,9 @@
-import { CachedMetadata, parseFrontMatterAliases, parseFrontMatterTags, TFile } from "obsidian";
-import { Gate } from "./Gate";
-import { StringUtils } from "./StringUtils";
-import { Anchor } from "./Anchor";
-import { RV } from "./constants";
+import { TFile, CachedMetadata, parseFrontMatterAliases, parseFrontMatterTags } from "obsidian";
+import { RV } from "./constants.js";
+import { StringUtils } from "./StringUtils.js";
+import { Anchor } from "./Anchor.js";
+import { Gate } from "./Gate.js";
 
-/**
- * Architectural classification labels defining graph data routing and quadrant placement:
- *  - "center": The active origin node anchoring the visible view frame.
- *  - "parent": Verified upstream semantic source container.
- *  - "child": Verified downstream semantic target node.
- *  - "friend": Lateral semantic connection cross-quadrant.
- *  - "sibling": Verified metadata-driven horizontal sibling node.
- *  - "undefined": Fallback bucket routing direct center links to the lower area.
- *  - "undefined-sibling": Fallback bucket routing indirect parent links to the right flanke area.
- *  - "ignored": Suppressed vault nodes matching blacklist metrics.
- */
 export type Relation = "center" | "parent" | "child" | "friend"| "sibling" | "undefined" | "undefined-sibling" | "ignored";
 
 export class Node {  
@@ -27,7 +16,12 @@ export class Node {
   readonly aliases: string[];
   readonly tags: string[]; // Sanitized in lowercase keys for high-velocity O(1) matching passes  
   readonly isInitiallyIgnored: boolean;
-  readonly rawFrontmatter: any;
+
+  // ==========================================================================
+  // PRODUCTION REFACTOR: Replaces unsafe 'any' signatures with Obsidian's core
+  // FrontMatterCache interface definition to pass gallery validations cleanly [dan].
+  // ==========================================================================
+  readonly rawFrontmatter: import("obsidian").FrontMatterCache | null;
   
   isUsed: boolean = false; // Lifecycle flag managing item element instance recycling
   public isIndexedInThisRound: boolean = false; // Typesafe JIT pass flag tracking JIT passes safely

@@ -15,11 +15,16 @@ export class DrawingUtils {
   /**
    * Toggles visibility hidden state inside the active line cache pool.
    * Invoked instantly when a node viewport boundaries scroll out of bounds.
+   * COMPLIANT REFACTOR: Replaces unsafe 'any' maps with explicit structural layout interfaces [dan].
    * @param fromGate The originating structural Gate node wrapper instance.
    * @param toGate The target destination Gate node wrapper instance.
    * @param linkCache The centralized memory map matrix tracking active vector paths.
    */
-  private static hideLineInCache(fromGate: Gate, toGate: Gate, linkCache: Map<string, any>) {
+  private static hideLineInCache(
+    fromGate: Gate, 
+    toGate: Gate, 
+    linkCache: Map<string, { svgElement: SVGPathElement; used: boolean }>
+  ) {
     const pathA = fromGate.parentNote.path;
     const pathB = toGate.parentNote.path;
 
@@ -27,13 +32,12 @@ export class DrawingUtils {
       ? `${pathA}->${pathB}` 
       : `${pathB}->${pathA}`;
     
+    // ==========================================================================
+    // TYPESAFE CACHE FETCHING: Since linkCache is strictly typed above,
+    // TypeScript knows that cacheItem contains a native SVGPathElement seamlessly [dan]!
+    // ==========================================================================
     const cacheItem = linkCache.get(lineId);
     if (cacheItem && cacheItem.svgElement) {
-      // ==========================================================================
-      // OBSIDIAN NATIVE STATE TUNING (Using official API shortcuts):
-      // Invokes Obsidian's built-in .addClass() method to enforce the hidden state 
-      // natively without introducing dirty inline style overrides [dan].
-      // ==========================================================================
       cacheItem.svgElement.addClass('is-hidden');
     }
   }
@@ -58,19 +62,21 @@ export class DrawingUtils {
     const rawP1 = fromGate.center();
     const rawP2 = toGate.center();
 
-    // Validates source gate against its assigned scrolling container boundaries
-    if (fromGate.areaElement) {
-        const areaRect = fromGate.areaElement.getBoundingClientRect();
-        if (rawP1.y < areaRect.top || rawP1.y > areaRect.bottom) {
+    if (!fromGate || !toGate || !fromGate.areaElement || !toGate.areaElement) {
+        return;
+    }
+
+    const areaRectFrom = fromGate.areaElement.getBoundingClientRect();
+    if (areaRectFrom) {
+        if (rawP1.y < areaRectFrom.top || rawP1.y > areaRectFrom.bottom) {
             this.hideLineInCache(fromGate, toGate, linkCache);
             return;
         }
     }
 
-    // Validates target gate symmetrically against its assigned quadrant wrap boundaries
-    if (toGate.areaElement) {
-        const areaRect = toGate.areaElement.getBoundingClientRect();
-        if (rawP2.y < areaRect.top || rawP2.y > areaRect.bottom) {
+    const areaRectTo = toGate.areaElement.getBoundingClientRect();
+    if (areaRectTo) {
+        if (rawP2.y < areaRectTo.top || rawP2.y > areaRectTo.bottom) {
             this.hideLineInCache(fromGate, toGate, linkCache);
             return;
         }
@@ -94,10 +100,6 @@ export class DrawingUtils {
     if (cacheItem) {
         pathEl = cacheItem.svgElement;
         
-        // ==========================================================================
-        // OBSIDIAN NATIVE REFACTOR: Purges inline styles for clean class toggles.
-        // Strips out the 'is-hidden' layout flag using Obsidian's official API [dan]!
-        // ==========================================================================
         pathEl.removeClass('is-hidden'); 
         
         if (!svgContainer.contains(pathEl)) {
@@ -122,7 +124,6 @@ export class DrawingUtils {
     // 5. DOM HYDRATION: Commit the string trajectory parameter down to the target path node
     pathEl.setAttribute("d", dAttribute);
   }
-
 
   /**
    * Compiles Bezier path configurations and returns a normalized SVG "d" vector string.

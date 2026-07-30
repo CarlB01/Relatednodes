@@ -5,6 +5,7 @@ import { DrawingUtils } from "./DrawingUtils.js";
 import { Gate } from "./Gate.js";
 import { RV } from "./constants.js";
 import MyBrainPlugin from "./main.js";
+import { MyBrainView } from "./view.js";
 
 export class AreaManager {
   containerEl: HTMLElement;
@@ -20,7 +21,7 @@ export class AreaManager {
   private plugin: MyBrainPlugin;
 
   // Centralized memory cache for the active SVG path lines
-  private linkCache = new Map<string, { svgElement: SVGPathElement; used: boolean }>();
+  public linkCache = new Map<string, { svgElement: SVGPathElement; used: boolean }>();
 
   private animationFrameId: number | null = null;
 
@@ -182,7 +183,11 @@ export class AreaManager {
     // ==========================================================================
     mainContainer.className = "view-content rv-container is-calculating";
 
-    const fragment = document.createDocumentFragment();
+    const fragment = createFragment();
+    
+    mainContainer.setAttribute(RV.LEFT_TALL, 'false');
+    mainContainer.setAttribute(RV.RIGHT_TALL, 'false');
+
     mainContainer.setAttribute(RV.LEFT_TALL, 'false');
     mainContainer.setAttribute(RV.RIGHT_TALL, 'false');
 
@@ -230,22 +235,14 @@ export class AreaManager {
     this.yieldIfLeftTall();
     this.yieldIfRightTall();
 
-    // ==========================================================================
-    // SYNCHRONOUS VECTOR COUPLING (Knuser tidsgapet på linjene!)
-    // By invoking drawAllGraphLines() directly right here, we force the Bezier 
-    // paths to compile inside memory BEFORE the layout becomes visible.
-    // When the frame drops the shield, nodes and lines appear simultaneously [dan]!
-    // ==========================================================================
+    // SYNCHRONOUS VECTOR COUPLING: Compiles Bezier curves inside memory safely
     if (this.graph?.centerNote) {
-      this.drawAllGraphLines(); // Tegner strekene synkront med en gang mens teppet er nede! [dan]
+      this.drawAllGraphLines(); 
     }
 
     // Drops the computational shield precisely on the next browser paint cycle
     window.requestAnimationFrame(() => {
       mainContainer.classList.remove('is-calculating');
-      // Vi kaller fortsatt requestRedraw her som en ekstra forsikring for mobile safeguards, 
-      // men siden strekene allerede ER tegnet, vil brukeren oppleve 0 nanosekunder forsinkelse! [dan]
-      this.requestRedraw(); 
     });
   }
 
@@ -259,7 +256,8 @@ export class AreaManager {
     if (noteCount === 0) return;
 
     // 1. ALLOCATE VIRTUAL MEMORY CANVAS FRAGMENT
-    const areaFragment = document.createDocumentFragment();
+    const areaFragment = createFragment();
+
     const collectionWrapper = areaFragment.createDiv(RV.COLLECTION_WRAPPER);
 
     // Map through high-level collections (e.g., maximum of 2 tiered layers in lower area)

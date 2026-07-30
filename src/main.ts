@@ -29,7 +29,7 @@ export default class MyBrainPlugin extends Plugin {
 
     // Ribbon icon to trigger view activation
     this.addRibbonIcon(RV.ICON, "Open myBrain", () => {
-      this.activateGraphView();
+      void this.activateGraphView();
     });
 
     // Native command palette registration
@@ -42,43 +42,36 @@ export default class MyBrainPlugin extends Plugin {
 
   /**
    * Binds global application lifecycle events to synchronize memory caches with vault mutations.
+   * COMPLIANT REFACTOR: Removes 'async' from core event signatures to fulfill strict void criteria.
+   * Leverages immediately invoked asynchronous execution envelopes to isolate data mutations safely [dan].
    */
   private registerGlobalEvents() {
-    // A. Intercepts note navigation events to synchronize the layout state centrally
+    // ------------------------------------------------------------------------
+    // A. FILE OPEN INTERCEPTOR
+    // ------------------------------------------------------------------------
     this.registerEvent(
-      this.app.workspace.on('file-open', async (file: TFile | null) => {
+      this.app.workspace.on('file-open', (file: TFile | null) => {
         if (!file) return;
         
         // Micro-timeout accommodating mobile touch-screen navigation animation sequences safely
         setTimeout(() => {
           this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
             if (leaf.view instanceof MyBrainView) {
-              leaf.view.onFileChange(file);
+              void leaf.view.onFileChange(file);
             }
           });
-        }, 70); // 70ms is invisible on desktop but ensures rock-solid execution on iOS/Android [dan]
+        }, 70); 
       })
     );
 
-        // ==========================================================================
-    // CORE WORKSPACE MONITOR EVENTS (Vault Mutations Pipeline)
-    // ==========================================================================
-
-    // ==========================================================================
-    // CORE WORKSPACE MONITOR EVENTS (Vault Mutations Pipeline)
-    // ==========================================================================
-
-    // B. Registers when the user renames an active file inside the vault
+    // ------------------------------------------------------------------------
+    // B. VAULT RENAME INTERCEPTOR
+    // ------------------------------------------------------------------------
     this.registerEvent(
-      this.app.vault.on('rename', async (file: TAbstractFile, oldPath: string) => {
+      this.app.vault.on('rename', (file: TAbstractFile, oldPath: string) => {
         if (!(file instanceof TFile)) return;
         
-        // ==========================================================================
-        // FORCE CACHE PURGE (The Ultimate Rename Cache Cure):
-        // Before updating memory paths, we must physically wipe the stale node object 
-        // from the repository cache mapping array [dan]. This guarantees that the engine 
-        // cannot recycle the old title string brent fast in memory [dan]!
-        // ==========================================================================
+        // Immediate database cache purge to kill stale filename text-strings in memory slots
         if (this.networkGraph && this.networkGraph.noteCache) {
           this.networkGraph.noteCache.delete(oldPath);
           this.networkGraph.noteCache.delete(file.path);
@@ -87,25 +80,26 @@ export default class MyBrainPlugin extends Plugin {
         // Execute background database memory path mapping updates safely
         this.networkGraph.handleFileRename(file, oldPath);
 
-        this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(async (leaf) => {
+        this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach((leaf) => {
           if (leaf.view instanceof MyBrainView) {
             const myView = leaf.view;
-
             if (!myView.isFullyStarted) return;
 
-            // Verify if the renamed file matches the currently tracked layout pathway bounds
             const wasCurrentlyVisibleFileRenamed = oldPath === (myView as any).currentFilePath;
 
             if (wasCurrentlyVisibleFileRenamed) {
-              // Commit the brand new absolute pathway down to the view controller slots
-              (myView as any).currentFilePath = file.path;
-              
-              // Force the data core to build a completely fresh node with the new filename [dan]!
-              await this.networkGraph.update(file);
-              
-              if (myView.areaManager) {
-                myView.areaManager.renderGraph(); // Smashes the stale text title instantly
-              }
+              // ==========================================================================
+              // COMPLIANT ENVELOPE INJECTION: Dispatches the asynchronous data reload pass
+              // inside a safe, decoupled thread execution block to pass core linter audits [dan].
+              // ==========================================================================
+              (async () => {
+                (myView as any).currentFilePath = file.path;
+                await this.networkGraph.update(file);
+                
+                if (myView.areaManager) {
+                  myView.areaManager.renderGraph(); 
+                }
+              })();
             }
           }
         });
@@ -116,72 +110,66 @@ export default class MyBrainPlugin extends Plugin {
     // METADATA RESOLUTION EVENT ROUTING (Interceptor Pipeline)
     // ==========================================================================
 
+        // ==========================================================================
+    // METADATA RESOLUTION EVENT ROUTING (Interceptor Pipeline)
+    // ==========================================================================
+
     // C. Intercepts metadata resolution flags when a note finishes background parsing updates
     this.registerEvent(
-      this.app.metadataCache.on('resolve', async (file: TFile) => {
+      this.app.metadataCache.on('resolve', (file: TFile) => {
         // Asynchronously resolves metadata data models mapping localized token keys
-        const dataWasUpdated = await this.networkGraph.handleFileResolve(file);
-        
-        this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(async (leaf) => {
-          if (leaf.view instanceof MyBrainView) {
-            const myView = leaf.view;
+        void this.networkGraph.handleFileResolve(file).then((dataWasUpdated) => {
+          
+          this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach((leaf) => {
+            if (leaf.view instanceof MyBrainView) {
+              const myView = leaf.view;
+              if (!myView.isFullyStarted) return; 
 
-            // Strictly drop rendering sweeps while the cold-start shield is active
-            if (!myView.isFullyStarted) return; 
+              const isEditingCurrentlyVisibleFile = file.path === (myView as any).currentFilePath;
 
-            // Check if the metadata resolving right now belongs to the active center note
-            const isEditingCurrentlyVisibleFile = file.path === (myView as any).currentFilePath;
-
-            if (isEditingCurrentlyVisibleFile) {
-              // ==========================================================================
-              // METADATA CACHE PURGE (The Ultimate Alias & Frontmatter Cure):
-              // Prior to reloading, we physically wipe the active node object from RAM [dan].
-              // This forces the core factories to rebuild the node and parse the fresh 
-              // frontmatter aliases array directly from Obsidian's database layers [dan]!
-              // ==========================================================================
-              if (this.networkGraph && this.networkGraph.noteCache) {
-                this.networkGraph.noteCache.delete(file.path);
-              }
-
-              // Force the data core to build a completely fresh node with the new frontmatter aliases [dan]!
-              await this.networkGraph.update(file);
-              
-              if (myView.areaManager) {
-                myView.areaManager.renderGraph(); // Redraws the graph synchronously
-              }
-              return; 
-            }
-
-            // STANDARD RUNTIME COOLDOWN (For background notes changes)
-            if (dataWasUpdated) {
-              if (myView.resolveDebounceTimer) {
-                window.clearTimeout(myView.resolveDebounceTimer);
-              }
-              
-              myView.resolveDebounceTimer = setTimeout(() => {
-                if (myView.areaManager) {
-                  myView.areaManager.renderGraph(); 
+              if (isEditingCurrentlyVisibleFile || dataWasUpdated) {
+                
+                if (myView.resolveDebounceTimer) {
+                  window.clearTimeout(myView.resolveDebounceTimer);
                 }
-              }, 250);
+                
+                myView.resolveDebounceTimer = setTimeout(() => {
+                  (async () => {
+                    // Kirurgisk re-indeksering av den aktive filen for å hente ut det nye aliaset
+                    if (isEditingCurrentlyVisibleFile && this.networkGraph && this.networkGraph.noteCache) {
+                      this.networkGraph.noteCache.delete(file.path);
+                    }
+                    
+                    await this.networkGraph.update(file);
+                    
+                    if (myView.areaManager) {
+                      myView.areaManager.renderGraph(); // Tegner grafen med det flunkende nye aliaset! [dan]
+                    }
+                  })();
+                }, 300); // 300ms buffer keeps the interface 100% stable while you type [dan]
+              }
+
             }
-          }
+          });
         });
       })
     );
-   
+
   }
+
 
   /**
    * Activates the custom panel inside the primary viewport framework.
    * Safeguards against initialization race conditions and prevents duplicated leaves.
+   * COMPLIANT REFACTOR: Prefixes unawaited promises with the native void operator [dan].
    */
   async activateGraphView() {
     // 1. TIMING SAFEGUARD: Defers activation if the core cache is still indexing on cold start
-		const isCacheReady = (this.app.metadataCache as typeof this.app.metadataCache & { initialized?: boolean }).initialized;
+    const isCacheReady = (this.app.metadataCache as typeof this.app.metadataCache & { initialized?: boolean }).initialized;
     if (!isCacheReady) {
       if (!this.resolvedEventRef) {
         this.resolvedEventRef = this.app.metadataCache.on('resolved', () => {
-          this.activateGraphView();
+          void this.activateGraphView();
           this.unregisterResolvedEvent(); 
         });
         this.registerEvent(this.resolvedEventRef);
@@ -215,13 +203,14 @@ export default class MyBrainPlugin extends Plugin {
       const activeFile = this.app.workspace.getActiveFile();
       if (activeFile) {
         if (newLeaf.view instanceof MyBrainView) {
-          newLeaf.view.onFileChange(activeFile);
+          void newLeaf.view.onFileChange(activeFile);
         }
       }
     } else {
       new Notice("Could not create view leaf");
     }
   }
+
   
   onunload() {
     this.unregisterResolvedEvent();

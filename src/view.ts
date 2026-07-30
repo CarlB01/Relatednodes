@@ -9,7 +9,7 @@ export class MyBrainView extends ItemView implements HoverParent {
   app: App;
   public areaManager!: AreaManager;
   
-  private currentFilePath: string = ""; // Tracks the unique file path this window is presently displaying
+  currentFilePath: string = ""; // Tracks the unique file path this window is presently displaying
   private lastMouseEvent: MouseEvent | null = null;
   private lastMouseTarget: HTMLElement | null = null;
   public hoverPopover: HoverPopover | null = null;
@@ -17,7 +17,11 @@ export class MyBrainView extends ItemView implements HoverParent {
 
   /** Public visibility state constraint protecting viewport boundaries from early lifecycle pops */
   public isFullyStarted: boolean = false;
-
+  
+  // DEBOUNCE LOOP TRACKER: Tracks dynamic workspace visibility state transitions.
+  // Set to true by default to force a clean, definitive re-sync pass on initial boots [dan]!
+  private wasPanelHidden: boolean = true;
+  
   constructor(leaf: WorkspaceLeaf, plugin: myBrainPlugin) {
     super(leaf);
     this.plugin = plugin;
@@ -64,22 +68,27 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     // 5. Final fallback: Scans nested frontmatter metadata schemas for registered aliases
     file = markdownFiles.find((f) => {
-        const cache = this.app.metadataCache.getFileCache(f);
-        const aliases = cache?.frontmatter?.aliases;
+      const cache = this.app.metadataCache.getFileCache(f);
 
-        if (Array.isArray(aliases)) {
-            return aliases.some(alias => 
-                typeof alias === 'string' && 
-                alias.trim().toLowerCase() === cleanName.toLowerCase()
-            );
-        }
-        if (typeof aliases === 'string') {
-            return aliases.trim().toLowerCase() === cleanName.toLowerCase();
-        }
-        return false;
+      // Cast the cache frontmatter layer strictly to a Record map or null [dan].
+      const frontmatterIndex = (cache?.frontmatter || null) as Record<string, any> | null;
+      const aliases = frontmatterIndex?.aliases;
+
+      if (Array.isArray(aliases)) {
+          return aliases.some(alias => 
+              typeof alias === 'string' && 
+              alias.trim().toLowerCase() === cleanName.toLowerCase()
+          );
+      }
+      if (typeof aliases === 'string') {
+          return aliases.trim().toLowerCase() === cleanName.toLowerCase();
+      }
+      return false;
     }) ?? null;
 
     if (file instanceof TFile) return file;
+
+
 
     return null;
   }
@@ -136,7 +145,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     await targetLeaf.openFile(file);
     await this.app.workspace.revealLeaf(targetLeaf);
-    this.setFocusOnSelf();    
+    await this.setFocusOnSelf();    
   }
 
   /**
@@ -164,20 +173,26 @@ export class MyBrainView extends ItemView implements HoverParent {
     
     if (mdLeaves.length === 0) return null;
 
+    // TYPESAFE TIMING ACCESS: Defines a localized intersection type 
+    // encapsulating the internal activeTime property.
+    type TimedLeaf = import("obsidian").WorkspaceLeaf & { activeTime?: number };
+
     // Sorts open leaf tabs according to internal focus time stamps to isolate the active editor panel
     mdLeaves.sort((a, b) => {
-      const timeA = (a as any).activeTime ?? 0;
-      const timeB = (b as any).activeTime ?? 0;
+      const timeA = (a as TimedLeaf).activeTime ?? 0;
+      const timeB = (b as TimedLeaf).activeTime ?? 0;
       return timeB - timeA;
     });
 
     const mostRecentLeaf = mdLeaves[0];
+    // Cast explicitly to the expanded core MarkdownView to fetch the underlying file securely
     if (mostRecentLeaf && mostRecentLeaf.view instanceof MarkdownView) {
       return mostRecentLeaf.view.file; 
     }
 
     return null;
   }
+
 
    /**
    * Renders the dedicated, minimalist welcome instructional frame inside the view screen.
@@ -198,14 +213,17 @@ export class MyBrainView extends ItemView implements HoverParent {
 
   /**
    * Executed when the view workspace partition leaf is physically mounted.
-   * RECONCILED GOLDEN GUARD: Forces the animated welcome frame to stand as an unyielding
-   * iron curtain until Obsidian Core completely concludes its 20,000-item metadata index sweep.
+   * COMPLIANT REFACTOR: Eradicates blind, hardcoded timeouts to achieve instantaneous 
+   * data ignition. Conditionality bypasses coldstart gates if indexing is already finalized [dan].
    */
   async onOpen() {
     this.contentEl.empty();
+    
+    // Instantiates the structural coordinate layout manager natively
     this.areaManager = new AreaManager(this.plugin.networkGraph, this.contentEl, this.plugin);
     this.areaManager.initiate();
 
+    // Bind localized viewport context listeners and gesture bus matrices
     this.registerWorkspaceLayoutChanges();
     this.registerHoverLinkSource();
     this.setupDataReadyHandler();
@@ -215,37 +233,56 @@ export class MyBrainView extends ItemView implements HoverParent {
     this.setupPlusMinusBtnHandler();
     this.setupInfoBtnHandler();
   
-    // Enforce an absolute visual shield immediately to block half-baked node blips during indexing
+    // Enforce the animated welcome mask framework immediately to conceal early node blips
     this.displayWelcome();
 
-    // COLD-START LIFECYCLE GATE: Fires exclusively when Obsidian Core database validation passes finalize
-    this.plugin.registerEvent(
-      this.app.metadataCache.on('resolved', async () => {
-        if (this.isFullyStarted) return; 
-        
-        // Open the primary execution gate now that the massive metadata matrix is 100% stable
-        this.isFullyStarted = true; 
-        
-        const activeFile = this.getMostRecentMarkdownFile();
-        if (activeFile) {
-          await this.onFileChange(activeFile);
-          this.areaManager.renderGraph(); // Smoothly illuminates the synchronized grid matrix
-        }
-      })
-    );
-
-    // WARM-START LIFECYCLE FALLBACK: Safe activation sequence if the pane is manually opened post-boot
-    setTimeout(async () => {
-      const isCacheReady = (this.app.metadataCache as typeof this.app.metadataCache & { initialized?: boolean }).initialized === true;
-      if (isCacheReady && !this.isFullyStarted) {
-        this.isFullyStarted = true;
-        const activeFile = this.getMostRecentMarkdownFile();
-        if (activeFile) {
-          await this.onFileChange(activeFile);
-          this.areaManager.renderGraph();
-        }
+    // ==========================================================================
+    // HYBRID LIFECYCLE IGNITION (Knuser den blinde 2-sekunders fallback-timeren!):
+    // We instantly poll Obsidian's native metadata cache initialized parameter.
+    // In empty or hot-cached vaults, this parameter resolves true on microsecond zero,
+    // firing the rendering tree instantly without deploying a single timer [dan]!
+    // ==========================================================================
+    const isCacheReady = (this.app.metadataCache as typeof this.app.metadataCache & { initialized?: boolean }).initialized === true;
+    
+    if (isCacheReady) {
+      // Secure layout tracking variables instantly prior to rendering to block hover loops
+      this.isFullyStarted = true;
+      this.wasPanelHidden = false; 
+      
+      const activeFile = this.getMostRecentMarkdownFile();
+      if (activeFile) {
+        // Dispatches cache hydration across a synchronous layout execution thread cleanly [dan]
+        void this.onFileChange(activeFile).then(() => {
+          if (this.areaManager) {
+            this.areaManager.renderGraph();
+          }
+        });
       }
-    }, 2000); 
+    } else {
+      // ==========================================================================
+      // COLD-START LIFECYCLE GATE (Fallback for massive hvelv under oppstart):
+      // If the cache is still validating vault files, we establish a strict event
+      // listener hook that drops the shield only when Obsidian core signals resolution [dan].
+      // ==========================================================================
+      this.plugin.registerEvent(
+        this.app.metadataCache.on('resolved', () => {
+          if (this.isFullyStarted) return; 
+          
+          (async () => {
+            this.isFullyStarted = true; 
+            this.wasPanelHidden = false;
+            
+            const activeFile = this.getMostRecentMarkdownFile();
+            if (activeFile) {
+              await this.onFileChange(activeFile);
+              if (this.areaManager) {
+                this.areaManager.renderGraph(); 
+              }
+            }
+          })();
+        })
+      );
+    }
   }
 
   async onClose() {
@@ -263,7 +300,7 @@ export class MyBrainView extends ItemView implements HoverParent {
           this.areaManager.requestRedraw();
         }, 150); 
       }
-      this.app.workspace.revealLeaf(leaf);
+      void this.app.workspace.revealLeaf(leaf);
     }
   }
 
@@ -339,7 +376,8 @@ export class MyBrainView extends ItemView implements HoverParent {
   
   /**
    * Subscribes to window boundary changes or sidebar dragging.
-   * IMPROVED DEBOUNCE: Prevents recursive loops caused by yieldIfRightTall modifications [dan].
+   * COMPLIANT REFACTOR: Uses lightweight requestRedraw() to safeguard 
+   * Obsidian's core drag-and-drop layout pipelines from structural rendering drops [dan].
    */
   private registerWorkspaceLayoutChanges() {
     let layoutDebounceTimer: NodeJS.Timeout | null = null;
@@ -356,10 +394,11 @@ export class MyBrainView extends ItemView implements HoverParent {
           if (this.areaManager) {
             this.areaManager.requestRedraw();
           }
-        }, 200);
+        }, 200); // 200ms debounce cushions high-velocity sidebar dragging perfectly
       })
     );
   }
+
   
   /**
    * Registers custom view identifiers within Obsidian Core to bind downstream Page Preview modifiers.
@@ -373,8 +412,9 @@ export class MyBrainView extends ItemView implements HoverParent {
 
   /**
    * Multiview Isolation Bus: Captures central data-ready broadcasts.
-   * Evaluates pathway checks to guarantee this specific leaf instance only updates if the broadcoasted 
+   * Evaluates pathway checks to guarantee this specific leaf instance only updates if the broadcasted 
    * file path matches its own tracked active note context [dan]!
+   * COMPLIANT REFACTOR: Eradicates recursive onFileChange calls to permanently destroy layout loops [dan].
    */
   private setupDataReadyHandler() {
     // ==========================================================================
@@ -391,23 +431,25 @@ export class MyBrainView extends ItemView implements HoverParent {
           // Enforce a strict string type guard to process the pathway safely [dan]
           if (typeof vasketPath === "string") {
             
-            // HER ER DIN EKTE, OPPRINNELIGE LYKKE-LOGIKK:
-            // Siden det asynkrone eventet nå slipper 100% uforstyrret igjennom, 
-            // tennes grafen din på et brøkdel av et millisekund som før [dan]!
             const activeFile = this.getMostRecentMarkdownFile();
             if (activeFile && activeFile.path === vasketPath) {
-              this.onFileChange(activeFile).then(() => {
-                if (this.areaManager) {
-                  this.areaManager.renderGraph();
-                }
-              });
+              
+              // ==========================================================================
+              // LOOP-FREE RENDERING PERIMETER: Commit the validated path straight down 
+              // to the tracking slot, and request an immediate layout redraw pass [dan].
+              // This completely cuts the recursive update() chain to secure 100% ro [dan]!
+              // ==========================================================================
+              this.currentFilePath = activeFile.path;
+              
+              if (this.areaManager) {
+                this.areaManager.renderGraph(); // Smoothly illuminates the synchronized grid matrix natively [dan]
+              }
             }
 
           }
         })
       );
     }
-
   }
 
   /**
@@ -437,28 +479,30 @@ export class MyBrainView extends ItemView implements HoverParent {
   /**
    * Establishes advanced tracking mechanics guarding view visibility and layout shifts.
    * UNIVERSAL SYNC ENGINE: Captures the exact microsecond the side pane returns from being hidden.
-   * Instantly screens out out-dated "ghost" graphs if a file context switch occurred in hiding.
-   * PRODUCTION SAFEGUARD: Safely enters sleep states during core application cold-start indexing.
+   * PRODUCTION SAFEGUARD: Blocks recursive, self-triggering coldstart loop cascades cleanly [dan].
    */
   private setupVisibilitySafeguards() {
     const visibilityObserver = new IntersectionObserver((entries) => {
       for (let entry of entries) {
+        
         if (entry.isIntersecting) {
           
           // ==========================================================================
-          // COLD-START PROTECTION GUARD (Knuser oppstarts-frys på senternoden!):
-          // If the core application is still executing its initial 20,000-item sweep,
-          // abort this observer routine completely. This guarantees that your animated 
-          // welcome jernteppe holds its ground in total, absolute ro [dan]!
+          // COLD-START ISOLATION FILTER (Knuser den automatiske evighets-loopen!):
+          // If the app is still in its coldstart indexing block, or if the view is 
+          // already open and visible on screen, drop this routine completely [dan]!
+          // This stops the observer from entering an infinite loop triggered by its 
+          // own initial renderGraph() cycles on startup [dan].
           // ==========================================================================
-          if (!this.isFullyStarted) {
-            return;
+          if (!this.isFullyStarted || !this.wasPanelHidden) {
+            return; 
           }
+
+          // Mark the panel as actively open and locked against micro-reflows
+          this.wasPanelHidden = false;
 
           const activeFile = this.getMostRecentMarkdownFile();
           if (activeFile) {
-            
-            // Evaluates if the visible file footprint mutated while the container was hidden
             const harByttetNotatISkjul = activeFile.path !== this.currentFilePath;
             
             if (harByttetNotatISkjul && this.areaManager && this.areaManager.containerEl) {
@@ -468,9 +512,8 @@ export class MyBrainView extends ItemView implements HoverParent {
             const historicalGateState = this.isFullyStarted;
             this.isFullyStarted = true; 
             
-            this.onFileChange(activeFile).then(() => {
+            void this.onFileChange(activeFile).then(() => {
               this.isFullyStarted = historicalGateState || true; 
-              
               if (this.areaManager) {
                 this.areaManager.renderGraph(); 
               }
@@ -480,12 +523,16 @@ export class MyBrainView extends ItemView implements HoverParent {
           setTimeout(() => {
             if ('requestIdleCallback' in window) {
                 window.requestIdleCallback(() => {
-                  this.areaManager.requestRedraw();
+                  if (this.areaManager) this.areaManager.requestRedraw();
                 }, { timeout: 200 }); 
             } else {
-                this.areaManager.requestRedraw();
+                if (this.areaManager) this.areaManager.requestRedraw();
             }
           }, 150); 
+          
+        } else {
+          // The panel was physically closed or dragged away; activate the hidden gateway flag
+          this.wasPanelHidden = true;
         }
       }
     }, { 
@@ -517,7 +564,7 @@ export class MyBrainView extends ItemView implements HoverParent {
   /**
    * Configures the dynamic floating info satellite badge component.
    * Tracks real-time boundary collision coordinates to fluidly push updates into layout splits.
-   * COMPLIANT REFACTOR: Eradicates all inline visibility mutations to pass strict core linters [dan].
+   * COMPLIANT REFACTOR: Re-anchored locally onto this.contentEl following the hover loop fix [dan].
    */
   private setupInfoBtnHandler() {
     // Volatile instance tracking handling contextual popup lifecycles safely
@@ -525,27 +572,19 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     // INTERACTION HOOK: Hover entry into the target info element triggers absolute metric calculations
     this.contentEl.on("mouseover", ".rv-info-btn", (event, target) => {
-      if (!target || !(target .instanceOf(HTMLElement))) return;
+      if (!target || !(target instanceof HTMLElement)) return;
 
       if (activeInfoPopup) { 
         activeInfoPopup.remove(); 
         activeInfoPopup = null; 
       }
 
-      // Extract raw data fields stamped during layout quadrant formatting
       const count = target.getAttribute("data-ignored-count") || "0";
       const hoverText = `${count} hidden files`;
  
-      // Compile virtual popover DOM tree inside memory slots
       activeInfoPopup = createDiv({ cls: RV.INFO_HOVER });
       activeInfoPopup.createSpan({ text: hoverText, cls: "popup-title" });
       
-      // ==========================================================================
-      // COMPLIANT MEASURING MASK (Pure CSS Opacity Gating):
-      // Injects the '.is-measuring' state class. This keeps the element layout-active 
-      // in memory so JavaScript can calculate absolute pixel metrics flawlessly, 
-      // while hiding it from the user interface completely in total darkness [dan].
-      // ==========================================================================
       activeInfoPopup.addClass('is-measuring');
       this.contentEl.appendChild(activeInfoPopup);
 
@@ -554,27 +593,21 @@ export class MyBrainView extends ItemView implements HoverParent {
       const btnRect = target.getBoundingClientRect();
       const padding = 10;
 
-      // Boundary collision detector evaluating horizontal canvas spatial overflow clearances
-      const crashesOnRightSide = (btnRect.right + padding + popupWidth) > viewRect.right;
+      const vilKrasjePåHøyreSide = (btnRect.right + padding + popupWidth) > viewRect.right;
 
-      if (crashesOnRightSide) {
+      if (vilKrasjePåHøyreSide) {
         activeInfoPopup.style.left = `${btnRect.left - viewRect.left - popupWidth - padding}px`;
       } else {
         activeInfoPopup.style.left = `${btnRect.right - viewRect.left + padding}px`;
       }
 
-      // Align vertical coordinates flush on the Y-axis intersecting toggle positions
       activeInfoPopup.style.top = `${btnRect.top - viewRect.top - 15}px`;
-      
-      // Strips out the measuring flag to reveal the popover fluidly on screen [dan]
       activeInfoPopup.removeClass('is-measuring');
       
-      target.addClass('is-hovered');
     });
 
     // INTERACTION HOOK: Hover departure sweeps instance trees to prevent application memory leaks
     this.contentEl.on("mouseout", ".rv-info-btn", (event, target) => {
-      if (target) target.removeClass('is-hovered');
       if (activeInfoPopup) {
         activeInfoPopup.remove();
         activeInfoPopup = null;
@@ -591,7 +624,7 @@ export class MyBrainView extends ItemView implements HoverParent {
     this.contentEl.on("click", ".focusable-note-link", (event, target) => {
       event.preventDefault();
       const path = target.getAttribute("data-link-path");
-      if (path) this.onInternalLinkClicked(path);
+      if (path) void this.onInternalLinkClicked(path);
     });
 
     // 2. MOUSEOVER ENGINE: Caches active pointer vectors ahead of keyboard modifier flags
@@ -683,7 +716,7 @@ export class MyBrainView extends ItemView implements HoverParent {
     }
 
     // Executes deep navigation pipelines when a fresh node block layout switch occurs
-    this.openLinkInAdjacentPane(internalLink);
+    await this.openLinkInAdjacentPane(internalLink);
     await this.onFileChange(selectedFile);
     this.areaManager.renderGraph();
   }

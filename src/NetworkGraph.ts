@@ -73,10 +73,6 @@ export class NetworkGraph {
     // 2. COLDSTART GUARD: Holds off pipeline processing until Obsidian Core has completed full initialization 
     const isCacheReady = (this.app.metadataCache as typeof this.app.metadataCache & { initialized?: boolean }).initialized;
     if (!isCacheReady) {
-      // ==========================================================================
-      // COMPLIANT VOID SIGNALLING: Prefixes the call with the native 'void' operator.
-      // This informs the compiler that the promise return tracking is bypassed by design [dan].
-      // ==========================================================================
       setTimeout(() => void this.update(activeFile), 300);
       return;
     }
@@ -86,87 +82,86 @@ export class NetworkGraph {
       window.clearTimeout(this.updateDebounceTimer);
     }
 
-    this.updateDebounceTimer = setTimeout(async () => {
-      // Validates that metadata indexes are accessible before launching the core vaskesyklus
-      const centerCache = this.app.metadataCache.getFileCache(activeFile);
-      if (!this.app.metadataCache.resolvedLinks || !centerCache) {
-        // SAFE TIME CUSHION: Replaces the aggressive instant recursive loop with a stable 150ms timeout.
-        // Silences the floating promise check cleanly via the void syntax wrapper [dan]!
-        setTimeout(() => void this.update(activeFile), 150); 
-        return;
-      }
+    // ==========================================================================
+    // Standardized setTimeout to accept a synchronous void callback function.
+    // Wraps the inner data aggregation chains inside an instantly invoked async 
+    // execution envelope 
+    // ==========================================================================
+    this.updateDebounceTimer = setTimeout(() => {
+      // Launch the isolated asynchronous data cycle thread seamlessly
+      (async () => {
+        // Validates that metadata indexes are accessible before launching the core vaskesyklus
+        const centerCache = this.app.metadataCache.getFileCache(activeFile);
+        if (!this.app.metadataCache.resolvedLinks || !centerCache) {
+          setTimeout(() => void this.update(activeFile), 150); 
+          return;
+        }
 
-      // 4. MEMORY RESETS: Purges data schemas cleanly for the current generation pass
-      this.ignoredNotes.clear();
-      for (const note of this.noteCache.values()) {
-        note.isUsed = false;
-        note.isIndexedInThisRound = false; 
-        note.relation = 'undefined';
-        note.discoverySource = 'bodytext';
-        note.assignedArea = 'lower'; 
-        note.relations.parents.clear();
-        note.relations.children.clear();
-        note.relations.friends.clear();
-        note.relations.ignored.clear();
-        note.crossingBaits.clear();
-      }
+        // 4. MEMORY RESETS: Purges data schemas cleanly for the current generation pass
+        this.ignoredNotes.clear();
+        for (const note of this.noteCache.values()) {
+          note.isUsed = false;
+          note.isIndexedInThisRound = false; 
+          note.relation = 'undefined';
+          note.discoverySource = 'bodytext';
+          note.assignedArea = 'lower'; 
+          note.relations.parents.clear();
+          note.relations.children.clear();
+          note.relations.friends.clear();
+          note.relations.ignored.clear();
+          note.crossingBaits.clear();
+        }
 
-      Gate.cachedRadius = null; 
+        Gate.cachedRadius = null; 
 
-      for (const bait of this.anchorCache.values()) {
-        bait.isUsed = false;
-        bait.sources.clear(); 
-      }
+        for (const bait of this.anchorCache.values()) {
+          bait.isUsed = false;
+          bait.sources.clear(); 
+        }
 
-      // 5. MOUNT CENTER RECORD
-      this.centerNote = this.getOrCreateNote(activeFile);
-      if (!this.centerNote) return;
-      this.centerNote.relation = 'center';
-      this.centerNote.assignedArea = 'center';
-      this.centerNote.isUsed = true;
-      
-      // ==========================================================================
-      // 6. DEEP PRE-LOAD STAGE (Two-dimensional asynchronous cache ignition)
-      // Forces metadata hydration across 1st-degree and 2nd-degree parent networks.
-      // Guarantees anchorCache is fully populated before any classification loops invoke.
-      // ==========================================================================
-      const firstDegreeFiles = this.getFirstDegreeFiles(this.centerNote.path);
+        // 5. MOUNT CENTER RECORD
+        this.centerNote = this.getOrCreateNote(activeFile);
+        if (!this.centerNote) return;
+        this.centerNote.relation = 'center';
+        this.centerNote.assignedArea = 'center';
+        this.centerNote.isUsed = true;
+        
+        // 6. DEEP PRE-LOAD STAGE (Two-dimensional asynchronous cache ignition)
+        const firstDegreeFiles = this.getFirstDegreeFiles(this.centerNote.path);
 
-      for (const file of firstDegreeFiles) {
-        if (file.path !== this.centerNote.path) {
-          const preparedNote = this.getOrCreateNote(file);
-          if (preparedNote) {
-            preparedNote.isUsed = true; // Safeguards target instance from garbage collection
-            
-            // Evaluates relationship vector; if verified as a direct parent,
-            // preemptively fetch grandparent nodes to eliminate asynchronous blindspots.
-            const relasjonTilSenter = this.findRelation(this.centerNote, preparedNote);
-            if (relasjonTilSenter === 'parent') {
-              const parentFiles = this.getFirstDegreeFiles(preparedNote.path);
-              for (const parentFile of parentFiles) {
-                // Triggers immediate JIT-indexing and fills bait caches natively
-                this.getOrCreateNote(parentFile);
+        for (const file of firstDegreeFiles) {
+          if (file.path !== this.centerNote.path) {
+            const preparedNote = this.getOrCreateNote(file);
+            if (preparedNote) {
+              preparedNote.isUsed = true;
+              
+              const relasjonTilSenter = this.findRelation(this.centerNote, preparedNote);
+              if (relasjonTilSenter === 'parent') {
+                const parentFiles = this.getFirstDegreeFiles(preparedNote.path);
+                for (const parentFile of parentFiles) {
+                  this.getOrCreateNote(parentFile);
+                }
               }
             }
           }
+        } 
+
+        // 7. RELATION ESTABLISHMENT RECKONING
+        this.determineFirstDegreeNotes(this.centerNote);
+        await this.determineParentConnectionsAndSiblings(this.centerNote); 
+        this.determineCrossNetworkConnections(this.centerNote);
+
+        // 8. GARBAGE COLLECTION: Constantly sweeps dead or unrendered instances from RAM
+        for (const [path, note] of this.noteCache.entries()) {
+          if (!note.isUsed) this.noteCache.delete(path); 
         }
-      } 
+        for (const [path, bait] of this.anchorCache.entries()) {
+          if (!bait.isUsed || bait.sources.size === 0) this.anchorCache.delete(path);
+        }
 
-      // 7. RELATION ESTABLISHMENT RECKONING
-      this.determineFirstDegreeNotes(this.centerNote);
-      await this.determineParentConnectionsAndSiblings(this.centerNote); 
-      this.determineCrossNetworkConnections(this.centerNote);
-
-      // 8. GARBAGE COLLECTION: Constantly sweeps dead or unrendered instances from RAM
-      for (const [path, note] of this.noteCache.entries()) {
-        if (!note.isUsed) this.noteCache.delete(path); 
-      }
-      for (const [path, bait] of this.anchorCache.entries()) {
-        if (!bait.isUsed || bait.sources.size === 0) this.anchorCache.delete(path);
-      }
-
-      // Dispatches event downstream to notify the multi-instance view bus
-      this.app.workspace.trigger("graph:data-ready", activeFile.path);
+        // Dispatches event downstream to notify the multi-instance view bus
+        this.app.workspace.trigger("graph:data-ready", activeFile.path);
+      })(); // The trailing double parenthesis invokes the async thread execution block instantly [dan]
     }, 50); // 50ms ensures absolute sync with Obsidian's UI thread loops
   }
 
@@ -212,7 +207,9 @@ export class NetworkGraph {
       for (const attrib of allTargetProps) {
         if (!attrib) continue;
         
-        const rawValue = note.rawFrontmatter[attrib];
+        // TYPESAFE INDEX ACCESS: This allows dynamic string lookups ([attrib]) 
+        const frontmatterCache = note.rawFrontmatter as Record<string, any> | null;
+        const rawValue = frontmatterCache ? frontmatterCache[attrib] : undefined;
         if (rawValue == null) continue;
 
         // Wash raw YAML structures into pure string fragments via StringUtils pipeline
@@ -515,17 +512,22 @@ export class NetworkGraph {
     }
 
     // ==========================================================================
-    // CHECK B: Evaluates if otherNote owns an ACTIVE reciprocal link to centerNote (Speiling)
+    // CHECK B: Evaluates if otherNote owns an ACTIVE reciprocal link to centerNote (Mirroring)
     // HIGH-SCALE RECKONING: Validates distinct file path hashes and raw normalized string identities.
-    // Blocks partial fragment intrusions to guarantee structural stability [dan].
+    // Blocks partial fragment intrusions to guarantee structural stability.
     // ==========================================================================
     if (baitForCenter) {
       for (const [sourceKey, prop] of baitForCenter.sources.entries()) {
         if (!sourceKey) continue;
 
-        // Safely extracts the identifier path independent of the source entry format
-        const sourcePath = (typeof sourceKey === 'string') ? sourceKey : (sourceKey as any).path || "";
-        const sourceBasename = (typeof sourceKey === 'string') ? sourceKey : (sourceKey as any).basename || "";
+        // Cast the variant reference into Node
+        const sourcePath = (typeof sourceKey === 'string') 
+          ? sourceKey 
+          : (sourceKey as Node).path || "";
+          
+        const sourceBasename = (typeof sourceKey === 'string') 
+          ? sourceKey 
+          : (sourceKey as Node).basename || "";
 
         // STRICT IDENTICAL SJEKK:
         if (sourcePath === otherNote.path || sourceBasename.toLowerCase().normalize('NFC') === lowercaseOtherName) {
@@ -556,12 +558,15 @@ export class NetworkGraph {
 
     const targetName = otherNote.basename;
     
-    const centerFm = centerNote.rawFrontmatter;
-    const otherFm = otherNote.rawFrontmatter;
+    // Cast the native frontmatter structures locally to explicit Record string index maps.
+    // This safely enables high-velocity dynamic lookups ([key])
+    const centerFmIndex = centerNote.rawFrontmatter as Record<string, any> | null;
+    const otherFmIndex = otherNote.rawFrontmatter as Record<string, any> | null;
 
-    // Checks properties securely using native JavaScript array inclusion filters
-    const finnesIFm = (centerFm && Object.keys(centerFm).some(key => String(centerFm[key]).includes(targetName))) ||
-                      (otherFm && Object.keys(otherFm).some(key => String(otherFm[key]).includes(centerNote.basename)));
+    // Checks properties securely using native JavaScript array inclusion filters loop matrices
+    const finnesIFm = (centerFmIndex && Object.keys(centerFmIndex).some(key => String(centerFmIndex[key]).includes(targetName))) ||
+                      (otherFmIndex && Object.keys(otherFmIndex).some(key => String(otherFmIndex[key]).includes(centerNote.basename)));
+                      
     if (finnesIFm) {
       otherNote.discoverySource = "frontmatter-udefinert";
     } else {
@@ -740,10 +745,6 @@ export class NetworkGraph {
     if (this.centerNote) {
       const currentCenterFile = this.app.vault.getFileByPath(this.centerNote.path);
       if (currentCenterFile) {
-        // ==========================================================================
-        // COMPLIANT VOID SIGNALLING: Prefixes the call with the native 'void' operator.
-        // This informs the compiler that the promise return tracking is bypassed by design [dan].
-        // ==========================================================================
         void this.update(currentCenterFile); 
       }
     }

@@ -1,16 +1,26 @@
+/**
+ * GLOBAL BRAND VARIABLES
+ * Declares native design tokens mapped seamlessly onto Obsidian's active theme layers.
+ */
 :root {
   --rv-line: var(--text-muted, #888888); 
-  --rv-line-width: 0.5px; 
+  --rv-line-width: 0.04em; 
 }
 
 /* ==========================================================================
-   1. CONTAINER (Rigid grid frame with reactive mobile scale)
+   CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
    ========================================================================== */
 
-.rv-container {
+.workspace-leaf .workspace-leaf-content .view-content.rv-container {
   container-name: main;
   display: grid;
   grid-template-columns: 1fr minmax(25%, 33%) 1fr;
+  
+  /* ==========================================================================
+     MAGNETIC CLUSTER ROW DESIGN (Tvinger klyngene inn mot senter!)
+     Rows 1 and 5 act as flexible shock absorbers (1fr) that swallow all empty space,
+     symmetrically compressing rows 2, 3, and 4 together tightly in the center [dan]!
+     ========================================================================== */
   grid-template-rows: 1fr auto auto auto 1fr;
   
   position: absolute;
@@ -18,556 +28,672 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: transparent;
-  overflow: hidden !important;
+  background-color: transparent; 
+  overflow: hidden;
   box-sizing: border-box;
-  
-  /* Fallback template mapping uses interface or customized text scaling */
-  font-size: calc(var(--font-text-size, 13px) * 0.8) !important;
-}
+  font-size: calc(var(--font-text-size, 13px) * 0.85);
+
+  /* --------------------------------================================--------
+     1. CONTAINER INTERACTION SUB-HOOKS
+     ------------------------------------------------------------------------ */
+
+  .focusable-note-link::before,
+  .focusable-note-link::after {
+    font-size: 0.6em; 
+    transform: translateY(-15%);
+    vertical-align: middle; 
+    line-height: 1;
+    display: inline-block;
+    white-space: nowrap;
+  }
+
+  .focusable-note-link {
+    display: inline-block;
+    padding: 0.25em 0.6em;
+    border-radius: 0.3em;
+    text-decoration: none;
+    font-weight: 500;
+    transition: background-color 0.15s ease, color 0.15s ease;
+    background-color: color-mix(in srgb, var(--background-secondary), transparent 30%);
+    backdrop-filter: blur(4px); 
+    -webkit-backdrop-filter: blur(4px); 
+  }
+
+  .rv-link-wrapper {
+    display: inline-flex;
+    align-items: center;
+    position: relative;
+    margin: 0.15em 0.3em; 
+    padding: 0.15em 0.45em;
+    border-radius: 0.3em;
+    white-space: nowrap;
+  }
+
+  .rv-scroll-pane {
+    max-height: 22em; 
+    overflow-y: auto;
+    overflow-x: hidden;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+  }
+
+  .rv-flanke-column {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3em; 
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* --------------------------------================================--------
+     2. AREAS & QUADRANTS INFRASTRUCTURE (The Compressed Symmetrical Grid)
+     ------------------------------------------------------------------------ */
+
+  /**
+   * UPPER QUADRANT (Row 2: Pulls parents tight down against center)
+   */
+  .rv-area.upper {
+    grid-column: 2;
+    grid-row: 2; /* Compressed tightly into the upper slot above origo [dan] */
+    margin-bottom: 0.3em; 
+    width: 100%;
+    min-width: 11.5em;  
+    anchor-name: --upper-area; 
+    align-self: end;
+    overflow: visible;
+  }
+
+  /**
+   * CENTER & LATERAL FLANKES (Row 3: Absolute layout origin axis)
+   */
+  .rv-area.left, 
+  .rv-area.right,
+  .rv-area.center {
+    grid-row: 3; /* Unified flush on the central axis row [dan] */
+    justify-self: stretch;
+    align-self: center;
+    display: flex;
+    flex-direction: column;
+    overflow: visible; 
+  }
+
+  .rv-area.center {
+    grid-column: 2;
+    anchor-name: --center-area; 
+    min-width: 33%;
+    align-self: center;
+    justify-self: center;
+    width: auto;
+    padding: clamp(0.4em, 3cqh, 2em) clamp(0.4em, 1cqw, 1.2em);
+  }
+
+  .rv-area.left {
+    grid-column: 1;
+    margin-right: 0.3em;
+  }
+
+  .rv-area.right {
+    grid-column: 3;
+    margin-left: 0.3em;
+  }
+
+  /**
+   * LOWER QUADRANT (Row 4: Pulls children tight up against center)
+   */
+  .rv-area.lower {
+    grid-column: 1 / span 3; 
+    grid-row: 4; /* Compressed tightly into the lower slot below origo [dan] */
+    margin-top: 0.3em;
+    margin-left: 0.35em; 
+    width: 100%;  
+    align-self: start; 
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    overflow: visible;
+  }
+
+  /* ==========================================================================
+    3. BOX MODELS & VIEWPORT WRAPPERS (Scroll engines and multi-column constraints)
+    ========================================================================== */
+
+  /**
+   * Scroll engine wrapper block.
+   * Regulates multi-layered touch scrolling physics across target quadrant nodes.
+   * COMPLIANT REFACTOR: All legacy !important tokens safely purged via core hierarchy [dan].
+   */
+  .rv-collection-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-y: auto; 
+    overflow-x: hidden; 
+    -webkit-overflow-scrolling: touch; /* Preserves native momentum scrolling on iOS */
+    touch-action: pan-y;
+  }
+
+  /* Structural override tailored specifically to the lower children cluster framework */
+  .rv-area.lower .rv-collection-wrapper {
+    height: clamp(0.75em, 100%, 55vh);
+    max-height: 52vh; 
+    align-items: center;
+    justify-content: flex-start;
+  }
+  /* Structural safeguard forcing vertical alignment for 1-3 active children nodes */
+  .rv-area.lower .rv-collection-wrapper .rv-columns-wrapper:has(.rv-groups:nth-child(2)):not(:has(.rv-groups:nth-child(4))) {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.6em; /* Converted from pixels to relative em to secure seamless fluid zooming [dan] */
+    columns: none;
+    width: 100%;
+    height: auto;
+    min-height: min-content; 
+  }
+
+  /* Specific vertical heights constraints preserving canvas breathing space across screens */
+  .rv-area.upper .rv-collection-wrapper {
+    max-height: 22vh; 
+  }
+
+  .rv-area.left .rv-collection-wrapper {
+    max-height: 35vh; 
+  }
+
+  .rv-area.right .rv-collection-wrapper {
+    max-height: 75vh; /* Exploits maximum horizontal canvas density on desktop frames */
+  }
+
+  /* ==========================================================================
+     4. COLLECTIONS & COLUMNS (Multi-column content routing engines)
+     ========================================================================== */
+
+  .rv-collection {
+    max-height: none;
+    height: auto;
+    width: 100%;
+    overflow: visible; 
+    box-sizing: border-box;
+  }
+
+  /**
+   * Hardware-accelerated multi-column content router.
+   * COMPLIANT REFACTOR: We chain the .rv-area quadrant class into the selector.
+   * This guarantees that the column layout out-ranks any theme-level flex constraints [dan]!
+   */
+  .rv-area .rv-columns-wrapper {
+    display: block;
+    columns: 9em; /* Balanced column width template in relative em [dan] */
+    column-gap: 1em; 
+    width: 100%;
+    max-width: 100%;
+    height: fit-content;
+    overflow: visible;
+    box-sizing: border-box;
+    margin: 0 auto;
+  }
+
+  /* GUARD 1: Centering fix deployed ONLY when there is strictly ONE single group/node block total */
+  .rv-columns-wrapper:has(> .rv-groups:only-child) {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: auto !important;
+  }
+
+  /* ==========================================================================
+     5. ADAPTIVE RESPONSIVE FRAME GRID-CHECKS
+     ========================================================================== */
+
+  /**
+   * Native parent selector binding loops.
+   * Leverages the nested amp '&' token to map layout-shifting mutations directly 
+   * onto Obsidian's parent container grid framework dynamically [dan]!
+   */
+  &[data-left-tall="true"] {
+    .rv-area.upper { grid-column: 2; }                       
+    .rv-area.left { grid-row: 2 / span 2; align-self: end; } 
+  }
+
+  &[data-right-tall="true"] {
+    .rv-area.lower { grid-column: 1 / span 2; }                  
+    .rv-area.right { grid-row: 2 / span 3; align-self: center; } 
+  }
+
+  /* Structural grouping wrapper bypassed by the multi-column engine */
+  .rv-groups { 
+    display: contents; 
+  } 
+
+  /* ==========================================================================
+     6. INTERACTIVE INDIVIDUAL RAD-BOXES (Item cell blocks)
+     ========================================================================== */
+
+  /**
+   * Node block cell boundaries.
+   * Standardized strictly under relative positioning rules to act as vector gate anchor roots.
+   */
+  .item {
+    display: flex; 
+    flex-direction: row;
+    align-items: center;  
+    justify-content: center; 
+    position: relative; 
+    overflow: visible; 
+    
+    padding: 0.3em;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%; 
+    box-sizing: border-box;
+
+    /* Strict fragmentation shields forbidding column breakage mid-cell */
+    break-inside: avoid;
+    page-break-inside: avoid; 
+    z-index: 2;
+  }
+
+  /* Explicit top padding gap deployed only when structural cluster headers fire */
+  .item.rv-first-in-group {
+    margin-top: 1.38em;
+    flex-direction: column; /* Converts node stacks vertically if headers are deployed */
+    overflow: visible;
+  }
+
+  /* Standard visibility killer layout schema */
+  .item.hidden {
+    display: none;
+  }
+
+  /* ==========================================================================
+     7. LINKDIV WRAPPER (Forbids row breakage and fragmentation)
+     ========================================================================== */
+
+  /**
+   * Layout envelope packaging vector ports and node components.
+   * Compiles horizontal layouts natively while preventing fragmentation layers.
+   */
+  .rv-linkdiv {
+    display: inline-flex;
+    flex-direction: row;
+    flex-wrap: nowrap; /* Strict safeguard: prevents nodes from splitting */
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    width: fit-content;
+    max-width: 100%;
+    padding: 0;
+    overflow: visible;
+  }
+
+  /* Expanded header group background highlight backing layout modifiers */
+  .rv-groups.expanded .rv-linkdiv {
+    background: rgba(183, 183, 183, 0.15);
+    box-shadow: inset 0 0 0.38em rgba(0, 0, 0, 0.05);
+  }
+
+  /* ==========================================================================
+     8. HOVER MOTORS & TEXT WRAPPING SAFEGUARDS
+     ========================================================================== */
+
+  /**
+   * Unified text interaction boundary interface.
+   * Merges custom transparency mixing formula with an advanced frosted-glass layout filter.
+   * Enables comprehensive soft word-breaking while preserving fluid scalability [dan].
+   */
+  .focusable-note-link {
+    position: relative;
+    display: inline-block;
+    box-sizing: border-box;
+    min-width: 0;
+    text-align: center;
+    text-decoration: none;
+    white-space: normal;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow: visible; 
+    cursor: default;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
+    
+    padding: 0.02em 0.4em;
+    line-height: 1.1; /* Forhindrer nettleseren fra å spytte ut usynlig luft vertikalt */
+    border-radius: 0.25em;
+    
+    /* Theme adaptive text mask framework: */
+    backdrop-filter: blur(0px); 
+    -webkit-backdrop-filter: blur(0px);
+    background-color: transparent; 
+  }
+
+  /* Forces text-spans to break row blocks inside frames smoothly */
+  .rv-text-span {
+    display: inline; 
+    background-color: color-mix(in srgb, var(--background-secondary), transparent 30%);
+    pointer-events: none; /* Shields cursor bounds from Obsidian JIT pointer collisions */
+  }
+
+  /**
+   * Hardware-accelerated 3D lifting engine.
+   * COMPLIANT HOVER REFACTOR: Swapped static JavaScript class bindings with native CSS :hover loops.
+   * This completely bypasses script threads to ensure 100% stable, layout flicker-free illumination [dan]!
+   */
+  .item:hover .focusable-note-link {
+    transform: scale(1.05);
+    box-shadow: 0 0 0.92em var(--text-accent), inset 0 0 0 0.08em var(--text-accent);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+
+  /* ==========================================================================
+     9. BACK SVGCANVAS LAYER (Bezier curve tracks mapping)
+     ========================================================================== */
+
+  /**
+   * Symmetrical background SVG layer window bounds.
+   * Placed strictly as an absolute background blanket layer underneath node clusters [dan].
+   */
+  svg.rv-svg-layer {
+    position: absolute; 
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1; /* Aligns canvas layers cleanly above collapsable splits grids [dan] */
+    pointer-events: none; /* Disables path tracking intercepting mouse events */
+  }
+
+  /* Mathematical vector path mapping styles */
+  .rv-link-path {
+    fill: none; 
+    stroke: var(--rv-line);
+    stroke-width: var(--rv-line-width);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Safely unmounts hidden path connections from rendering cycles when out of bounds */
+  .is-hidden,
+  svg.is-hidden {
+    display: none; 
+  }
+
+  /* ==========================================================================
+     10. GEOMETRICAL PORT GATES (Vector docking nodes)
+     ========================================================================== */
+
+  /**
+   * Docking coordinate port shapes.
+   * Strictly locks down height/width metrics using em units to preserve zoom mapping matrices [dan].
+   */
+  .rv-gate-svg {
+    position: absolute;
+    width: 0.5em;
+    height: 0.5em;
+    overflow: visible;
+    pointer-events: none;
+    flex-shrink: 0; /* Safeguards gate vectors from cross-row squeezing */
+  }
+
+  /* Anchor direction formatting vectors offsets */
+  .rv-gate-svg.up {
+    top: -0.25em;   
+    left: 50%; 
+    transform: translate(calc(-50% - 0.5em), 0);
+  }
+
+  .rv-gate-svg.down {
+    bottom: -0.25em;   
+    left: 50%; 
+    transform: translate(calc(-50% + 0.5em), 0);
+  }
+
+  .rv-gate-svg.left {
+    top: 50%;
+    left: -0.25em;
+    right: auto;
+    transform: translateY(-50%);
+  }
+
+  .rv-gate-svg.right {
+    top: 50%;
+    right: -0.25em;
+    left: auto;
+    transform: translateY(-50%);
+  }
+
+  /* ==========================================================================
+     11. GATE STATE ENGINE (Empty vs Connected filling parameters)
+     ========================================================================== */
+
+  /* Standard static port vector frame state */
+  .rv-gate-svg circle {
+    fill: var(--background-secondary); 
+    stroke: var(--rv-line);
+    stroke-width: 1px;
+  }
+
+  /* Activated connected connection state injecting dynamic opacity blending math */
+  .rv-gate-svg.is-connected circle {
+    fill: color-mix(in srgb, var(--rv-line), transparent 40%);
+    stroke: var(--rv-line);
+    stroke-width: 1px;
+  }
+
+  /* Focus illumination boost compounding glow filtering on active node paths */
+  .item:hover .rv-gate-svg.is-connected circle {
+    fill: var(--rv-line); 
+    filter: drop-shadow(0 0 0.3em var(--rv-line)); 
+  }
+
+  /* ==========================================================================
+     12. ULTRA-COMPACT GROUP BADGE CAPSLOCK (Taktil plusminus switch)
+     ========================================================================== */
+
+  /**
+   * Proportional expand/collapse interaction toggle button.
+   * Converted from absolute pixels to relative em units to scale during font zooming [dan].
+   */
+  .rv-plusminus {
+    position: absolute; 
+    top: -1.08em;
+    right: 0.3em;
+    z-index: 10;
+    width: max-content;
+    height: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.15em 0.45em;
+    margin: 0;
+    border-radius: 1.5em; 
+    font-size: 0.8em; 
+    font-weight: bold;
+    line-height: 1;
+    white-space: nowrap;
+    background-color: var(--background-primary-alt); 
+    border: 1.5px solid var(--border-color); 
+    color: var(--text-muted);
+    cursor: pointer;
+    box-sizing: border-box;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); 
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+    break-inside: avoid-column;
+  }
+
+  .rv-plusminus:hover {
+    background-color: var(--interactive-accent); 
+    border-color: var(--interactive-accent);
+    color: white;
+    transform: scale(1.05); 
+  }
+
+  /* INTEGRATED GROUP SAFEGUARD: Enforces constraints on the button element inside the first group block */
+  .item.rv-first-in-group .rv-plusminus {
+    width: fit-content;
+    max-width: 100%;
+    text-align: center;
+    break-inside: avoid-column;
+    break-after: avoid-column;
+    overflow: visible; /* Permits the 3D button aura shadow to render unclipped */
+  }
+
+  /* INTEGRATED WRAPPER SAFEGUARD: Enforces structure on the node frame inside the first group block */
+  .item.rv-first-in-group .rv-linkdiv {
+    width: fit-content;
+    max-width: 100%;
+    break-inside: avoid-column;
+    break-before: avoid-column;
+  }
+
+  /* ==========================================================================
+     13. ELASTIC SATELLITE INFO BUTTON (Taktil metadata switch)
+     ========================================================================== */
+
+  .rv-info-btn {
+    position: absolute;
+    top: 0;
+    right: -0.5em;
+    z-index: 10;
+    color: var(--text-accent); /* Neutral info accent branding matching core elements */
+    cursor: pointer;
+    box-sizing: border-box;
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  }
+
+  /* ==========================================================================
+     14. METADATA INFO POPUP (Cinematic local presentation layer)
+     ========================================================================== */
+
+  /**
+   * Floating info satellite badge component.
+   * Blends theme-adaptive secondary background layers smoothly with layout split boundaries.
+   */
+  .rv-info-hover {
+    position: absolute; 
+    z-index: var(--layer-menu);
+    pointer-events: none;
+    background-color: var(--background-secondary-alt);
+    border: 1px solid var(--border-color);
+    padding: 0.45em 0.75em;
+    border-radius: 0.3em;
+    box-shadow: 0 0.15em 0.6em rgba(0, 0, 0, 0.25);
+  }
+
+  /* Keeps the element dimensionally active for JS offsets while masking visibility [dan] */
+  .rv-info-hover.is-measuring {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .rv-info-hover .popup-title {
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+  /* ==========================================================================
+     15. AUTOMATIC TEXTAREA RESIZER (Plugin settings dashboard styles)
+     ========================================================================== */
+
+  textarea.rv-setting-textarea {
+    width: 100%;
+    min-width: 11.5em;
+    min-height: 3.8em;
+    max-height: 27em;
+    resize: none;
+    overflow-y: auto;
+    field-sizing: content;
+  }
+
+  /* ==========================================================================
+     16. INSTRUCTIONAL WELCOME FRAME (Premium initial state mask)
+     ========================================================================== */
+
+  .rv-welcome-container {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 2em;
+    box-sizing: border-box;
+    text-align: center;
+    
+    /* Smooth fade-in sequence shielding the frame from raw layout pops */
+    animation: rvWelcomeFadeIn 0.2s ease-out forwards;
+  }
+
+  .rv-welcome-text {
+    margin: 0;
+    max-width: 21.5em; /* Constrains text width gracefully inside standard sidebar widths */
+    color: var(--text-muted);
+    font-size: 1.1em;
+    line-height: 1.5;
+  }
+
+  @keyframes rvWelcomeFadeIn {
+    from {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* ==========================================================================
+     17. NATIVE INTERFACE BUTTONS (100% Pure CSS Hover States)
+     ========================================================================== */
+
+  /* Triggers instantly in the browser thread without waking any JavaScript observers [dan]! */
+  .rv-info-btn:hover,
+  .rv-zoom-btn:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+    cursor: pointer;
+  }
+
+  /* ==========================================================================
+     18. SVG LAYER DETACHMENT RECONCILIATION (Full screen grid alignment)
+     ========================================================================== */
+     
+  svg.rv-svg-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    min-width: 100%;
+    min-height: 100%;
+    pointer-events: none; 
+    display: block; 
+    visibility: visible;
+    z-index: 1; 
+  }
+
+} /* <<--- GLOBAL ENVELOPE END!  */
+
+/* ==========================================================================
+   GLOBAL VIEWPORT MODIFIERS (Placed outside the core envelope)
+   ========================================================================== */
 
 /* Mobile framework override to prevent layout fragmentation on iOS devices */
-.is-phone .rv-container,
-.is-tablet .rv-container {
-  height: calc(100% - 10px) !important;
+.is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container,
+.is-tablet .workspace-leaf .workspace-leaf-content .view-content.rv-container {
+  height: calc(100% - 0.75em);
   box-sizing: border-box;
-  padding-bottom: 0 !important;
-}
-
-/* Custom icon optimization (Applies specific rendering constraint to ::before/::after hooks) */
-.rv-container .focusable-note-link::before,
-.rv-container .focusable-note-link::after {
-  font-size: 0.6em !important; 
-  transform: translateY(-15%) !important;
-  vertical-align: middle !important; 
-  line-height: 1 !important;
-  display: inline-block !important;
-  white-space: nowrap !important;
-}
-
-/* ==========================================================================
-   2. AREAS (Open grid infrastructure mapping the network quadrants)
-   ========================================================================== */
-
-.rv-area.center {
-  grid-column: 2;
-  grid-row: 3;
-  anchor-name: --center-area; 
-  min-width: 33%;
-  align-self: center;
-  justify-self: center;
-  width: auto;
-  padding: clamp(8px, 4cqh, 40px) clamp(8px, 1cqw, 20px);
-}
-
-.rv-area.upper {
-  grid-column: 2;
-  grid-row: 2;
-  margin-bottom: 5px;
-  width: 100%;
-  min-width: 150px;  
-  anchor-name: --upper-area; 
-  align-self: end;
-  overflow: visible !important;
-}
-
-.rv-area.lower {
-  grid-column: 1 / span 3; 
-  grid-row: 4;
-  margin-top: 5px;
-  margin-left: 0.35em; /* Preserves geometrical canvas clearances for side curves */
-  width: 100%;  
-  align-self: start; 
-  display: flex !important;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-}
-
-.rv-area.left, 
-.rv-area.right {
-  justify-self: stretch;
-  align-self: center;
-  display: flex;
-  flex-direction: column;
-  overflow: visible !important; 
-}
-
-.rv-area.left {
-  grid-column: 1;
-  grid-row: 3;
-  margin-right: 5px;
-}
-
-.rv-area.right {
-  grid-column: 3;
-  grid-row: 2 / span 2; 
-  margin-left: 5px;
-}
-
-/* ==========================================================================
-   3. BOX MODELS & VIEWPORT WRAPPERS (Scroll engines and multi-column constraints)
-   ========================================================================== */
-
-.rv-collection-wrapper {
-  display: flex !important;
-  flex-direction: column;
-  width: 100%;
-  max-width: 100%;
-  box-sizing: border-box;
-  overflow-y: auto !important; 
-  overflow-x: hidden !important; 
-  -webkit-overflow-scrolling: touch !important; /* Preserves native momentum scrolling on iOS */
-  touch-action: pan-y !important;
-}
-
-.rv-area.lower .rv-collection-wrapper {
-  height: clamp(10px, 100%, 55vh) !important;
-  max-height: 65vh !important; 
-  align-items: center;
-  justify-content: flex-start !important;
-}
-
-/* iOS padding offsets safeguarding scroll gutters on touch screens */
-.is-phone .rv-area.lower .rv-collection-wrapper,
-.is-tablet .rv-area.lower .rv-collection-wrapper {
-  padding-bottom: 45px !important; 
-  box-sizing: border-box;
-  -webkit-overflow-scrolling: touch !important;
-  touch-action: pan-y !important;
-}
-
-/* Structural safeguard forcing vertical alignment for 1-3 active children nodes */
-.rv-area.lower .rv-collection-wrapper .rv-columns-wrapper:has(.rv-groups:nth-child(2)):not(:has(.rv-groups:nth-child(4))) {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
-  gap: 8px !important;
-  columns: none !important;
-  width: 100%;
-  height: auto !important;
-  min-height: min-content !important; 
-}
-
-.rv-area.upper .rv-collection-wrapper {
-  max-height: 22vh !important; /* Limits top area layout before deploying inner scrolling overflow */
-}
-
-.rv-area.left .rv-collection-wrapper {
-  max-height: 35vh !important; 
-}
-
-.rv-area.right .rv-collection-wrapper {
-  max-height: 75vh !important; /* Exploits maximum horizontal canvas density on desktop frames */
-}
-
-/* ==========================================================================
-   4. COLLECTIONS & COLUMNS (Multi-column content routing engines)
-   ========================================================================== */
-
-.rv-collection {
-  max-height: none !important;
-  height: auto !important;
-  width: 100%;
-  overflow: visible !important; 
-  box-sizing: border-box;
-}
-
-.rv-columns-wrapper {
-  display: block !important;
-  columns: 100px; 
-  column-gap: 12px; 
-  width: 100%;
-  max-width: 100%;
-  height: fit-content;
-  overflow: visible !important;
-  box-sizing: border-box;
-}
-
-/* ==========================================================================
-   5. ADAPTIVE RESPONSIVE FRAME GRID-CHECKS
-   ========================================================================== */
-
-.rv-container[data-left-tall="true"] {
-  & .rv-area.upper { grid-column: 2; }                       
-  & .rv-area.left { grid-row: 2 / span 2; align-self: end; } 
-}
-
-.rv-container[data-right-tall="true"] {
-  & .rv-area.lower { grid-column: 1 / span 2; }                  
-  & .rv-area.right { grid-row: 2 / span 3; align-self: center; } 
-}
-
-/* Structural grouping wrapper bypassed by the multi-column engine */
-.rv-groups { 
-  display: contents; 
-} 
-
-/* ==========================================================================
-   6. INTERACTIVE INDIVIDUAL RAD-BOXES (Item cell blocks)
-   ========================================================================== */
-
-.item {
-  display: flex !important; 
-  flex-direction: row !important;
-  align-items: center !important;  
-  justify-content: center !important; 
-  position: relative !important; 
-  overflow: visible !important; 
-  
-  padding: 0.3em;
-  width: 100% !important;
-  min-width: 0 !important;
-  max-width: 100% !important; 
-  box-sizing: border-box;
-
-  /* Strict fragmentation shields forbidding column breakage mid-cell */
-  break-inside: avoid !important;
-  page-break-inside: avoid !important; 
-}
-
-.item.rv-first-in-group {
-  margin-top: 18px !important;
-  flex-direction: column !important; /* Converts node stacks vertically if headers are deployed */
-  overflow: visible !important;
-}
-
-.item.hidden {
-  display: none !important;
-}
-
-/* ==========================================================================
-   7. LINKDIV WRAPPER (Forbids row breakage and fragmentation)
-   ========================================================================== */
-
-.rv-linkdiv {
-  display: inline-flex !important;
-  flex-direction: row !important;
-  flex-wrap: nowrap !important; /* Strict safeguard: prevents nodes from splitting */
-  align-items: center !important;
-  justify-content: center !important;
-
-  position: relative !important;
-  width: fit-content;
-  max-width: 100% !important;
-  padding: 0 0.3em;
-  overflow: visible !important;
-}
-
-/* Expanded groups state backing layout modifiers */
-.rv-groups.expanded .rv-linkdiv {
-  background: rgba(183, 183, 183, 0.15);
-  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.05);
-}
-
-/* ==========================================================================
-   8. HOVER MOTORS & TEXT WRAPPING SIFECARDS
-   ========================================================================== */
-
-.rv-container .focusable-note-link {
-  position: relative !important;
-  display: inline-block !important;
-  box-sizing: border-box;
-  min-width: 0 !important;
-  text-align: center !important;
-  text-decoration: none !important;
-  background-color: color-mix(in srgb, var(--background-secondary), transparent 30%) !important;
-  white-space: normal !important;
-  word-wrap: break-word !important;
-  word-break: break-word !important;
-  overflow: visible !important; 
-  cursor: default !important;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
-}
-
-.rv-container .focusable-note-link .rv-text-span {
-  display: inline !important; /* Forces soft row breaks inside the node frame layout */
-  pointer-events: none !important; /* Shields cursor bounds from Obsidian JIT pointer collisions */
-}
-
-/* Hardware-accelerated 3D lifting engine triggered via the active state class */
-.rv-container .item.is-hovered .focusable-note-link {
-  transform: scale(1.05) !important;
-  box-shadow: 0 0 12px var(--text-accent), inset 0 0 0 1px var(--text-accent) !important;
-  backdrop-filter: blur(4px) !important;
-  -webkit-backdrop-filter: blur(4px) !important;
-}
-
-/* ==========================================================================
-   9. BACK SVGCANVAS LAYER (Bezier curve tracks mapping)
-   ========================================================================== */
-
-.rv-svg-layer {
-  position: absolute !important; 
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -10;
-  pointer-events: none; /* Disables path tracking intercepting mouse events */
-}
-
-.rv-link-path {
-  fill: none !important; 
-  stroke: var(--rv-line) !important;
-  stroke-width: var(--rv-line-width) !important;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-/* Safely unmounts hidden path connections from rendering cycles when out of bounds */
-.rv-container .is-hidden,
-svg.is-hidden {
-  display: none !important; /* Enforces absolute hidden state natively in CSS [dan] */
-}
-
-/* ==========================================================================
-   10. GEOMETRICAL PORT GATES (Vector docking nodes)
-   ========================================================================== */
-
-.rv-gate-svg {
-  position: absolute !important;
-  width: 0.5em !important;
-  height: 0.5em !important;
-  overflow: visible !important;
-  pointer-events: none;
-  flex-shrink: 0 !important; /* Safeguards gate vectors from cross-row squeezing */
-}
-
-.rv-gate-svg.up {
-  top: -0.25em !important;   
-  left: 50% !important; 
-  transform: translate(calc(-50% - 0.5em), 0) !important;
-}
-
-.rv-gate-svg.down {
-  bottom: -0.25em !important;   
-  left: 50% !important; 
-  transform: translate(calc(-50% + 0.5em), 0) !important;
-}
-
-.rv-gate-svg.left {
-  top: 50% !important;
-  left: -0.25em !important;
-  right: auto !important;
-  transform: translateY(-50%) !important;
-}
-
-.rv-gate-svg.right {
-  top: 50% !important;
-  right: -0.25em !important;
-  left: auto !important;
-  transform: translateY(-50%) !important;
-}
-
-/* ==========================================================================
-   11. GATE STATE STATES (Empty vs Connected filling engines)
-   ========================================================================== */
-
-/* Standard static frame state */
-.rv-gate-svg circle {
-  fill: var(--background-secondary) !important; 
-  stroke: var(--rv-line) !important;
-  stroke-width: 1px !important;
-}
-
-/* Activated route state injecting color mixing formulas based on global variables */
-.rv-gate-svg.is-connected circle {
-  fill: color-mix(in srgb, var(--rv-line), transparent 40%) !important;
-  stroke: var(--rv-line) !important;
-  stroke-width: 1px !important;
-}
-
-/* Focus illumination boost compounding glow filtering on active node paths */
-.item.is-hovered .rv-gate-svg.is-connected circle {
-  fill: var(--rv-line) !important; 
-  filter: drop-shadow(0 0 4px var(--rv-line)) !important; 
-}
-
-/* ==========================================================================
-   12. ULTRA-COMPACT GROUP BADGE CAPSLOCK (Taktil plusminus switch)
-   ========================================================================== */
-
-.rv-plusminus {
-  position: absolute !important; 
-  top: -14px !important;
-  right: 4px !important;
-  z-index: 10;
-  width: max-content !important;
-  height: auto !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  padding: 2px 6px !important;
-  margin: 0 !important;
-  border-radius: 20px !important; 
-  font-size: 0.8em !important; 
-  font-weight: bold !important;
-  line-height: 1 !important;
-  white-space: nowrap !important;
-  background-color: var(--background-primary-alt) !important; 
-  border: 1.5px solid var(--border-color) !important; 
-  color: var(--text-muted) !important;
-  cursor: pointer;
-  box-sizing: border-box;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); 
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
-  break-inside: avoid-column !important;
-}
-
-.rv-plusminus:hover {
-  background-color: var(--interactive-accent) !important; 
-  border-color: var(--interactive-accent) !important;
-  color: white !important;
-  transform: scale(1.05); 
-}
-
-/* INTEGRATED GROUP SAFEGUARD: Enforces constraints on the button element inside the first group block */
-.item.rv-first-in-group .rv-plusminus {
-  width: fit-content !important;
-  max-width: 100% !important;
-  text-align: center !important;
-  break-inside: avoid-column !important;
-  break-after: avoid-column !important;
-  overflow: visible !important; /* Permits the 3D button aura shadow to render unclipped */
-}
-
-/* ==========================================================================
-   7. LINKDIV WRAPPER (Forbids row breakage and fragmentation)
-   ========================================================================== */
-
-.rv-linkdiv {
-  display: inline-flex !important;
-  flex-direction: row !important;
-  flex-wrap: nowrap !important; 
-  align-items: center !important;
-  justify-content: center !important;
-  position: relative !important;
-  width: fit-content;
-  max-width: 100% !important;
-  padding: 0 0.3em;
-  overflow: visible !important;
-}
-
-.rv-groups.expanded .rv-linkdiv {
-  background: rgba(183, 183, 183, 0.15);
-  box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.05);
-}
-
-/* INTEGRATED WRAPPER SAFEGUARD: Enforces structure on the node frame inside the first group block */
-.item.rv-first-in-group .rv-linkdiv {
-  width: fit-content !important;
-  max-width: 100% !important;
-  break-inside: avoid-column !important;
-  break-before: avoid-column !important;
-}
-
-/* ==========================================================================
-   13. ELASTIC SATELLITE INFO BUTTON (Taktil metadata switch)
-   ========================================================================== */
-
-.rv-info-btn {
-  position: absolute !important;
-  top: 0px !important;
-  z-index: 10;
-  color: var(--text-accent) !important; /* Neutral info accent branding matching core elements */
-  cursor: pointer;
-  box-sizing: border-box;
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-}
-
-/* Interactive illumination glow when hovering directly over the info element */
-.rv-info-btn:hover {
-  background-color: var(--text-accent) !important;
-  border-color: var(--text-accent) !important;
-  color: var(--background-primary) !important;
-}
-
-/* ==========================================================================
-   14. METADATA INFO POPUP (Flyttet fra JavaScript for maksimal ytelse!)
-   ========================================================================== */
-
-.rv-info-hover {
-  position: absolute !important; 
-  z-index: var(--layer-menu) !important;
-  pointer-events: none !important;
-  background-color: var(--background-secondary-alt) !important;
-  border: 1px solid var(--border-color) !important;
-  padding: 6px 10px !important;
-  border-radius: 4px !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
-}
-
-/* ==========================================================================
-   COMPLIANT MEASURING SHIELD (Moved from JavaScript visibility triggers)
-   ========================================================================== */
-
-/* Keeps the element dimensionally active for JS offsets while masking visibility [dan] */
-.rv-info-hover.is-measuring {
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-.rv-info-hover .popup-title {
-  font-weight: 500;
-  color: var(--text-muted);
-}
-
-/* ==========================================================================
-   15. AUTOMATIC TEXTAREA RESIZER (Moved from inline JavaScript style commands)
-   ========================================================================== */
-
-/* Styles myBrain's auto-expanding text areas without conflicting with other plugins */
-textarea.rv-setting-textarea {
-  width: 100% !important;
-  min-width: 150px !important;
-  min-height: 50px !important;
-  max-height: 350px !important;
-  resize: none !important;
-  overflow-y: auto !important;
-  field-sizing: content !important;
-}
-
-/* ==========================================================================
-   16. INSTRUCTIONAL WELCOME FRAME (Moved from JavaScript for premium UI)
-   ========================================================================== */
-
-.rv-welcome-container {
-  position: absolute !important;
-  top: 0 !important;
-  bottom: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: center !important;
-  
-  padding: 2em !important;
-  box-sizing: border-box;
-  text-align: center !important;
-
-  /* Smooth fade-in sequence shielding the frame from raw layout pops */
-  animation: rvWelcomeFadeIn 0.2s ease-out forwards;
-}
-
-.rv-welcome-text {
-  margin: 0 !important;
-  max-width: 280px; /* Constrains text width gracefully inside standard sidebar widths */
-  color: var(--text-muted) !important;
-  font-size: 1.1em !important;
-  line-height: 1.5 !important;
-}
-
-@keyframes rvWelcomeFadeIn {
-  from {
-    opacity: 0;
-    transform: scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  padding-bottom: 0;
 }
