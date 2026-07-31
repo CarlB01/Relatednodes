@@ -19,7 +19,7 @@
   /* ==========================================================================
      MAGNETIC CLUSTER ROW DESIGN (Tvinger klyngene inn mot senter!)
      Rows 1 and 5 act as flexible shock absorbers (1fr) that swallow all empty space,
-     symmetrically compressing rows 2, 3, and 4) together tightly in the center [dan]!
+     symmetrically compressing rows 2, 3, and 4 together tightly in the center [dan]!
      ========================================================================== */
   grid-template-rows: 1fr auto auto auto 1fr;
   
@@ -186,8 +186,9 @@
     align-items: center;
     justify-content: flex-start;
   }
-  /* Structural safeguard forcing vertical alignment for 1-3 active children nodes */
-  .rv-area.lower .rv-collection-wrapper .rv-columns-wrapper:has(.rv-groups:nth-child(2)):not(:has(.rv-groups:nth-child(4))) {
+  
+  /* iOS FIX: Replace :has() selector with explicit class-based state marking */
+  .rv-area.lower .rv-collection-wrapper .rv-columns-wrapper.rv-has-2-3-groups {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -408,7 +409,7 @@
     z-index: -1;
     pointer-events: none; /* Disables path tracking intercepting mouse events */
     
-    /* iOS FIX: Minimal negative z-index respects Obsidian compliance */
+    /* iOS FIX: Minimal transform to stabilize rendering */
     -webkit-transform: translateZ(0);
     transform: translateZ(0);
   }
