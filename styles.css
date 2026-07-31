@@ -55,8 +55,46 @@
     font-weight: 500;
     transition: background-color 0.15s ease, color 0.15s ease;
     background-color: color-mix(in srgb, var(--background-secondary), transparent 30%);
-    backdrop-filter: blur(4px); 
-    -webkit-backdrop-filter: blur(4px); 
+    /* iOS FIX: Move backdrop-filter to pseudo-element to prevent stacking context */
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none; 
+  }
+
+  .focusable-note-link {
+    position: relative;
+    display: inline-block;
+    box-sizing: border-box;
+    min-width: 0;
+    text-align: center;
+    text-decoration: none;
+    white-space: normal;
+    word-wrap: break-word;
+    word-break: break-word;
+    overflow: visible; 
+    cursor: default;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    
+    padding: 0.02em 0.4em;
+    line-height: 1.1; /* Forhindrer nettleseren fra å spytte ut usynlig luft vertikalt */
+    border-radius: 0.25em;
+    
+    /* Theme adaptive text mask framework: */
+    background-color: transparent;
+    /* iOS FIX: Removed backdrop-filter - will be on ::before pseudo-element */
+  }
+
+  .focusable-note-link::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 0.25em;
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+    z-index: -1;
+    pointer-events: none;
   }
 
   .rv-link-wrapper {
@@ -298,6 +336,12 @@
     break-inside: avoid;
     page-break-inside: avoid; 
     z-index: 2;
+    
+    /* iOS FIX: Explicitly prevent stacking context creation from filters */
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    mix-blend-mode: normal;
   }
 
   /* Explicit top padding gap deployed only when structural cluster headers fire */
@@ -348,29 +392,6 @@
    * Merges custom transparency mixing formula with an advanced frosted-glass layout filter.
    * Enables comprehensive soft word-breaking while preserving fluid scalability [dan].
    */
-  .focusable-note-link {
-    position: relative;
-    display: inline-block;
-    box-sizing: border-box;
-    min-width: 0;
-    text-align: center;
-    text-decoration: none;
-    white-space: normal;
-    word-wrap: break-word;
-    word-break: break-word;
-    overflow: visible; 
-    cursor: default;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
-    
-    padding: 0.02em 0.4em;
-    line-height: 1.1; /* Forhindrer nettleseren fra å spytte ut usynlig luft vertikalt */
-    border-radius: 0.25em;
-    
-    /* Theme adaptive text mask framework: */
-    backdrop-filter: blur(0px); 
-    -webkit-backdrop-filter: blur(0px);
-    background-color: transparent; 
-  }
 
   /* Forces text-spans to break row blocks inside frames smoothly */
   .rv-text-span {
@@ -387,6 +408,7 @@
   .item:hover .focusable-note-link {
     transform: scale(1.05);
     box-shadow: 0 0 0.92em var(--text-accent), inset 0 0 0 0.08em var(--text-accent);
+    /* iOS FIX: Apply backdrop-filter only on hover, not statically */
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
   }
@@ -407,6 +429,11 @@
     height: 100%;
     z-index: 1; /* Aligns canvas layers cleanly above collapsable splits grids [dan] */
     pointer-events: none; /* Disables path tracking intercepting mouse events */
+    
+    /* iOS FIX: Force proper rendering layer and stacking */
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+    isolation: isolate;
   }
 
   /* Mathematical vector path mapping styles */
@@ -679,7 +706,12 @@
     pointer-events: none; 
     display: block; 
     visibility: visible;
-    z-index: 1; 
+    z-index: 1;
+    
+    /* iOS FIX: Consolidated with section 9 */
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+    isolation: isolate;
   }
 
 } /* <<--- GLOBAL ENVELOPE END!  */
