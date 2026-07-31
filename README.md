@@ -99,6 +99,15 @@ When a quadrant contains many nodes of the same type, they can optionally be **c
 
 ---
 
+## 🔒 Privacy & Data Safety
+
+This plugin triggers an automated notice during the Obsidian community review process called **Vault Enumeration** (due to the use of `vault.getMarkdownFiles()`). 
+
+* **100% Local Processing:** This function is strictly used to map note relationships natively and build your semantic graph in real-time.
+* **No External Transmission:** No file paths, note titles, or contents are ever sent to external servers, trackers, or third-party APIs. Your data remains completely yours, offline, and inside your vault.
+
+---
+
 ## 📰 The Backstory & Legacy
 
 For decades, the semantic power of mapping information into strict **Parents, Children, Friends, and Siblings** relationships belonged to closed, proprietary database silos. As a healthcare professional navigating intensive daily workflows, I searched for alternative architectures that combined this specific cognitive layout with local, secure data ownership.
