@@ -53,6 +53,7 @@ export class AreaManager {
       // Enforces a micro-timeout ensuring CSS Grid layouts have fully settled 
       // on their concrete pixels before measuring geometry bounds
       window.setTimeout(() => {
+        this.markGroupStateForColumnsWrapper();
         this.yieldIfLeftTall();
         this.yieldIfRightTall();
 
@@ -96,15 +97,23 @@ export class AreaManager {
     const columnsWrappers = this.containerEl.querySelectorAll('.rv-columns-wrapper');
     
     columnsWrappers.forEach((wrapper) => {
-      const groups = Array.from(wrapper.querySelectorAll('.rv-groups'));
+      const groups = Array.from(wrapper.children).filter((child) =>
+        child.classList.contains('rv-groups')
+      );
       const groupCount = groups.length;
       
       // Remove previous state class
       wrapper.classList.remove('rv-has-2-3-groups');
+      wrapper.classList.remove('rv-single-group');
       
       // Add class only if there are exactly 2 or 3 groups
       if (groupCount >= 2 && groupCount <= 3) {
         wrapper.classList.add('rv-has-2-3-groups');
+      }
+
+      // Add class only if there is exactly one direct group child
+      if (groupCount === 1) {
+        wrapper.classList.add('rv-single-group');
       }
     });
   }
