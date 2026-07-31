@@ -14,7 +14,7 @@
 .workspace-leaf .workspace-leaf-content .view-content.rv-container {
   container-name: main;
   display: grid;
-  grid-template-columns: 1fr minmax(25%, 33%) 1fr;
+  grid-template-columns: minmax(0, 1fr) clamp(14em, 33%, 40em) minmax(0, 1fr);
   
   /* ==========================================================================
      MAGNETIC CLUSTER ROW DESIGN (Tvinger klyngene inn mot senter!)
@@ -29,7 +29,8 @@
   width: 100%;
   height: 100%;
   background-color: transparent; 
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: hidden;
   box-sizing: border-box;
   font-size: calc(var(--font-text-size, 13px) * 0.85);
 
@@ -124,21 +125,30 @@
   .rv-area.center {
     grid-column: 2;
     anchor-name: --center-area; 
-    min-width: 33%;
+    min-width: clamp(14em, 25cqw, 40em);
     align-self: center;
     justify-self: center;
-    width: auto;
+    width: max-content;
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-y: visible;
     padding: clamp(0.4em, 3cqh, 2em) clamp(0.4em, 1cqw, 1.2em);
   }
 
   .rv-area.left {
     grid-column: 1;
     margin-right: 0.3em;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: visible;
   }
 
   .rv-area.right {
     grid-column: 3;
     margin-left: 0.3em;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: visible;
   }
 
   /**
@@ -237,7 +247,8 @@
     width: 100%;
     max-width: 100%;
     height: fit-content;
-    overflow: visible;
+    overflow-x: hidden;
+    overflow-y: visible;
     box-sizing: border-box;
     margin: 0 auto;
   }
@@ -252,6 +263,8 @@
     align-items: center;
     justify-content: center;
     width: auto;
+    overflow-x: hidden;
+    overflow-y: visible;
   }
 
   /* ==========================================================================
@@ -703,4 +716,14 @@
   height: calc(100% - 0.75em);
   box-sizing: border-box;
   padding-bottom: 0;
+  grid-template-columns: minmax(0, 0.5fr) clamp(14em, 70%, 100%) minmax(0, 0.5fr);
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+.is-phone .rv-area.center,
+.is-tablet .rv-area.center {
+  min-width: clamp(14em, 70cqw, 100%);
+  max-width: 100%;
+  overflow-x: hidden;
 }
