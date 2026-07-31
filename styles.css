@@ -187,7 +187,7 @@
     justify-content: flex-start;
   }
   
-  /* iOS FIX: Replace :has() selector with explicit class-based state marking */
+  /* iOS FIX: Replaced parent-selector logic with explicit class-based state marking */
   .rv-area.lower .rv-collection-wrapper .rv-columns-wrapper.rv-has-2-3-groups {
     display: flex;
     flex-direction: column;
@@ -246,7 +246,7 @@
   }
 
   /* GUARD 1: Centering fix deployed ONLY when there is strictly ONE single group/node block total */
-  .rv-columns-wrapper:has(> .rv-groups:only-child) {
+  .rv-columns-wrapper.rv-single-group {
     display: flex;
     flex-direction: column;
     align-items: center;
