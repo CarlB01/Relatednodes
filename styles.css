@@ -335,13 +335,12 @@
     /* Strict fragmentation shields forbidding column breakage mid-cell */
     break-inside: avoid;
     page-break-inside: avoid; 
-    z-index: 2;
+    z-index: 10;
     
     /* iOS FIX: Explicitly prevent stacking context creation from filters */
     -webkit-transform: translateZ(0);
     transform: translateZ(0);
     backface-visibility: hidden;
-    mix-blend-mode: normal;
   }
 
   /* Explicit top padding gap deployed only when structural cluster headers fire */
@@ -427,13 +426,12 @@
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: 1; /* Aligns canvas layers cleanly above collapsable splits grids [dan] */
+    z-index: 0;
     pointer-events: none; /* Disables path tracking intercepting mouse events */
     
     /* iOS FIX: Force proper rendering layer and stacking */
     -webkit-transform: translate3d(0, 0, 0);
     transform: translate3d(0, 0, 0);
-    isolation: isolate;
   }
 
   /* Mathematical vector path mapping styles */
@@ -706,12 +704,11 @@
     pointer-events: none; 
     display: block; 
     visibility: visible;
-    z-index: 1;
+    z-index: 0;
     
-    /* iOS FIX: Consolidated with section 9 */
+    /* iOS FIX: Consolidated rendering context */
     -webkit-transform: translate3d(0, 0, 0);
     transform: translate3d(0, 0, 0);
-    isolation: isolate;
   }
 
 } /* <<--- GLOBAL ENVELOPE END!  */
