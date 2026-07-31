@@ -14,7 +14,7 @@
 .workspace-leaf .workspace-leaf-content .view-content.rv-container {
   container-name: main;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(14em, 33%, 40em) minmax(0, 1fr);
+  grid-template-columns: 1fr clamp(8em, 33%, 40em) 1fr;
   
   /* ==========================================================================
      MAGNETIC CLUSTER ROW DESIGN (Tvinger klyngene inn mot senter!)
@@ -125,7 +125,7 @@
   .rv-area.center {
     grid-column: 2;
     anchor-name: --center-area; 
-    min-width: clamp(14em, 25cqw, 40em);
+    min-width: clamp(8em, 25cqw, 40em);
     align-self: center;
     justify-self: center;
     width: max-content;
