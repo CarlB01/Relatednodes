@@ -5,7 +5,6 @@ import { DrawingUtils } from "./DrawingUtils.js";
 import { Gate } from "./Gate.js";
 import { RV } from "./constants.js";
 import MyBrainPlugin from "./main.js";
-import { MyBrainView } from "./view.js";
 
 export class AreaManager {
   containerEl: HTMLElement;
@@ -53,7 +52,7 @@ export class AreaManager {
     this.animationFrameId = window.requestAnimationFrame(() => {
       // Enforces a micro-timeout ensuring CSS Grid layouts have fully settled 
       // on their concrete pixels before measuring geometry bounds
-      setTimeout(() => {
+      window.setTimeout(() => {
         this.yieldIfLeftTall();
         this.yieldIfRightTall();
 

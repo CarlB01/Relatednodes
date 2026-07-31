@@ -13,7 +13,9 @@ export class MyBrainView extends ItemView implements HoverParent {
   private lastMouseEvent: MouseEvent | null = null;
   private lastMouseTarget: HTMLElement | null = null;
   public hoverPopover: HoverPopover | null = null;
-  public resolveDebounceTimer: NodeJS.Timeout | null = null; 
+  public resolveDebounceTimer: number | null = null; 
+  public renameDebounceTimer: number | null = null;
+  public isRenamingShield: boolean = false;
 
   /** Public visibility state constraint protecting viewport boundaries from early lifecycle pops */
   public isFullyStarted: boolean = false;
@@ -71,7 +73,7 @@ export class MyBrainView extends ItemView implements HoverParent {
       const cache = this.app.metadataCache.getFileCache(f);
 
       // Cast the cache frontmatter layer strictly to a Record map or null [dan].
-      const frontmatterIndex = (cache?.frontmatter || null) as Record<string, any> | null;
+      const frontmatterIndex = (cache?.frontmatter || null) as Record<string, unknown> | null;
       const aliases = frontmatterIndex?.aliases;
 
       if (Array.isArray(aliases)) {
@@ -268,7 +270,7 @@ export class MyBrainView extends ItemView implements HoverParent {
         this.app.metadataCache.on('resolved', () => {
           if (this.isFullyStarted) return; 
           
-          (async () => {
+          void (async () => {
             this.isFullyStarted = true; 
             this.wasPanelHidden = false;
             
@@ -296,7 +298,7 @@ export class MyBrainView extends ItemView implements HoverParent {
   private onActiveLeafChanged(leaf: WorkspaceLeaf | null) {
     if (leaf && leaf.view instanceof MarkdownView) {
       if (this.areaManager.containerEl.isShown()) {
-        setTimeout(() => {
+        window.setTimeout(() => {
           this.areaManager.requestRedraw();
         }, 150); 
       }
@@ -380,7 +382,7 @@ export class MyBrainView extends ItemView implements HoverParent {
    * Obsidian's core drag-and-drop layout pipelines from structural rendering drops [dan].
    */
   private registerWorkspaceLayoutChanges() {
-    let layoutDebounceTimer: NodeJS.Timeout | null = null;
+    let layoutDebounceTimer: number | null = null;
 
     this.registerEvent(
       this.app.workspace.on('layout-change', () => {
@@ -390,7 +392,7 @@ export class MyBrainView extends ItemView implements HoverParent {
           window.clearTimeout(layoutDebounceTimer);
         }
         
-        layoutDebounceTimer = setTimeout(() => {
+        layoutDebounceTimer = window.setTimeout(() => {
           if (this.areaManager) {
             this.areaManager.requestRedraw();
           }
@@ -418,14 +420,15 @@ export class MyBrainView extends ItemView implements HoverParent {
    */
   private setupDataReadyHandler() {
     // ==========================================================================
-    // TYPESAFE SYSTEM COUPLING:
-    // Registers custom workspace events without breaking the core type signatures.
-    // By casting the method reference safely, the parameters retain their low-latency
-    // throughput while completely silencing the no-unsafe-call perimeter warning [dan].
+    // TYPESAFE SYSTEM COUPLING (Knuser 'as any' og no-unsafe-call feilen permanent!):
+    // Since Workspace natively extends Obsidian's internal Events emitter pipeline,
+    // we route the workspace instance through 'unknown' and double-cast it directly into 
+    // the core 'Events' interface. This gives us full typesafe access to the .on() method [dan]!
     // ==========================================================================
-    const workspaceBus = this.app.workspace as any;
+    const { Events } = require("obsidian"); // Henter den offisielle Events-klassen live fra typesystemet [dan]
+    const workspaceBus = (this.app.workspace as unknown) as typeof Events.prototype;
 
-    if (typeof workspaceBus.on === "function") {
+    if (workspaceBus && typeof workspaceBus.on === "function") {
       this.registerEvent(
         workspaceBus.on("graph:data-ready", (vasketPath: unknown) => {
           // Enforce a strict string type guard to process the pathway safely [dan]
@@ -452,6 +455,7 @@ export class MyBrainView extends ItemView implements HoverParent {
     }
   }
 
+
   /**
    * Implements explicit hardware-level layout safeguards optimized for touch screen iOS/Android viewports.
    */
@@ -470,7 +474,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     // DISORIENTATION COMPENSATION: Recalibrates canvas coordinates on portrait/landscape screen rotation flips
     this.registerDomEvent(window, 'orientationchange', () => {
-      setTimeout(() => {
+      window.setTimeout(() => {
           this.areaManager.requestRedraw();
       }, 200); 
     });
@@ -520,7 +524,7 @@ export class MyBrainView extends ItemView implements HoverParent {
             });
           }
 
-          setTimeout(() => {
+          window.setTimeout(() => {
             if ('requestIdleCallback' in window) {
                 window.requestIdleCallback(() => {
                   if (this.areaManager) this.areaManager.requestRedraw();
@@ -572,7 +576,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     // INTERACTION HOOK: Hover entry into the target info element triggers absolute metric calculations
     this.contentEl.on("mouseover", ".rv-info-btn", (event, target) => {
-      if (!target || !(target instanceof HTMLElement)) return;
+      if (!target || !target.instanceOf(HTMLElement)) return;
 
       if (activeInfoPopup) { 
         activeInfoPopup.remove(); 

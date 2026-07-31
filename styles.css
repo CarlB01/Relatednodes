@@ -246,11 +246,11 @@
 
   /* GUARD 1: Centering fix deployed ONLY when there is strictly ONE single group/node block total */
   .rv-columns-wrapper:has(> .rv-groups:only-child) {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-    justify-content: center !important;
-    width: auto !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: auto;
   }
 
   /* ==========================================================================
@@ -271,11 +271,6 @@
     .rv-area.lower { grid-column: 1 / span 2; }                  
     .rv-area.right { grid-row: 2 / span 3; align-self: center; } 
   }
-
-  /* Structural grouping wrapper bypassed by the multi-column engine */
-  .rv-groups { 
-    display: contents; 
-  } 
 
   /* ==========================================================================
      6. INTERACTIVE INDIVIDUAL RAD-BOXES (Item cell blocks)
