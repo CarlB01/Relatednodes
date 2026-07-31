@@ -88,6 +88,28 @@ export class AreaManager {
   }
 
   /**
+   * iOS FIX: Replaces :has() selector logic with explicit class-based state management.
+   * Evaluates if columns-wrapper has exactly 2-3 groups and adds flag class for CSS targeting.
+   * This prevents iOS Safari performance degradation and memory crashes from :has() invalidation.
+   */
+  private markGroupStateForColumnsWrapper() {
+    const columnsWrappers = this.containerEl.querySelectorAll('.rv-columns-wrapper');
+    
+    columnsWrappers.forEach((wrapper) => {
+      const groups = Array.from(wrapper.querySelectorAll('.rv-groups'));
+      const groupCount = groups.length;
+      
+      // Remove previous state class
+      wrapper.classList.remove('rv-has-2-3-groups');
+      
+      // Add class only if there are exactly 2 or 3 groups
+      if (groupCount >= 2 && groupCount <= 3) {
+        wrapper.classList.add('rv-has-2-3-groups');
+      }
+    });
+  }
+
+  /**
    * Evaluates layout height and updates CSS dataset flags (data-left-tall).
    * Executed post graph data updates but preceding path vector rendering.
    * Forces upper area layout constraints to yield the top-left quadrant to the left area.
@@ -230,6 +252,9 @@ export class AreaManager {
     // Binds event listeners directly to the initialized layout container frames
     this.setupScrollEventListeners();
     
+    // iOS FIX: Apply group state marking for CSS class-based targeting
+    this.markGroupStateForColumnsWrapper();
+    
     // Evaluate geometric boundary heights exactly once while layout metrics are hidden
     this.yieldIfLeftTall();
     this.yieldIfRightTall();
@@ -319,9 +344,9 @@ export class AreaManager {
   }
 
     /**
-   * Evaluates layout geography and draws vector paths across all active nodes.
-   * Leverages localized structural memory caches to execute path tracking in O(1) velocity.
-   */
+    * Evaluates layout geography and draws vector paths across all active nodes.
+    * Leverages localized structural memory caches to execute path tracking in O(1) velocity.
+    */
   drawAllGraphLines() {
     const centerNote = this.graph.centerNote;
     if (!centerNote) return;
@@ -468,4 +493,3 @@ export class AreaManager {
     return button;
   }
 }
-
