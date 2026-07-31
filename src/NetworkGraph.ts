@@ -88,7 +88,7 @@ export class NetworkGraph {
         // Validates that metadata indexes are accessible before launching the core vaskesyklus
         const centerCache = this.app.metadataCache.getFileCache(activeFile);
         if (!this.app.metadataCache.resolvedLinks || !centerCache) {
-          setTimeout(() => void this.update(activeFile), 150); 
+          window.setTimeout(() => void this.update(activeFile), 150); 
           return;
         }
 
@@ -400,7 +400,7 @@ export class NetworkGraph {
       const unresolvedLinks = this.app.metadataCache.unresolvedLinks;
       
       const sjekkKobling = (fraPath: string, tilBasename: string): boolean => {
-        const resObj = resolvedLinks[fraPath];
+        const resObj = resolvedLinks?.[fraPath];
         if (resObj) {
           const tilNameLower = tilBasename.toLowerCase();
           return Object.keys(resObj).some(path => {
@@ -408,7 +408,7 @@ export class NetworkGraph {
             return pLower.includes(tilNameLower) || pLower.endsWith(`/${tilNameLower}.md`);
           });
         }
-        const unresObj = unresolvedLinks[fraPath];
+        const unresObj = unresolvedLinks?.[fraPath];
         if (unresObj && typeof unresObj === 'object') {
           const tilNameLower = tilBasename.toLowerCase();
           return Object.keys(unresObj).some(key => key.toLowerCase().includes(tilNameLower));
