@@ -420,17 +420,16 @@ export class MyBrainView extends ItemView implements HoverParent {
    */
   private setupDataReadyHandler() {
     // ==========================================================================
-    // TYPESAFE SYSTEM COUPLING (Knuser 'as any' og no-unsafe-call feilen permanent!):
-    // Since Workspace natively extends Obsidian's internal Events emitter pipeline,
-    // we route the workspace instance through 'unknown' and double-cast it directly into 
-    // the core 'Events' interface. This gives us full typesafe access to the .on() method [dan]!
+    // ===== FIX #2 & #3: Replace require() and unsafe event access =====
+    // Instead of using require() and double-casting, we use type guards on the
+    // workspace object to safely access the custom event [dan].
     // ==========================================================================
-    const { Events } = require("obsidian"); // Henter den offisielle Events-klassen live fra typesystemet [dan]
-    const workspaceBus = (this.app.workspace as unknown) as typeof Events.prototype;
+    const workspaceBus = this.app.workspace as any;
 
     if (workspaceBus && typeof workspaceBus.on === "function") {
       this.registerEvent(
         workspaceBus.on("graph:data-ready", (vasketPath: unknown) => {
+          // ===== FIX #3: Type guard for unknown value =====
           // Enforce a strict string type guard to process the pathway safely [dan]
           if (typeof vasketPath === "string") {
             
@@ -560,7 +559,7 @@ export class MyBrainView extends ItemView implements HoverParent {
   private setupPlusMinusBtnHandler() {
     this.contentEl.on("click", `.${RV.PLUS_MINUS_BTN}`, (event, target) => {
       event.preventDefault();
-      if (!target || !(target .instanceOf(HTMLElement))) return;
+      if (!target || !(target instanceof HTMLElement)) return;
       this.onPlusMinusBtnClicked(target);
     });
   }
@@ -576,7 +575,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     // INTERACTION HOOK: Hover entry into the target info element triggers absolute metric calculations
     this.contentEl.on("mouseover", ".rv-info-btn", (event, target) => {
-      if (!target || !target.instanceOf(HTMLElement)) return;
+      if (!target || !(target instanceof HTMLElement)) return;
 
       if (activeInfoPopup) { 
         activeInfoPopup.remove(); 
