@@ -102,9 +102,9 @@ export default class MyBrainPlugin extends Plugin {
               const myView = leaf.view;
               if (!myView.isFullyStarted) continue;
 
-              // We safely route 'myView' through 'unknown' and cast it into a standard 
-              // string-indexed Record to read the path context without violating audits [dan]!
-              const wasCurrentlyVisibleFileRenamed = oldPath === ((myView as unknown) as Record<string, unknown>).currentFilePath;
+              // ===== FIX #1: Safe property access instead of unsafe casting =====
+              // Directly access the public property without type casting
+              const wasCurrentlyVisibleFileRenamed = oldPath === myView.currentFilePath;
               if (wasCurrentlyVisibleFileRenamed) {
                 // ==========================================================================
                 // 🛡️ THE RENAME SHIELD ACTIVATION (Låser dørvakta på sekund 0):
@@ -113,8 +113,9 @@ export default class MyBrainPlugin extends Plugin {
                 // ==========================================================================
                 myView.isRenamingShield = true;
                 
-                // Safely update the pathway descriptor slots immediately so the view tracks the new name
-                ((myView as unknown) as Record<string, unknown>).currentFilePath = file.path;
+                // ===== FIX #1: Safe property assignment instead of unsafe casting =====
+                // Directly assign to the public property
+                myView.currentFilePath = file.path;
                 
                 const internalCacheBus = this.app.metadataCache;
                 
@@ -182,7 +183,9 @@ export default class MyBrainPlugin extends Plugin {
               // If the layout shield is active during a rename pass, drop background resolution cycles cleanly [dan]
               if (myView.isRenamingShield) return;
 
-              const isEditingCurrentlyVisibleFile = file.path === ((myView as unknown) as Record<string, unknown>).currentFilePath;
+              // ===== FIX #1: Safe property access instead of unsafe casting =====
+              // Directly access the public property without type casting
+              const isEditingCurrentlyVisibleFile = file.path === myView.currentFilePath;
 
               if (isEditingCurrentlyVisibleFile || dataWasUpdated) {
                 
