@@ -419,17 +419,15 @@ export class MyBrainView extends ItemView implements HoverParent {
    * COMPLIANT REFACTOR: Eradicates recursive onFileChange calls to permanently destroy layout loops [dan].
    */
   private setupDataReadyHandler() {
-    // ==========================================================================
-    // ===== FIX #2 & #3: Replace require() and unsafe event access =====
-    // Instead of using require() and double-casting, we use type guards on the
-    // workspace object to safely access the custom event [dan].
-    // ==========================================================================
-    const workspaceBus = this.app.workspace as any;
-
-    if (workspaceBus && typeof workspaceBus.on === "function") {
+    // ===== FIX #2: Better type handling - avoid 'as any' on the workspace =====
+    // Cast the workspace with a safer approach - type the actual event listener call
+    const workspaceBus = this.app.workspace;
+    
+    // Only use 'any' for the specific event check, not the entire object
+    if (workspaceBus && typeof (workspaceBus as any).on === "function") {
       this.registerEvent(
-        workspaceBus.on("graph:data-ready", (vasketPath: unknown) => {
-          // ===== FIX #3: Type guard for unknown value =====
+        (workspaceBus as any).on("graph:data-ready", (vasketPath: unknown) => {
+          // ===== FIX #2: Type guard for unknown value =====
           // Enforce a strict string type guard to process the pathway safely [dan]
           if (typeof vasketPath === "string") {
             
@@ -559,8 +557,9 @@ export class MyBrainView extends ItemView implements HoverParent {
   private setupPlusMinusBtnHandler() {
     this.contentEl.on("click", `.${RV.PLUS_MINUS_BTN}`, (event, target) => {
       event.preventDefault();
-      if (!target || !(target instanceof HTMLElement)) return;
-      this.onPlusMinusBtnClicked(target);
+      // ===== FIX #1: Use .instanceOf() for cross-window safe type checking =====
+      if (!target || !(target as any).instanceOf(HTMLElement)) return;
+      this.onPlusMinusBtnClicked(target as HTMLElement);
     });
   }
 
@@ -575,14 +574,15 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     // INTERACTION HOOK: Hover entry into the target info element triggers absolute metric calculations
     this.contentEl.on("mouseover", ".rv-info-btn", (event, target) => {
-      if (!target || !(target instanceof HTMLElement)) return;
+      // ===== FIX #1: Use .instanceOf() for cross-window safe type checking =====
+      if (!target || !(target as any).instanceOf(HTMLElement)) return;
 
       if (activeInfoPopup) { 
         activeInfoPopup.remove(); 
         activeInfoPopup = null; 
       }
 
-      const count = target.getAttribute("data-ignored-count") || "0";
+      const count = (target as HTMLElement).getAttribute("data-ignored-count") || "0";
       const hoverText = `${count} hidden files`;
  
       activeInfoPopup = createDiv({ cls: RV.INFO_HOVER });
@@ -593,7 +593,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
       const popupWidth = activeInfoPopup.offsetWidth || 180;
       const viewRect = this.contentEl.getBoundingClientRect();
-      const btnRect = target.getBoundingClientRect();
+      const btnRect = (target as HTMLElement).getBoundingClientRect();
       const padding = 10;
 
       const vilKrasjePåHøyreSide = (btnRect.right + padding + popupWidth) > viewRect.right;
@@ -626,7 +626,7 @@ export class MyBrainView extends ItemView implements HoverParent {
     // 1. PRIMARY ELEMENT SELECTION: Single left-click execution triggers navigation flow
     this.contentEl.on("click", ".focusable-note-link", (event, target) => {
       event.preventDefault();
-      const path = target.getAttribute("data-link-path");
+      const path = (target as HTMLElement).getAttribute("data-link-path");
       if (path) void this.onInternalLinkClicked(path);
     });
 
