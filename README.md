@@ -75,7 +75,7 @@ The myBrain graph is a normal Obsidian view. Drag its tab and drop it anywhere i
                     │  \
                     │   - - - ┐
                     ▼         ▼
-  [ FRIENDS ] ◄► [ CENTER ]  [ SIBLINGS ]
+[ FRIENDS ] ◄► [ CENTER ]  [ SIBLINGS ]
                     │
                     ▼
                [ CHILDREN ]
