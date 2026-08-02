@@ -14,7 +14,7 @@
 .workspace-leaf .workspace-leaf-content .view-content.rv-container {
   container-name: main;
   display: grid;
-  grid-template-columns: 1fr clamp(8em, 33%, 40em) 1fr;
+  grid-template-columns: clamp(4em, 33%, 40em) clamp(4em, 33%, 40em) clamp(4em, 33%, 40em);
   
   /* ==========================================================================
      MAGNETIC CLUSTER ROW DESIGN (Tvinger klyngene inn mot senter!)
@@ -32,7 +32,7 @@
   overflow-x: hidden;
   overflow-y: hidden;
   box-sizing: border-box;
-  font-size: calc(var(--font-text-size, 13px) * 0.85);
+  font-size: calc(var(--font-text-size, 11px) * 0.80);
 
   /* --------------------------------================================--------
      1. CONTAINER INTERACTION SUB-HOOKS
@@ -53,11 +53,10 @@
     padding: 0.25em 0.6em;
     border-radius: 0.3em;
     text-decoration: none;
-    font-weight: 500;
     transition: background-color 0.15s ease, color 0.15s ease;
     background-color: color-mix(in srgb, var(--background-secondary), transparent 30%);
-    backdrop-filter: blur(4px); 
-    -webkit-backdrop-filter: blur(4px); 
+    backdrop-filter: blur(1px); 
+    -webkit-backdrop-filter: blur(1px); 
   }
 
   .rv-link-wrapper {
@@ -82,14 +81,6 @@
     scrollbar-width: thin;
   }
 
-  .rv-flanke-column {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3em; 
-    width: 100%;
-    max-width: 100%;
-  }
-
   /* --------------------------------================================--------
      2. AREAS & QUADRANTS INFRASTRUCTURE (The Compressed Symmetrical Grid)
      ------------------------------------------------------------------------ */
@@ -102,14 +93,13 @@
     grid-row: 2; /* Compressed tightly into the upper slot above origo [dan] */
     margin-bottom: 0.3em; 
     width: 100%;
-    min-width: 11.5em;  
     anchor-name: --upper-area; 
     align-self: end;
     overflow: visible;
   }
 
   /**
-   * CENTER & LATERAL FLANKES (Row 3: Absolute layout origin axis)
+   * CENTER & LATERAL AREAS (Row 3: Absolute layout origin axis)
    */
   .rv-area.left, 
   .rv-area.right,
@@ -125,14 +115,14 @@
   .rv-area.center {
     grid-column: 2;
     anchor-name: --center-area; 
-    min-width: clamp(8em, 25cqw, 40em);
+    min-width: clamp(4em, 25cqw, 40em);
     align-self: center;
     justify-self: center;
     width: max-content;
     max-width: 100%;
     overflow-x: hidden;
     overflow-y: visible;
-    padding: clamp(0.4em, 3cqh, 2em) clamp(0.4em, 1cqw, 1.2em);
+    padding: clamp(0.2em, 3cqh, 2em) clamp(0.2em, 1cqw, 1.2em);
   }
 
   .rv-area.left {
@@ -253,7 +243,7 @@
     margin: 0 auto;
   }
   .rv-area.center .rv-columns-wrapper {
-    padding-right: 1.4em; /* Gir nøyaktig nok plass til info-knappen i senter [dan] */
+    padding-right: 1.4em; /* enough space for the info btn */
   }
 
   /* GUARD 1: Centering fix deployed ONLY when there is strictly ONE single group/node block total */
@@ -377,7 +367,7 @@
     transition: transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
     
     padding: 0.02em 0.4em;
-    line-height: 1.1; /* Forhindrer nettleseren fra å spytte ut usynlig luft vertikalt */
+    line-height: 1.1; /* prevents extra added air around the link */
     border-radius: 0.25em;
     
     /* Theme adaptive text mask framework: */
@@ -528,11 +518,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 0.15em 0.45em;
+    padding: 0.2em 0.45em;
     margin: 0;
     border-radius: 1.5em; 
     font-size: 0.8em; 
-    font-weight: bold;
+    font-weight: 800;
     line-height: 1;
     white-space: nowrap;
     background-color: var(--background-primary-alt); 
@@ -577,8 +567,9 @@
   .rv-info-btn {
     position: absolute;
     top: 0;
-    right: -0.5em;
+    right: -0.6em;
     z-index: 10;
+    font-weight: 999;
     color: var(--text-accent); /* Neutral info accent branding matching core elements */
     cursor: pointer;
     box-sizing: border-box;
@@ -716,14 +707,7 @@
   height: calc(100% - 0.75em);
   box-sizing: border-box;
   padding-bottom: 0;
-  grid-template-columns: minmax(0, 0.5fr) clamp(14em, 70%, 100%) minmax(0, 0.5fr);
   overflow-x: hidden;
   overflow-y: hidden;
 }
 
-.is-phone .rv-area.center,
-.is-tablet .rv-area.center {
-  min-width: clamp(14em, 70cqw, 100%);
-  max-width: 100%;
-  overflow-x: hidden;
-}

@@ -142,7 +142,7 @@ export class AreaManager {
 
   /**
    * Evaluates layout height and updates CSS dataset flags (data-right-tall).
-   * Operates symmetrically to yield the bottom-right quadrant to the right flanke area.
+   * Operates symmetrically to yield the bottom-right quadrant to the right gate area.
    */
   yieldIfRightTall() {
     const vc = this.containerEl;
@@ -416,7 +416,7 @@ export class AreaManager {
             nodeA.upperGate.svg!.classList.add('is-connected');
           }
         } 
-        // RULE 3: Horizontal flanke connections (Symmetrically validated cross-quadrant friends)
+        // RULE 3: Horizontal gate connections (Symmetrically validated cross-quadrant friends)
         else if (nodeA.relations.friends.has(nodeB) || nodeB.relations.friends.has(nodeA)) {
           if (canDraw(nodeA.friendGate, nodeB.friendGate)) {
             DrawingUtils.drawLink(nodeA.friendGate, nodeB.friendGate, links, offBy, canvas);

@@ -134,7 +134,7 @@ export class DrawingUtils {
     fromGate: Gate, 
     toGate: Gate
   ): string {
-    // Evaluates vector alignment to select either vertical spine mapping or horizontal flanke routing
+    // Evaluates vector alignment to select either vertical spine mapping or horizontal gate routing
     const isFriendLink = fromGate.direction === 'left' || fromGate.direction === 'right';
 
     if (isFriendLink) {

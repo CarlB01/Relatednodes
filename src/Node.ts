@@ -67,7 +67,7 @@ export class Node {
     this.isInitiallyIgnored = isInitiallyIgnored;
     this.rawFrontmatter = frontmatter;
 
-    // Lateral flanke starts defaulted to the 'left' vector, but can be updated via render calculations
+    // Lateral GATE starts defaulted to the 'left' vector, but can be updated via render calculations
     this.upperGate  = new Gate(this, 'up');
     this.lowerGate  = new Gate(this, 'down');
     this.friendGate = new Gate(this, 'left');
@@ -129,7 +129,7 @@ export class Node {
 
     linkEl.createSpan( { text: this.displayText, cls: 'rv-text-span'} );
 
-    // 3. EVALUATE GEOMETRICAL FLANKE ORIENTATION
+    // 3. EVALUATE GEOMETRICAL GATE ORIENTATION
     if (this.assignedArea === "left") {
       this.friendGate.direction = 'right'; // Routes friend links inward toward the center layout axis
     } else {

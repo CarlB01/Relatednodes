@@ -431,7 +431,7 @@ export class NetworkGraph {
         const nodeB = visibleNotes[j];
         if (!nodeB) continue;
 
-        // Shields the center node flanke anchors as its 1st-degree maps are already spikret
+        // Shields the center node are anchors as its 1st-degree maps are already spikret
         if (nodeA.path === centerNote.path || nodeB.path === centerNote.path) continue;
 
         // DILEMMA DISCOVERY GUARD: Intercepts and blocks lateral lines unless 
@@ -465,7 +465,7 @@ export class NetworkGraph {
 
           case 'undefined':
             // Fallback track: Sourced entirely from a direct bodytext link detection. 
-            // Since it passed the link check, we log them cleanly into friend flanke segments.
+            // Since it passed the link check, we log them cleanly into friend GATE segments.
             nodeA.relations.friends.add(nodeB);
             nodeB.relations.friends.add(nodeA);
             break;
