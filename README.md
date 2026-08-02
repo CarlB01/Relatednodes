@@ -1,6 +1,9 @@
 # myBrain for Obsidian
 
+✅ **Now officially available in Obsidian Community Plugins.**
+
 [![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-%23483699.svg?logo=obsidian&logoColor=white)](https://obsidian.md)
+[![Available in Community Plugins](https://img.shields.io/badge/Obsidian-Community%20Plugins-success)](https://obsidian.md/plugins?search=myBrain)
 [![Release](https://img.shields.io/github/v/release/CarlB01/myBrain)](https://github.com/CarlB01/myBrain/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/CarlB01/myBrain/blob/master/LICENSE)
 [![Downloads](https://img.shields.io/github/downloads/CarlB01/myBrain/total)](https://github.com/CarlB01/myBrain/releases)
@@ -24,12 +27,12 @@ It organizes your notes into a clean and predictable layout with **Parents · Fr
 
 ## 📦 Installation
 
-### Option 1: Community Plugins (recommended – after approval)
+### Option 1: Community Plugins (recommended)
 1. Open **Settings → Community Plugins**
 2. Search for **myBrain**
 3. Click **Install**, then **Enable**
 
-### Option 2: BRAT (beta / before approval)
+### Option 2: BRAT (beta/testing)
 1. Install the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin
 2. Open **Settings → BRAT → Add Beta plugin**
 3. Enter: `CarlB01/myBrain`
@@ -110,13 +113,13 @@ This plugin triggers an automated notice during the Obsidian community review pr
 
 ## 📰 The Backstory & Legacy
 
-For decades, the semantic power of mapping information into strict **Parents, Children, Friends, and Siblings** relationships belonged to closed, proprietary database silos. As a healthcare professional navigating intensive daily workflows, I searched for alternative architectures that combined this specific cognitive layout with local, secure data ownership.
+For decades, the semantic power of mapping information into strict **Parents, Children, Friends, and Siblings** relationships belonged to closed, proprietary database silos. As a healthcare professional, I depended on this structured mode of thought every day.
 
-When Licat and Silver launched Obsidian, it felt like home. When Zsolt introduced *ExcaliBrain*, it was a revelation. I even had the privilege of collaborating briefly with Zsolt to help adapt its behavior toward mobile touchscreens and sidebar layouts.
+When Licat and Silver launched Obsidian, it felt like home. When Zsolt introduced *ExcaliBrain*, it was a revelation. I even had the privilege of collaborating briefly with Zsolt to help adapt its behavior to real-world semantic workflows.
 
-However, as the years passed, it became clear that a graph framework bolted onto a heavy vector drawing canvas (*Excalidraw*) introduced rigid limitations. It restricted downstream interface interactions like native contextual popup menus, localized styling, drag-and-drop mechanics, or integration with decrypting tools like *Meld Encrypt*.
+However, as the years passed, it became clear that a graph framework bolted onto a heavy vector drawing canvas (*Excalidraw*) introduced rigid limitations. It restricted downstream interface interactions and made dynamic scaling harder than necessary.
 
-When Zsolt hinted at gatherings that it was time for a native implementation to take over, I accepted the challenge. I went back to the drawing board—mapping out how nodes could dynamically project multi-directional network anchors using links and backlinks. If you are an *ExcaliBrain* user, your files are **already 100% compatible** with **myBrain**. Your years of structured data will render beautifully on day one.
+When Zsolt hinted at gatherings that it was time for a native implementation to take over, I accepted the challenge. I went back to the drawing board—mapping out how nodes could dynamically project into strict semantic quadrants without sacrificing speed.
 
 **myBrain** is the result: a clean, uncompromising, lightning-fast native implementation designed to bring cognitive structure back to the user on their own terms.
 
