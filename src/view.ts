@@ -1,5 +1,5 @@
 import myBrainPlugin from './main.js';
-import { HoverPopover, TFile, WorkspaceLeaf, HoverParent, MarkdownView, FileView, Platform, ItemView, App} from 'obsidian';
+import { HoverPopover, TFile, WorkspaceLeaf, HoverParent, MarkdownView, FileView, Platform, ItemView, App, EventRef } from 'obsidian';
 import { AreaManager } from './AreaManager.js';
 import { RV } from './constants.js';
 
@@ -89,8 +89,6 @@ export class MyBrainView extends ItemView implements HoverParent {
     }) ?? null;
 
     if (file instanceof TFile) return file;
-
-
 
     return null;
   }
@@ -419,14 +417,15 @@ export class MyBrainView extends ItemView implements HoverParent {
    * COMPLIANT REFACTOR: Eradicates recursive onFileChange calls to permanently destroy layout loops [dan].
    */
   private setupDataReadyHandler() {
-    // ===== FIX #2: Better type handling - avoid 'as any' on the workspace =====
-    // Cast the workspace with a safer approach - type the actual event listener call
-    const workspaceBus = this.app.workspace;
-    
-    // Only use 'any' for the specific event check, not the entire object
-    if (workspaceBus && typeof (workspaceBus as any).on === "function") {
+    type GraphDataReadyBus = {
+      on(name: "graph:data-ready", callback: (vasketPath: unknown) => void): EventRef;
+    };
+
+    const workspaceBus = this.app.workspace as unknown as Partial<GraphDataReadyBus>;
+
+    if (workspaceBus.on) {
       this.registerEvent(
-        (workspaceBus as any).on("graph:data-ready", (vasketPath: unknown) => {
+        workspaceBus.on("graph:data-ready", (vasketPath: unknown) => {
           // ===== FIX #2: Type guard for unknown value =====
           // Enforce a strict string type guard to process the pathway safely [dan]
           if (typeof vasketPath === "string") {
@@ -557,9 +556,8 @@ export class MyBrainView extends ItemView implements HoverParent {
   private setupPlusMinusBtnHandler() {
     this.contentEl.on("click", `.${RV.PLUS_MINUS_BTN}`, (event, target) => {
       event.preventDefault();
-      // ===== FIX #1: Use .instanceOf() for cross-window safe type checking =====
-      if (!target || !(target as any).instanceOf(HTMLElement)) return;
-      this.onPlusMinusBtnClicked(target as HTMLElement);
+      if (!(target instanceof HTMLElement)) return;
+      this.onPlusMinusBtnClicked(target);
     });
   }
 
@@ -574,15 +572,14 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     // INTERACTION HOOK: Hover entry into the target info element triggers absolute metric calculations
     this.contentEl.on("mouseover", ".rv-info-btn", (event, target) => {
-      // ===== FIX #1: Use .instanceOf() for cross-window safe type checking =====
-      if (!target || !(target as any).instanceOf(HTMLElement)) return;
+      if (!(target instanceof HTMLElement)) return;
 
       if (activeInfoPopup) { 
         activeInfoPopup.remove(); 
         activeInfoPopup = null; 
       }
 
-      const count = (target as HTMLElement).getAttribute("data-ignored-count") || "0";
+      const count = target.getAttribute("data-ignored-count") || "0";
       const hoverText = `${count} hidden files`;
  
       activeInfoPopup = createDiv({ cls: RV.INFO_HOVER });
@@ -593,7 +590,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
       const popupWidth = activeInfoPopup.offsetWidth || 180;
       const viewRect = this.contentEl.getBoundingClientRect();
-      const btnRect = (target as HTMLElement).getBoundingClientRect();
+      const btnRect = target.getBoundingClientRect();
       const padding = 10;
 
       const vilKrasjePåHøyreSide = (btnRect.right + padding + popupWidth) > viewRect.right;
@@ -611,6 +608,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     // INTERACTION HOOK: Hover departure sweeps instance trees to prevent application memory leaks
     this.contentEl.on("mouseout", ".rv-info-btn", (event, target) => {
+      if (!(target instanceof HTMLElement)) return;
       if (activeInfoPopup) {
         activeInfoPopup.remove();
         activeInfoPopup = null;
