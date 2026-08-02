@@ -556,8 +556,8 @@ export class MyBrainView extends ItemView implements HoverParent {
   private setupPlusMinusBtnHandler() {
     this.contentEl.on("click", `.${RV.PLUS_MINUS_BTN}`, (event, target) => {
       event.preventDefault();
-      if (!(target instanceof HTMLElement)) return;
-      this.onPlusMinusBtnClicked(target);
+	  if (!target.instanceOf(HTMLElement)) return;
+	  this.onPlusMinusBtnClicked(target);
     });
   }
 
@@ -572,7 +572,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     // INTERACTION HOOK: Hover entry into the target info element triggers absolute metric calculations
     this.contentEl.on("mouseover", ".rv-info-btn", (event, target) => {
-      if (!(target instanceof HTMLElement)) return;
+      if (!target.instanceOf(HTMLElement)) return;
 
       if (activeInfoPopup) { 
         activeInfoPopup.remove(); 
@@ -608,7 +608,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     // INTERACTION HOOK: Hover departure sweeps instance trees to prevent application memory leaks
     this.contentEl.on("mouseout", ".rv-info-btn", (event, target) => {
-      if (!(target instanceof HTMLElement)) return;
+      if (!target.instanceOf(HTMLElement)) return;
       if (activeInfoPopup) {
         activeInfoPopup.remove();
         activeInfoPopup = null;
