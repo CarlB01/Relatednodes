@@ -624,8 +624,8 @@ export class MyBrainView extends ItemView implements HoverParent {
     // 1. PRIMARY ELEMENT SELECTION: Single left-click execution triggers navigation flow
     this.contentEl.on("click", ".focusable-note-link", (event, target) => {
       event.preventDefault();
-      const path = (target as HTMLElement).getAttribute("data-link-path");
-      if (path) void this.onInternalLinkClicked(path);
+		const path = target.getAttribute("data-link-path");
+		if (path) void this.onInternalLinkClicked(path);
     });
 
     // 2. MOUSEOVER ENGINE: Caches active pointer vectors ahead of keyboard modifier flags
