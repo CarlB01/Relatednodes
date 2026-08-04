@@ -124,14 +124,14 @@
     overflow-y: visible;
     padding: clamp(0.2em, 3cqh, 2em) clamp(0.2em, 1cqw, 1.2em);
   }
-
+ 
   .rv-area.left {
     grid-column: 1;
     margin-right: 0.3em;
     min-width: 0;
     overflow-x: hidden;
     overflow-y: visible;
-  }
+  } 
 
   .rv-area.right {
     grid-column: 3;

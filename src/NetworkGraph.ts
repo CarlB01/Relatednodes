@@ -76,7 +76,7 @@ export class NetworkGraph {
 
     this.pendingFile = activeFile;
     this.updateRequestToken++;
-
+ 
     if (!this.updateInFlight) {
       this.updateInFlight = this.runUpdateLoop().finally(() => {
         this.updateInFlight = null;
