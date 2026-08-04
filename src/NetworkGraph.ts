@@ -75,7 +75,7 @@ export class NetworkGraph {
     if (!visibleLeaf) return;
 
     this.pendingFile = activeFile;
-    this.updateRequestToken;
+    this.updateRequestToken++;
 
     if (!this.updateInFlight) {
       this.updateInFlight = this.runUpdateLoop().finally(() => {
@@ -123,7 +123,7 @@ export class NetworkGraph {
       const centerLinks = resolvedLinks?.[file.path];
       const count = centerLinks ? Object.keys(centerLinks).length : 0;
 
-      if (count === prevCount) stableHits;
+      if (count === prevCount) stableHits++;
       else stableHits = 0;
 
       if (initialized && !!fileCache && !!resolvedLinks && stableHits >= 2) return;
@@ -183,7 +183,7 @@ export class NetworkGraph {
         }
       }
 
-      if (preloadStep % 40 === 0) await this.yieldToUI();
+      if (++preloadStep % 40 === 0) await this.yieldToUI();
       if (tokenAtStart !== this.updateRequestToken) return;
     }
 

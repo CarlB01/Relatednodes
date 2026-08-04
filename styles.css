@@ -115,6 +115,7 @@
   .rv-area.center {
     grid-column: 2;
     anchor-name: --center-area; 
+    min-width: clamp(4em, 15cqw, 40em);
     align-self: center;
     justify-self: center;
     width: max-content;
