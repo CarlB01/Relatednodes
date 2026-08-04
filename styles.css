@@ -115,7 +115,6 @@
   .rv-area.center {
     grid-column: 2;
     anchor-name: --center-area; 
-    min-width: clamp(4em, 25cqw, 40em);
     align-self: center;
     justify-self: center;
     width: max-content;
@@ -711,28 +710,8 @@
   overflow-y: hidden;
 }
 
-
-/* ==========================================================================
-   iPHONE-ONLY SAFETY OVERRIDES (lock/unlock stability)
-   Keeps iPad + desktop visuals untouched.
-   ========================================================================== */
-.is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .rv-collection-wrapper {
-  -webkit-overflow-scrolling: auto; /* disable momentum in nested scrollers on iPhone */
+.is-phone .rv-area.center,
+.is-tablet .rv-area.center {
+  max-width: 100%;
+  overflow-x: hidden;
 }
-
-.is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .focusable-note-link {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  transition: none;
-}
-
-.is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .item:hover .focusable-note-link {
-  transform: none;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-.is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .item:hover .rv-gate-svg.is-connected circle {
-  filter: none;
-}
-   

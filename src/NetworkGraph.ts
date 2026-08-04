@@ -44,7 +44,11 @@ export class NetworkGraph {
   private app: App; 
   private plugin: MyBrainPlugin;
   private settings: SettingsManager;
-  public updateDebounceTimer: number | null = null; 
+
+ // Serialisert async update-loop (erstatter intern debounce/timer-styring)
+  private updateInFlight: Promise<void> | null = null;
+  private pendingFile: TFile | null = null;
+  private updateRequestToken = 0;
 
   constructor(
     plugin: MyBrainPlugin,
@@ -61,7 +65,8 @@ export class NetworkGraph {
    * COMPLIANT REFACTOR: Silences floating promise warnings via explicit void operators [dan].
    * @param activeFile The targeted TFile record currently being opened or focused.
    */
-  async update(activeFile: TFile | null) {
+  
+  async update(activeFile: TFile | null): Promise<void> {
     if (!activeFile) return;
 
     // 1. VIEWPORT SAFEGUARD: Immediate exit if the network side-panel leaf is minimized or hidden
@@ -69,97 +74,138 @@ export class NetworkGraph {
     const visibleLeaf = leaves.find(l => l.view.containerEl.offsetHeight > 0);
     if (!visibleLeaf) return;
 
-    // 2. COLDSTART GUARD: Holds off pipeline processing until Obsidian Core has completed full initialization 
-    const isCacheReady = (this.app.metadataCache as typeof this.app.metadataCache & { initialized?: boolean }).initialized;
-    if (!isCacheReady) {
-      window.setTimeout(() => void this.update(activeFile), 300);
-      return;
-    }
-  
-    // 3. DEBOUNCE THROTTLING: Clear previous updates to neutralize click stutter or rapid navigation
-    if (this.updateDebounceTimer) {
-      window.clearTimeout(this.updateDebounceTimer);
+    this.pendingFile = activeFile;
+    this.updateRequestToken;
+
+    if (!this.updateInFlight) {
+      this.updateInFlight = this.runUpdateLoop().finally(() => {
+        this.updateInFlight = null;
+      });
     }
 
-    this.updateDebounceTimer = window.setTimeout(() => {
-      
-      // Launch the isolated asynchronous data cycle thread seamlessly with void guard [dan]
-      void (async () => {
-        // Validates that metadata indexes are accessible before launching the core vaskesyklus
-        const centerCache = this.app.metadataCache.getFileCache(activeFile);
-        if (!this.app.metadataCache.resolvedLinks || !centerCache) {
-          window.setTimeout(() => void this.update(activeFile), 150); 
-          return;
-        }
-
-        // 4. MEMORY RESETS: Purges data schemas cleanly for the current generation pass
-        this.ignoredNotes.clear();
-        for (const note of this.noteCache.values()) {
-          note.isUsed = false;
-          note.isIndexedInThisRound = false; 
-          note.relation = 'undefined';
-          note.discoverySource = 'bodytext';
-          note.assignedArea = 'lower'; 
-          note.relations.parents.clear();
-          note.relations.children.clear();
-          note.relations.friends.clear();
-          note.relations.ignored.clear();
-          note.crossingBaits.clear();
-        }
-
-        Gate.cachedRadius = null; 
-
-        for (const bait of this.anchorCache.values()) {
-          bait.isUsed = false;
-          bait.sources.clear(); 
-        }
-
-        // 5. MOUNT CENTER RECORD
-        this.centerNote = this.getOrCreateNote(activeFile);
-        if (!this.centerNote) return;
-        this.centerNote.relation = 'center';
-        this.centerNote.assignedArea = 'center';
-        this.centerNote.isUsed = true;
-        
-        // 6. DEEP PRE-LOAD STAGE (Two-dimensional asynchronous cache ignition)
-        const firstDegreeFiles = this.getFirstDegreeFiles(this.centerNote.path);
-
-        for (const file of firstDegreeFiles) {
-          if (file.path !== this.centerNote.path) {
-            const preparedNote = this.getOrCreateNote(file);
-            if (preparedNote) {
-              preparedNote.isUsed = true;
-              
-              const relasjonTilSenter = this.findRelation(this.centerNote, preparedNote);
-              if (relasjonTilSenter === 'parent') {
-                const parentFiles = this.getFirstDegreeFiles(preparedNote.path);
-                for (const parentFile of parentFiles) {
-                  this.getOrCreateNote(parentFile);
-                }
-              }
-            }
-          }
-        } 
-
-        // 7. RELATION ESTABLISHMENT RECKONING
-        this.determineFirstDegreeNotes(this.centerNote);
-        await this.determineParentConnectionsAndSiblings(this.centerNote); 
-        this.determineCrossNetworkConnections(this.centerNote);
-
-        // 8. GARBAGE COLLECTION: Constantly sweeps dead or unrendered instances from RAM
-        for (const [path, note] of this.noteCache.entries()) {
-          if (!note.isUsed) this.noteCache.delete(path); 
-        }
-        for (const [path, bait] of this.anchorCache.entries()) {
-          if (!bait.isUsed || bait.sources.size === 0) this.anchorCache.delete(path);
-        }
-
-        // Dispatches event downstream to notify the multi-instance view bus
-        this.app.workspace.trigger("graph:data-ready", activeFile.path);
-      })(); // The trailing double parenthesis invokes the async thread execution block instantly [dan]
-    }, 50); // 50ms ensures absolute sync with Obsidian's UI thread loops
+    await this.updateInFlight;
   }
 
+  private async runUpdateLoop(): Promise<void> {
+    while (this.pendingFile) {
+      const file = this.pendingFile;
+      this.pendingFile = null;
+      const tokenAtStart = this.updateRequestToken;
+
+      await this.waitUntilCacheStable(file);
+      if (tokenAtStart !== this.updateRequestToken) continue;
+
+      await this.processGraphDeterministic(file, tokenAtStart);
+    }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  private async yieldToUI(): Promise<void> {
+    await this.sleep(0);
+  }
+
+  private async waitUntilCacheStable(file: TFile): Promise<void> {
+    const maxMs = 3000;
+    const stepMs = 60;
+    const start = Date.now();
+
+    let prevCount = -1;
+    let stableHits = 0;
+
+    while (Date.now() - start < maxMs) {
+      const initialized = (this.app.metadataCache as typeof this.app.metadataCache & { initialized?: boolean }).initialized === true;
+      const fileCache = this.app.metadataCache.getFileCache(file);
+      const resolvedLinks = this.app.metadataCache.resolvedLinks;
+
+      const centerLinks = resolvedLinks?.[file.path];
+      const count = centerLinks ? Object.keys(centerLinks).length : 0;
+
+      if (count === prevCount) stableHits;
+      else stableHits = 0;
+
+      if (initialized && !!fileCache && !!resolvedLinks && stableHits >= 2) return;
+
+      prevCount = count;
+      await this.sleep(stepMs);
+    }
+  }
+
+  private async processGraphDeterministic(activeFile: TFile, tokenAtStart: number): Promise<void> {
+    this.ignoredNotes.clear();
+    for (const note of this.noteCache.values()) {
+      note.isUsed = false;
+      note.isIndexedInThisRound = false;
+      note.relation = "undefined";
+      note.discoverySource = "bodytext";
+      note.assignedArea = "lower";
+      note.relations.parents.clear();
+      note.relations.children.clear();
+      note.relations.friends.clear();
+      note.relations.ignored.clear();
+      note.crossingBaits.clear();
+    }
+
+    Gate.cachedRadius = null;
+
+    for (const bait of this.anchorCache.values()) {
+      bait.isUsed = false;
+      bait.sources.clear();
+    }
+
+    await this.yieldToUI();
+
+    this.centerNote = this.getOrCreateNote(activeFile);
+    if (!this.centerNote) return;
+    this.centerNote.relation = "center";
+    this.centerNote.assignedArea = "center";
+    this.centerNote.isUsed = true;
+
+    const firstDegreeFiles = this.getFirstDegreeFiles(this.centerNote.path);
+    await this.yieldToUI(); // naturlig pausepunkt etter 1.grad
+
+    let preloadStep = 0;
+    for (const file of firstDegreeFiles) {
+      if (file.path !== this.centerNote.path) {
+        const preparedNote = this.getOrCreateNote(file);
+        if (preparedNote) {
+          preparedNote.isUsed = true;
+
+          const relasjonTilSenter = this.findRelation(this.centerNote, preparedNote);
+          if (relasjonTilSenter === "parent") {
+            const parentFiles = this.getFirstDegreeFiles(preparedNote.path);
+            for (const parentFile of parentFiles) {
+              this.getOrCreateNote(parentFile);
+            }
+          }
+        }
+      }
+
+      if (preloadStep % 40 === 0) await this.yieldToUI();
+      if (tokenAtStart !== this.updateRequestToken) return;
+    }
+
+    this.determineFirstDegreeNotes(this.centerNote);
+    if (tokenAtStart !== this.updateRequestToken) return;
+
+    await this.determineParentConnectionsAndSiblings(this.centerNote, tokenAtStart);
+    if (tokenAtStart !== this.updateRequestToken) return;
+
+    await this.determineCrossNetworkConnections(this.centerNote, tokenAtStart);
+
+    for (const [path, note] of this.noteCache.entries()) {
+      if (!note.isUsed) this.noteCache.delete(path);
+    }
+    for (const [path, bait] of this.anchorCache.entries()) {
+      if (!bait.isUsed || bait.sources.size === 0) this.anchorCache.delete(path);
+    }
+
+    if (tokenAtStart === this.updateRequestToken) {
+      this.app.workspace.trigger("graph:data-ready", activeFile.path);
+    }
+  }  
 
 
   /**
@@ -292,9 +338,11 @@ export class NetworkGraph {
    * Discovers and structures sibling connections derived via active parent nodes.
    * Leverages precise relationship shielding to avoid mutating existing first-degree data hierarchies.
    */
-  private async determineParentConnectionsAndSiblings(centerNote: Node) {
+  private async determineParentConnectionsAndSiblings(centerNote: Node, tokenAtStart: number) {
     const parents = centerNote.relations.parents;
     if (parents.size === 0) return;
+
+    let step = 0;
 
     for (const parent of parents) {
       const allGraphFiles = this.getFirstDegreeFiles(parent.path);
@@ -376,6 +424,12 @@ export class NetworkGraph {
 
         parent.relations.children.add(graphNode);
         graphNode.relations.parents.add(parent);
+
+        if (++step % 30 === 0) {
+          await this.yieldToUI();
+          if (tokenAtStart !== this.updateRequestToken) return;
+        }
+
       }
     }
   }
@@ -387,7 +441,7 @@ export class NetworkGraph {
    * Synchronously binds evaluated connections two-way into high-velocity RAM sets.
    * @param centerNote The active origin note anchoring the graph hierarchy framework.
    */
-  private determineCrossNetworkConnections(centerNote: Node) {
+  private async determineCrossNetworkConnections(centerNote: Node, tokenAtStart: number) {
     // 1. COLLECT LAYOUT-RENDERED VIEW CORES
     const visibleNotes = Array.from(this.noteCache.values())
       .filter(note => note.isUsed && note.assignedArea !== 'ignored');
@@ -423,6 +477,7 @@ export class NetworkGraph {
     // 2. PRIMARY PAIRING RECKONING MACHINE (Inherited from cross-bait topology)
     // Symmetrically pairs all active layout nodes across a flawless double-loop
     // ==========================================================================
+    let step = 0;
     for (let i = 0; i < visibleNotes.length; i++) {
       const nodeA = visibleNotes[i];
       if (!nodeA) continue;
@@ -469,6 +524,10 @@ export class NetworkGraph {
             nodeA.relations.friends.add(nodeB);
             nodeB.relations.friends.add(nodeA);
             break;
+        }
+        if (++step % 25 === 0) {
+          await this.yieldToUI();
+          if (tokenAtStart !== this.updateRequestToken) return;
         }
       }
     }
