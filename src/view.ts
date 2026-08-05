@@ -251,12 +251,10 @@ export class MyBrainView extends ItemView implements HoverParent {
       
       const activeFile = this.getMostRecentMarkdownFile();
       if (activeFile) {
-        // Dispatches cache hydration across a synchronous layout execution thread cleanly [dan]
-        void this.onFileChange(activeFile).then(() => {
-          if (this.areaManager) {
-            this.areaManager.renderGraph();
-          }
-        });
+        await this.onFileChange(activeFile);
+        if (this.areaManager) {
+          this.areaManager.renderGraph();
+        }
       }
     } else {
       // ==========================================================================

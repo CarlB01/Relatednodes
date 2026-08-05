@@ -115,7 +115,7 @@
   .rv-area.center {
     grid-column: 2;
     anchor-name: --center-area; 
-    min-width: clamp(4em, 25cqw, 40em);
+    min-width: clamp(4em, 15cqw, 40em);
     align-self: center;
     justify-self: center;
     width: max-content;
@@ -124,14 +124,14 @@
     overflow-y: visible;
     padding: clamp(0.2em, 3cqh, 2em) clamp(0.2em, 1cqw, 1.2em);
   }
-
+ 
   .rv-area.left {
     grid-column: 1;
     margin-right: 0.3em;
     min-width: 0;
     overflow-x: hidden;
     overflow-y: visible;
-  }
+  } 
 
   .rv-area.right {
     grid-column: 3;
@@ -734,4 +734,3 @@
 .is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .item:hover .rv-gate-svg.is-connected circle {
   filter: none;
 }
-   
