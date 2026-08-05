@@ -10,7 +10,8 @@ export default class MyBrainPlugin extends Plugin {
   public networkGraph!: NetworkGraph;
   
   private resolvedEventRef: EventRef | undefined;
-  
+  private appPaused = false;
+
   async onload() {
     await this.loadSettings();
 
@@ -26,6 +27,7 @@ export default class MyBrainPlugin extends Plugin {
 
     // Binds all global application listeners natively (file-open, rename, resolve)
     this.registerGlobalEvents();
+    this.registerAppLifecycleEvents();
 
     // Ribbon icon to trigger view activation
     this.addRibbonIcon(RV.ICON, "Open myBrain", () => {
@@ -51,6 +53,7 @@ export default class MyBrainPlugin extends Plugin {
     // ------------------------------------------------------------------------
     this.registerEvent(
       this.app.workspace.on('file-open', (file: TFile | null) => {
+        if (this.appPaused) return;
         if (!file) return;
         
         // Micro-timeout accommodating mobile touch-screen navigation animation sequences safely
@@ -78,6 +81,7 @@ export default class MyBrainPlugin extends Plugin {
     // ------------------------------------------------------------------------
     this.registerEvent(
       this.app.vault.on('rename', (file: TAbstractFile, oldPath: string) => {
+        if (this.appPaused) return;
         if (!(file instanceof TFile)) return;
         
         // Immediate database cache purge to kill stale filename text-strings in memory slots
@@ -171,6 +175,8 @@ export default class MyBrainPlugin extends Plugin {
     // C. Intercepts metadata resolution flags when a note finishes background parsing updates
     this.registerEvent(
       this.app.metadataCache.on('resolve', (file: TFile) => {
+        if (this.appPaused) return;
+
         // Asynchronously resolves metadata data models mapping localized token keys
         void this.networkGraph.handleFileResolve(file).then((dataWasUpdated) => {
           
@@ -212,6 +218,40 @@ export default class MyBrainPlugin extends Plugin {
       })
     );
 
+  }
+
+  // Only document visibility + Obsidian views
+  private registerAppLifecycleEvents() {
+    const suspendAllViews = () => {
+      this.appPaused = true;
+      this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
+        if (leaf.view instanceof MyBrainView) {
+          leaf.view.suspendForBackground();
+        }
+      });
+    };
+
+    const resumeAllViews = () => {
+      this.appPaused = false;
+      this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
+        if (leaf.view instanceof MyBrainView) {
+          leaf.view.resumeFromBackground();
+        }
+      });
+    };
+
+    this.registerDomEvent(document, 'visibilitychange', () => {
+      if (document.hidden) suspendAllViews();
+      else resumeAllViews();
+    });
+
+    this.registerDomEvent(window, 'pagehide', () => {
+      suspendAllViews();
+    });
+
+    this.registerDomEvent(window, 'pageshow', () => {
+      resumeAllViews();
+    });
   }
 
   /**
@@ -275,6 +315,12 @@ export default class MyBrainPlugin extends Plugin {
 
   
   onunload() {
+    this.appPaused = true;
+    this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
+      if (leaf.view instanceof MyBrainView) {
+        leaf.view.suspendForBackground();
+      }
+    });
     this.unregisterResolvedEvent();
   }
 

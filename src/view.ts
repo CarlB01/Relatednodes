@@ -15,8 +15,16 @@ export class MyBrainView extends ItemView implements HoverParent {
   public hoverPopover: HoverPopover | null = null;
   public resolveDebounceTimer: number | null = null; 
   public renameDebounceTimer: number | null = null;
-  public isRenamingShield: boolean = false;
 
+  private layoutDebounceTimer: number | null = null;
+  private orientationDebounceTimer: number | null = null;
+  private activeLeafDebounceTimer: number | null = null;
+  private visibilityResumeTimer: number | null = null;
+  private isSuspended: boolean = false;
+  private visibilityObserver: IntersectionObserver | null = null;
+  
+
+  public isRenamingShield: boolean = false;
   /** Public visibility state constraint protecting viewport boundaries from early lifecycle pops */
   public isFullyStarted: boolean = false;
   
@@ -207,6 +215,38 @@ export class MyBrainView extends ItemView implements HoverParent {
     welcomeDiv.createEl("p", { text: RV.WELCOME, cls: "rv-welcome-text" });
   }
 
+  public suspendForBackground() {
+    this.isSuspended = true;
+    this.clearAllTimers();
+  }
+
+  public resumeFromBackground() {
+    this.isSuspended = false;
+    if (!this.isFullyStarted) return;
+    const activeFile = this.getMostRecentMarkdownFile();
+    if (!activeFile) return;
+    void this.onFileChange(activeFile).then(() => {
+      this.areaManager?.renderGraph();
+    });
+  }
+
+  private clearAllTimers() {
+    if (this.resolveDebounceTimer) window.clearTimeout(this.resolveDebounceTimer);
+    if (this.renameDebounceTimer) window.clearTimeout(this.renameDebounceTimer);
+    if (this.layoutDebounceTimer) window.clearTimeout(this.layoutDebounceTimer);
+    if (this.orientationDebounceTimer) window.clearTimeout(this.orientationDebounceTimer);
+    if (this.activeLeafDebounceTimer) window.clearTimeout(this.activeLeafDebounceTimer);
+    if (this.visibilityResumeTimer) window.clearTimeout(this.visibilityResumeTimer);
+
+    this.resolveDebounceTimer = null;
+    this.renameDebounceTimer = null;
+    this.layoutDebounceTimer = null;
+    this.orientationDebounceTimer = null;
+    this.activeLeafDebounceTimer = null;
+    this.visibilityResumeTimer = null;
+  }
+
+
   // ==========================================================================
   // APPLICATION LIFECYCLE RECEPTORS & HOOKS
   // ==========================================================================
@@ -284,7 +324,11 @@ export class MyBrainView extends ItemView implements HoverParent {
   }
 
   async onClose() {
-    // Structural termination hook ready for down-stream allocations
+    this.clearAllTimers();
+    if (this.visibilityObserver) {
+      this.visibilityObserver.disconnect();
+      this.visibilityObserver = null;
+    }
   }
 
   /**
@@ -292,9 +336,12 @@ export class MyBrainView extends ItemView implements HoverParent {
    * Incorporates an asynchronous breathing delay allowing sliding layout panes to lock calculations.
    */
   private onActiveLeafChanged(leaf: WorkspaceLeaf | null) {
+    if (this.isSuspended) return;
+
     if (leaf && leaf.view instanceof MarkdownView) {
       if (this.areaManager.containerEl.isShown()) {
-        window.setTimeout(() => {
+        if (this.activeLeafDebounceTimer) window.clearTimeout(this.activeLeafDebounceTimer);
+        this.activeLeafDebounceTimer = window.setTimeout(() => {
           this.areaManager.requestRedraw();
         }, 150); 
       }
@@ -310,6 +357,7 @@ export class MyBrainView extends ItemView implements HoverParent {
    */
   async onFileChange(file: TFile | null) {
     if (!file) return;
+    if (this.isSuspended) return;
 
     // HARDWARE INITIALIZATION FILTER: Safeguards the startup visual shield from premature data leaks
     if (!this.isFullyStarted) {
@@ -378,17 +426,17 @@ export class MyBrainView extends ItemView implements HoverParent {
    * Obsidian's core drag-and-drop layout pipelines from structural rendering drops [dan].
    */
   private registerWorkspaceLayoutChanges() {
-    let layoutDebounceTimer: number | null = null;
 
     this.registerEvent(
       this.app.workspace.on('layout-change', () => {
+        if (this.isSuspended) return;
         if (!this.isFullyStarted) return; // Drop updates entirely if initialization shield is active
 
-        if (layoutDebounceTimer) {
-          window.clearTimeout(layoutDebounceTimer);
+        if (this.layoutDebounceTimer) {
+          window.clearTimeout(this.layoutDebounceTimer);
         }
         
-        layoutDebounceTimer = window.setTimeout(() => {
+        this.layoutDebounceTimer = window.setTimeout(() => {
           if (this.areaManager) {
             this.areaManager.requestRedraw();
           }
@@ -468,9 +516,11 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     // DISORIENTATION COMPENSATION: Recalibrates canvas coordinates on portrait/landscape screen rotation flips
     this.registerDomEvent(window, 'orientationchange', () => {
-      window.setTimeout(() => {
-          this.areaManager.requestRedraw();
-      }, 200); 
+      if (this.isSuspended) return;
+      if (this.orientationDebounceTimer) window.clearTimeout(this.orientationDebounceTimer);
+      this.orientationDebounceTimer = window.setTimeout(() => {
+           this.areaManager.requestRedraw();
+       }, 200); 
     });
   }
 	
@@ -480,7 +530,7 @@ export class MyBrainView extends ItemView implements HoverParent {
    * PRODUCTION SAFEGUARD: Blocks recursive, self-triggering coldstart loop cascades cleanly [dan].
    */
   private setupVisibilitySafeguards() {
-    const visibilityObserver = new IntersectionObserver((entries) => {
+    this.visibilityObserver = new IntersectionObserver((entries) => {
       for (let entry of entries) {
         
         if (entry.isIntersecting) {
@@ -518,15 +568,16 @@ export class MyBrainView extends ItemView implements HoverParent {
             });
           }
 
-          window.setTimeout(() => {
-            if ('requestIdleCallback' in window) {
-                window.requestIdleCallback(() => {
-                  if (this.areaManager) this.areaManager.requestRedraw();
-                }, { timeout: 200 }); 
-            } else {
-                if (this.areaManager) this.areaManager.requestRedraw();
-            }
-          }, 150); 
+          if (this.visibilityResumeTimer) window.clearTimeout(this.visibilityResumeTimer);
+          this.visibilityResumeTimer = window.setTimeout(() => {
+             if ('requestIdleCallback' in window) {
+                 window.requestIdleCallback(() => {
+                   if (this.areaManager) this.areaManager.requestRedraw();
+                 }, { timeout: 200 }); 
+             } else {
+                 if (this.areaManager) this.areaManager.requestRedraw();
+             }
+           }, 150); 
           
         } else {
           // The panel was physically closed or dragged away; activate the hidden gateway flag
@@ -537,8 +588,8 @@ export class MyBrainView extends ItemView implements HoverParent {
         threshold: 0.1 
     });
 
-    visibilityObserver.observe(this.areaManager.containerEl);
-    this.register(() => visibilityObserver.disconnect());
+    this.visibilityObserver.observe(this.areaManager.containerEl);
+    this.register(() => this.visibilityObserver?.disconnect());
 
     // PANEL SWAP MONITOR
     this.registerEvent(
