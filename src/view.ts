@@ -21,6 +21,9 @@ export class MyBrainView extends ItemView implements HoverParent {
   private activeLeafDebounceTimer: number | null = null;
   private visibilityResumeTimer: number | null = null;
   private isSuspended: boolean = false;
+  private isDomSuspended: boolean = false;
+
+  private lastResumeAt = 0;
   private visibilityObserver: IntersectionObserver | null = null;
   
 
@@ -218,16 +221,41 @@ export class MyBrainView extends ItemView implements HoverParent {
   public suspendForBackground() {
     this.isSuspended = true;
     this.clearAllTimers();
+    this.areaManager?.cancelPendingRedraw();
+    this.teardownDomForSuspend();
   }
 
   public resumeFromBackground() {
+    const now = Date.now();
+    if (now - this.lastResumeAt < 500) return;
+    this.lastResumeAt = now;
+
     this.isSuspended = false;
+    this.restoreDomAfterSuspend();
     if (!this.isFullyStarted) return;
     const activeFile = this.getMostRecentMarkdownFile();
     if (!activeFile) return;
     void this.onFileChange(activeFile).then(() => {
       this.areaManager?.renderGraph();
     });
+  }
+
+
+  private teardownDomForSuspend() {
+    if (this.isDomSuspended) return;
+    if (!this.contentEl) return;
+    this.contentEl.empty();
+    this.isDomSuspended = true;
+  }
+
+  private restoreDomAfterSuspend() {
+    if (!this.isDomSuspended) return;
+    if (!this.contentEl) return;
+
+    // Re-init minimal rendering surface only
+    this.areaManager = new AreaManager(this.plugin.networkGraph, this.contentEl, this.plugin);
+    this.areaManager.initiate();
+    this.isDomSuspended = false;
   }
 
   private clearAllTimers() {
@@ -276,12 +304,6 @@ export class MyBrainView extends ItemView implements HoverParent {
     // Enforce the animated welcome mask framework immediately to conceal early node blips
     this.displayWelcome();
 
-    // ==========================================================================
-    // HYBRID LIFECYCLE IGNITION (Knuser den blinde 2-sekunders fallback-timeren!):
-    // We instantly poll Obsidian's native metadata cache initialized parameter.
-    // In empty or hot-cached vaults, this parameter resolves true on microsecond zero,
-    // firing the rendering tree instantly without deploying a single timer [dan]!
-    // ==========================================================================
     const isCacheReady = (this.app.metadataCache as typeof this.app.metadataCache & { initialized?: boolean }).initialized === true;
     
     if (isCacheReady) {
@@ -325,6 +347,8 @@ export class MyBrainView extends ItemView implements HoverParent {
 
   async onClose() {
     this.clearAllTimers();
+    this.areaManager?.cancelPendingRedraw();
+    this.teardownDomForSuspend();
     if (this.visibilityObserver) {
       this.visibilityObserver.disconnect();
       this.visibilityObserver = null;
@@ -340,10 +364,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     if (leaf && leaf.view instanceof MarkdownView) {
       if (this.areaManager.containerEl.isShown()) {
-        if (this.activeLeafDebounceTimer) window.clearTimeout(this.activeLeafDebounceTimer);
-        this.activeLeafDebounceTimer = window.setTimeout(() => {
-          this.areaManager.requestRedraw();
-        }, 150); 
+        this.areaManager.requestRedraw();
       }
       void this.app.workspace.revealLeaf(leaf);
     }
@@ -435,12 +456,10 @@ export class MyBrainView extends ItemView implements HoverParent {
         if (this.layoutDebounceTimer) {
           window.clearTimeout(this.layoutDebounceTimer);
         }
-        
+
         this.layoutDebounceTimer = window.setTimeout(() => {
-          if (this.areaManager) {
-            this.areaManager.requestRedraw();
-          }
-        }, 200); // 200ms debounce cushions high-velocity sidebar dragging perfectly
+          if (this.areaManager) this.areaManager.requestRedraw();
+        }, 120);
       })
     );
   }
@@ -464,39 +483,29 @@ export class MyBrainView extends ItemView implements HoverParent {
    */
   private setupDataReadyHandler() {
     type GraphDataReadyBus = {
-      on(name: "graph:data-ready", callback: (vasketPath: unknown) => void): EventRef;
+      on(name: "graph:data-ready", callback: (cleanedPath: unknown) => void): EventRef;
     };
 
     const workspaceBus = this.app.workspace as unknown as Partial<GraphDataReadyBus>;
 
     if (workspaceBus.on) {
       this.registerEvent(
-        workspaceBus.on("graph:data-ready", (vasketPath: unknown) => {
+        workspaceBus.on("graph:data-ready", (cleanedPath: unknown) => {
           // ===== FIX #2: Type guard for unknown value =====
           // Enforce a strict string type guard to process the pathway safely [dan]
-          if (typeof vasketPath === "string") {
-            
+          if (typeof cleanedPath === "string") {
             const activeFile = this.getMostRecentMarkdownFile();
-            if (activeFile && activeFile.path === vasketPath) {
-              
-              // ==========================================================================
-              // LOOP-FREE RENDERING PERIMETER: Commit the validated path straight down 
-              // to the tracking slot, and request an immediate layout redraw pass [dan].
-              // This completely cuts the recursive update() chain to secure 100% ro [dan]!
-              // ==========================================================================
+            if (activeFile && activeFile.path === cleanedPath) {
               this.currentFilePath = activeFile.path;
-              
               if (this.areaManager) {
-                this.areaManager.renderGraph(); // Smoothly illuminates the synchronized grid matrix natively [dan]
+                this.areaManager.renderGraph();
               }
             }
-
           }
         })
       );
     }
   }
-
 
   /**
    * Implements explicit hardware-level layout safeguards optimized for touch screen iOS/Android viewports.
@@ -519,8 +528,8 @@ export class MyBrainView extends ItemView implements HoverParent {
       if (this.isSuspended) return;
       if (this.orientationDebounceTimer) window.clearTimeout(this.orientationDebounceTimer);
       this.orientationDebounceTimer = window.setTimeout(() => {
-           this.areaManager.requestRedraw();
-       }, 200); 
+        this.areaManager.requestRedraw();
+      }, 140);
     });
   }
 	
@@ -561,24 +570,15 @@ export class MyBrainView extends ItemView implements HoverParent {
             this.isFullyStarted = true; 
             
             void this.onFileChange(activeFile).then(() => {
-              this.isFullyStarted = historicalGateState || true; 
-              if (this.areaManager) {
-                this.areaManager.renderGraph(); 
-              }
+              this.areaManager?.renderGraph(); 
             });
           }
 
           if (this.visibilityResumeTimer) window.clearTimeout(this.visibilityResumeTimer);
           this.visibilityResumeTimer = window.setTimeout(() => {
-             if ('requestIdleCallback' in window) {
-                 window.requestIdleCallback(() => {
-                   if (this.areaManager) this.areaManager.requestRedraw();
-                 }, { timeout: 200 }); 
-             } else {
-                 if (this.areaManager) this.areaManager.requestRedraw();
-             }
-           }, 150); 
-          
+            if (this.areaManager) this.areaManager.requestRedraw();
+          }, 90); 
+              
         } else {
           // The panel was physically closed or dragged away; activate the hidden gateway flag
           this.wasPanelHidden = true;

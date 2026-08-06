@@ -11,6 +11,20 @@ export default class MyBrainPlugin extends Plugin {
   
   private resolvedEventRef: EventRef | undefined;
   private appPaused = false;
+  private resumedAt = 0;
+  private resumeInFlight = false;
+
+  public isAppPaused(): boolean {
+    return this.appPaused;
+  }
+
+  public isInResumeCooldown(ms = 1200): boolean {
+    return Date.now() - this.resumedAt < ms;
+  }
+
+  public markResumedNow() {
+    this.resumedAt = Date.now();
+  }
 
   async onload() {
     await this.loadSettings();
@@ -55,24 +69,14 @@ export default class MyBrainPlugin extends Plugin {
       this.app.workspace.on('file-open', (file: TFile | null) => {
         if (this.appPaused) return;
         if (!file) return;
-        
-        // Micro-timeout accommodating mobile touch-screen navigation animation sequences safely
-        window.setTimeout(() => {
-          this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
-            if (leaf.view instanceof MyBrainView) {
-              const myView = leaf.view;
-              
-              // ==========================================================================
-              // 🛡️ THE RENAME FILE-OPEN SHIELD (Kveler gjenferds-blinket på sekund 0!):
-              // If our secure renaming shield is currently deployed on the active view layout,
-              // we forcefully abort this thread to block unstable layout pops during names mutating [dan]!
-              // ==========================================================================
-              if (myView.isRenamingShield) return;
-              
-              void myView.onFileChange(file);
-            }
-          });
-        }, 70); 
+
+        this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
+          if (leaf.view instanceof MyBrainView) {
+            const myView = leaf.view;
+            if (myView.isRenamingShield) return;
+            void myView.onFileChange(file);
+          }
+        });
       })
     );
 
@@ -124,39 +128,33 @@ export default class MyBrainPlugin extends Plugin {
                 
                 const onCacheResolvedOnce = () => {
                   
-                  // ==========================================================================
-                  // ⏳ THE RE-INDEXING CUSHION (Gir Obsidian tid til å oppdatere lenkene!):
-                  // Obsidian needs a few milliseconds to update the text inside the other files 
-                  // and push them into resolvedLinks. A 400ms timeout provides the exact breathing 
-                  // room needed for the global links database to fully mature prior to drawing [dan]!
-                  // ==========================================================================
-                  if (myView.renameDebounceTimer) {
-                    window.clearTimeout(myView.renameDebounceTimer);
-                  }
+                  if (myView.renameDebounceTimer) window.clearTimeout(myView.renameDebounceTimer);
 
                   myView.renameDebounceTimer = window.setTimeout(() => {
-                    void (async () => {
-                      
-                      // Flush old internal caches so the core reads the brand new backlinks layout
-                      if (this.networkGraph && this.networkGraph.noteCache) {
-                        this.networkGraph.noteCache.delete(file.path);
-                      }
-                      
-                      const freshFileInstance = this.app.vault.getAbstractFileByPath(file.path);
-                      
-                      if (freshFileInstance instanceof TFile && this.networkGraph) {
-                        await this.networkGraph.update(freshFileInstance); 
-                      }
-                      
-                      if (myView.areaManager) {
-                        myView.areaManager.renderGraph(); // Spretter opp rent, uovervinnelig og vakkert! [dan]
-                      }
-                      
-                      // Drop the execution shield precisely after the true updated graph matrix has mounted [dan]
-                      myView.isRenamingShield = false;
-                    })();
-                  }, 400); // 400ms is imperceptible but completely eliminates index race conditions [dan]
-                  
+                    window.requestAnimationFrame(() => {
+                      void (async () => {
+                        if (this.appPaused) return;
+
+                        if (this.networkGraph?.noteCache) {
+                          this.networkGraph.noteCache.delete(file.path);
+                        }
+
+                        const freshFileInstance = this.app.vault.getAbstractFileByPath(file.path);
+                        const activeNow = this.app.workspace.getActiveFile();
+                        if (!activeNow || activeNow.path !== file.path) {
+                          myView.isRenamingShield = false;
+                          return;
+                        }
+                        if (freshFileInstance instanceof TFile && this.networkGraph) {
+                          await this.networkGraph.update(freshFileInstance);
+                        }
+
+                        myView.areaManager?.renderGraph();
+                        myView.isRenamingShield = false;
+                      })();
+                    });
+                  }, 0);                  
+
                   internalCacheBus.off('resolved', onCacheResolvedOnce);
                 };
 
@@ -176,6 +174,7 @@ export default class MyBrainPlugin extends Plugin {
     this.registerEvent(
       this.app.metadataCache.on('resolve', (file: TFile) => {
         if (this.appPaused) return;
+        if (this.isInResumeCooldown(1200)) return;
 
         // Asynchronously resolves metadata data models mapping localized token keys
         void this.networkGraph.handleFileResolve(file).then((dataWasUpdated) => {
@@ -232,12 +231,19 @@ export default class MyBrainPlugin extends Plugin {
     };
 
     const resumeAllViews = () => {
+      if (this.resumeInFlight) return;
+      this.resumeInFlight = true;
       this.appPaused = false;
+      this.resumedAt = Date.now();
+
+      this.markResumedNow();
+
       this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
         if (leaf.view instanceof MyBrainView) {
           leaf.view.resumeFromBackground();
         }
       });
+      window.setTimeout(() => { this.resumeInFlight = false; }, 300);
     };
 
     this.registerDomEvent(document, 'visibilitychange', () => {
@@ -245,13 +251,6 @@ export default class MyBrainPlugin extends Plugin {
       else resumeAllViews();
     });
 
-    this.registerDomEvent(window, 'pagehide', () => {
-      suspendAllViews();
-    });
-
-    this.registerDomEvent(window, 'pageshow', () => {
-      resumeAllViews();
-    });
   }
 
   /**

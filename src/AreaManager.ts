@@ -23,6 +23,7 @@ export class AreaManager {
   public linkCache = new Map<string, { svgElement: SVGPathElement; used: boolean }>();
 
   private animationFrameId: number | null = null;
+  private redrawQueued = false;
 
   constructor(
     graph: NetworkGraph,
@@ -43,27 +44,31 @@ export class AreaManager {
    * Automatically triggered by scroll vents, window resizing, and following initial DOM injection.
    */
   public requestRedraw() {
-    // If a drawing is already scheduled, cancel the previous frame request
+    if (this.redrawQueued) return;
+    this.redrawQueued = true;
+
     if (this.animationFrameId !== null) {
       cancelAnimationFrame(this.animationFrameId);
     }
 
-    // Schedule a new frame synchronized with the browser rendering engine
+    // 2x rAF: first paint settles layout, second reads geometry and draws lines
     this.animationFrameId = window.requestAnimationFrame(() => {
-      // Enforces a micro-timeout ensuring CSS Grid layouts have fully settled 
-      // on their concrete pixels before measuring geometry bounds
-      window.setTimeout(() => {
+      this.animationFrameId = window.requestAnimationFrame(() => {
+        this.redrawQueued = false;
+        this.animationFrameId = null;
+
+        if (!this.containerEl || !this.containerEl.isConnected) return;
+        const rect = this.containerEl.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
         this.markGroupStateForColumnsWrapper();
         this.yieldIfLeftTall();
         this.yieldIfRightTall();
 
         if (this.graph?.centerNote) {
-          this.drawAllGraphLines(); // Renders the bezier curve network lines accurately
+          this.drawAllGraphLines();
         }
-      }, 150); // 150ms allows browser reflow to settle without human-visible lag
-
-      // Reset the animation frame ID to open the gate for the next request cycle
-      this.animationFrameId = null;
+      });
     });
   }
 
@@ -277,6 +282,14 @@ export class AreaManager {
     window.requestAnimationFrame(() => {
       mainContainer.classList.remove('is-calculating');
     });
+  }
+
+  public cancelPendingRedraw() {
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+    this.redrawQueued = false;
   }
 
   private renderQuadrant(

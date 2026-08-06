@@ -68,6 +68,7 @@ export class NetworkGraph {
   
   async update(activeFile: TFile | null): Promise<void> {
     if (!activeFile) return;
+    if (this.plugin.isAppPaused()) return;
 
     // 1. VIEWPORT SAFEGUARD: Immediate exit if the network side-panel leaf is minimized or hidden
     const leaves = this.plugin.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE);
@@ -88,6 +89,8 @@ export class NetworkGraph {
 
   private async runUpdateLoop(): Promise<void> {
     while (this.pendingFile) {
+      if (this.plugin.isAppPaused()) return;
+
       const file = this.pendingFile;
       this.pendingFile = null;
       const tokenAtStart = this.updateRequestToken;
