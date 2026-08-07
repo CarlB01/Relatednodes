@@ -61,7 +61,6 @@ export class AreaManager {
         const rect = this.containerEl.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return;
 
-        this.markGroupStateForColumnsWrapper();
         this.yieldIfLeftTall();
         this.yieldIfRightTall();
 
@@ -91,36 +90,6 @@ export class AreaManager {
         { passive: true }
       );
     }
-  }
-
-  /**
-   * iOS FIX: Replaces :has() selector logic with explicit class-based state management.
-   * Evaluates if columns-wrapper has exactly 2-3 groups and adds flag class for CSS targeting.
-   * This prevents iOS Safari performance degradation and memory crashes from :has() invalidation.
-   */
-  private markGroupStateForColumnsWrapper() {
-    const columnsWrappers = this.containerEl.querySelectorAll('.rv-columns-wrapper');
-    
-    columnsWrappers.forEach((wrapper) => {
-      const groups = Array.from(wrapper.children).filter((child) =>
-        child.classList.contains('rv-groups')
-      );
-      const groupCount = groups.length;
-      
-      // Remove previous state class
-      wrapper.classList.remove('rv-has-2-3-groups');
-      wrapper.classList.remove('rv-single-group');
-      
-      // Add class only if there are exactly 2 or 3 groups
-      if (groupCount >= 2 && groupCount <= 3) {
-        wrapper.classList.add('rv-has-2-3-groups');
-      }
-
-      // Add class only if there is exactly one direct group child
-      if (groupCount === 1) {
-        wrapper.classList.add('rv-single-group');
-      }
-    });
   }
 
   /**
@@ -266,9 +235,6 @@ export class AreaManager {
     // Binds event listeners directly to the initialized layout container frames
     this.setupScrollEventListeners();
     
-    // iOS FIX: Apply group state marking for CSS class-based targeting
-    this.markGroupStateForColumnsWrapper();
-    
     // Evaluate geometric boundary heights exactly once while layout metrics are hidden
     this.yieldIfLeftTall();
     this.yieldIfRightTall();
@@ -315,7 +281,16 @@ export class AreaManager {
 
       // Mounts individual horizontal multi-column layout flows
       const colWrapDiv = areaCollectionDiv.createDiv({ cls: RV.COL_WRAPPER });
+      const itemCount = collection.length;
+      
+      if (itemCount >= 2 && itemCount <= 6) {
+        colWrapDiv.addClass('rv-2-6-items-group');
+      }
 
+      if (itemCount === 1) {
+        colWrapDiv.addClass('rv-single-item-group');
+      }
+    
       // Group active nodes inside this specific collection dynamically by frontmatter tags
       const tagGroupedNotes = this.graph.groupByFirstTag(collection);
 

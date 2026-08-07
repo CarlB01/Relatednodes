@@ -13,6 +13,28 @@ export default class MyBrainPlugin extends Plugin {
   private appPaused = false;
   private resumedAt = 0;
   private resumeInFlight = false;
+  private mobileWarmupUntil = 0;
+
+  private crashTrace: {
+    bootCount: number;
+    lastBootAt: number;
+    lastSuspendAt: number;
+    lastResumeAt: number;
+    lastOnFileChangeAt: number;
+    lastCenterPath: string;
+    lastEvent: string;
+  } = {
+    bootCount: 0,
+    lastBootAt: 0,
+    lastSuspendAt: 0,
+    lastResumeAt: 0,
+    lastOnFileChangeAt: 0,
+    lastCenterPath: "",
+    lastEvent: "init"
+  };
+
+  private persistTimer: number | null = null;
+
 
   public isAppPaused(): boolean {
     return this.appPaused;
@@ -24,10 +46,39 @@ export default class MyBrainPlugin extends Plugin {
 
   public markResumedNow() {
     this.resumedAt = Date.now();
+    this.mobileWarmupUntil = this.resumedAt + 2000; // 1.5s warmup gate after resume
+  }
+
+  private queueCrashTracePersist() {
+    if (this.persistTimer) window.clearTimeout(this.persistTimer);
+    this.persistTimer = window.setTimeout(() => {
+      void this.saveData({
+        ...(this.settings as unknown as Record<string, unknown>),
+        __crashTrace: this.crashTrace
+      });
+    }, 120);
+  }
+
+  public markCrashEvent(event: string, centerPath?: string) {
+    this.crashTrace.lastEvent = event;
+    if (centerPath !== undefined) this.crashTrace.lastCenterPath = centerPath;
+    this.queueCrashTracePersist();
+  }
+  public markOnFileChangeAt(ts: number) {
+    this.crashTrace.lastOnFileChangeAt = ts;
+    this.queueCrashTracePersist();
+  }
+
+  public isInMobileWarmup(): boolean {
+    return Date.now() < this.mobileWarmupUntil;
   }
 
   async onload() {
     await this.loadSettings();
+    this.crashTrace.bootCount += 1;
+    this.crashTrace.lastBootAt = Date.now();
+    this.crashTrace.lastEvent = "onload";
+    this.queueCrashTracePersist();
 
     this.networkGraph = new NetworkGraph(this, this.settings);
 
@@ -87,7 +138,7 @@ export default class MyBrainPlugin extends Plugin {
       this.app.vault.on('rename', (file: TAbstractFile, oldPath: string) => {
         if (this.appPaused) return;
         if (!(file instanceof TFile)) return;
-        
+
         // Immediate database cache purge to kill stale filename text-strings in memory slots
         if (this.networkGraph && this.networkGraph.noteCache) {
           this.networkGraph.noteCache.delete(oldPath);
@@ -97,11 +148,6 @@ export default class MyBrainPlugin extends Plugin {
         // Execute background database memory path mapping updates safely
         this.networkGraph.handleFileRename(file, oldPath);
 
-        // ==========================================================================
-        // COMPLIANT RENAME EXECUTION CONVOLUT:
-        // Prefixed with the explicit 'void' operator to satisfy Obsidian's floating promises guard.
-        // Converted the loop to a strict 'for...of' structure to properly wait for inner update calls.
-        // ==========================================================================
         void (async () => {
           const leaves = this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE);
 
@@ -110,24 +156,14 @@ export default class MyBrainPlugin extends Plugin {
               const myView = leaf.view;
               if (!myView.isFullyStarted) continue;
 
-              // We safely route 'myView' through 'unknown' and cast it into a standard 
-              // string-indexed Record to read the path context without violating audits [dan]!
               const wasCurrentlyVisibleFileRenamed = oldPath === myView.currentFilePath;
               if (wasCurrentlyVisibleFileRenamed) {
-                // ==========================================================================
-                // 🛡️ THE RENAME SHIELD ACTIVATION (Låser dørvakta på sekund 0):
-                // We arm the renaming shield parameter right here to force the global file-open
-                // interceptor (Section A) to stand down and ignore core layout vibrations [dan]!
-                // ==========================================================================
                 myView.isRenamingShield = true;
-                
-                // Safely update the pathway descriptor slots immediately so the view tracks the new name
                 myView.currentFilePath = file.path;
-                
+
                 const internalCacheBus = this.app.metadataCache;
-                
+
                 const onCacheResolvedOnce = () => {
-                  
                   if (myView.renameDebounceTimer) window.clearTimeout(myView.renameDebounceTimer);
 
                   myView.renameDebounceTimer = window.setTimeout(() => {
@@ -145,6 +181,7 @@ export default class MyBrainPlugin extends Plugin {
                           myView.isRenamingShield = false;
                           return;
                         }
+
                         if (freshFileInstance instanceof TFile && this.networkGraph) {
                           await this.networkGraph.update(freshFileInstance);
                         }
@@ -153,7 +190,7 @@ export default class MyBrainPlugin extends Plugin {
                         myView.isRenamingShield = false;
                       })();
                     });
-                  }, 0);                  
+                  }, 0);
 
                   internalCacheBus.off('resolved', onCacheResolvedOnce);
                 };
@@ -162,66 +199,61 @@ export default class MyBrainPlugin extends Plugin {
               }
             }
           }
-        })(); 
+        })();
       })
     );
 
-    // ==========================================================================
-    // METADATA RESOLUTION EVENT ROUTING (Interceptor Pipeline)
-    // ==========================================================================
-
-    // C. Intercepts metadata resolution flags when a note finishes background parsing updates
+    // ------------------------------------------------------------------------
+    // C. METADATA RESOLVE INTERCEPTOR
+    // ------------------------------------------------------------------------
     this.registerEvent(
       this.app.metadataCache.on('resolve', (file: TFile) => {
         if (this.appPaused) return;
         if (this.isInResumeCooldown(1200)) return;
+        if (this.isInMobileWarmup()) return;
 
-        // Asynchronously resolves metadata data models mapping localized token keys
-        void this.networkGraph.handleFileResolve(file).then((dataWasUpdated) => {
-          
+
+        void this.networkGraph.handleFileResolve(file).then((_dataWasUpdated) => {
           this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach((leaf) => {
             if (leaf.view instanceof MyBrainView) {
               const myView = leaf.view;
-              if (!myView.isFullyStarted) return; 
-
-              // If the layout shield is active during a rename pass, drop background resolution cycles cleanly [dan]
+              if (!myView.isFullyStarted) return;
               if (myView.isRenamingShield) return;
 
               const isEditingCurrentlyVisibleFile = file.path === myView.currentFilePath;
 
-              if (isEditingCurrentlyVisibleFile || dataWasUpdated) {
-                
+              if (isEditingCurrentlyVisibleFile) {
                 if (myView.resolveDebounceTimer) {
                   window.clearTimeout(myView.resolveDebounceTimer);
                 }
-                
+
                 myView.resolveDebounceTimer = window.setTimeout(() => {
                   void (async () => {
-                    // Kirurgisk re-indeksering av den aktive filen for å hente ut det nye aliaset
-                    if (isEditingCurrentlyVisibleFile && this.networkGraph && this.networkGraph.noteCache) {
+                    if (isEditingCurrentlyVisibleFile && this.networkGraph?.noteCache) {
                       this.networkGraph.noteCache.delete(file.path);
                     }
-                    
-                    await this.networkGraph.update(file);
-                    
-                    if (myView.areaManager) {
-                      myView.areaManager.renderGraph(); // Tegner grafen med det flunkende nye aliaset! [dan]
-                    }
-                  })();
-                }, 300); // 300ms buffer keeps the interface 100% stable while you type [dan]
-              }
 
+                    const activeNow = this.app.workspace.getActiveFile();
+                    if (!activeNow) return;
+                    if (activeNow.path !== myView.currentFilePath) return;
+
+                    await this.networkGraph.update(activeNow);
+                    myView.areaManager?.renderGraph();
+                  })();
+                }, 300);
+              }
             }
           });
         });
       })
     );
-
   }
 
   // Only document visibility + Obsidian views
   private registerAppLifecycleEvents() {
     const suspendAllViews = () => {
+      this.crashTrace.lastSuspendAt = Date.now();
+      this.markCrashEvent("suspendAllViews", this.networkGraph?.centerNote?.path ?? "");
       this.appPaused = true;
       this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
         if (leaf.view instanceof MyBrainView) {
@@ -235,7 +267,8 @@ export default class MyBrainPlugin extends Plugin {
       this.resumeInFlight = true;
       this.appPaused = false;
       this.resumedAt = Date.now();
-
+      this.crashTrace.lastResumeAt = this.resumedAt;
+      this.markCrashEvent("resumeAllViews", this.networkGraph?.centerNote?.path ?? "");
       this.markResumedNow();
 
       this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
@@ -314,6 +347,8 @@ export default class MyBrainPlugin extends Plugin {
 
   
   onunload() {
+    this.markCrashEvent("onunload", this.networkGraph?.centerNote?.path ?? "");
+
     this.appPaused = true;
     this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
       if (leaf.view instanceof MyBrainView) {
@@ -348,10 +383,34 @@ export default class MyBrainPlugin extends Plugin {
     }
     
     this.settings.prepare();
+    type CrashTrace = {
+      bootCount: number;
+      lastBootAt: number;
+      lastSuspendAt: number;
+      lastResumeAt: number;
+      lastOnFileChangeAt: number;
+      lastCenterPath: string;
+      lastEvent: string;
+    };
+
+    type LoadedWithCrashTrace = Partial<SettingsManager> & {
+      __crashTrace?: Partial<CrashTrace>;
+    };
+
+    const raw = loadedData as LoadedWithCrashTrace | null;
+    if (raw?.__crashTrace) {
+      this.crashTrace = {
+        ...this.crashTrace,
+        ...raw.__crashTrace,
+      };
+    }
   }
 
   async saveSettings() {
     this.settings.prepare();
-    await this.saveData(this.settings);
+    await this.saveData({
+      ...(this.settings as unknown as Record<string, unknown>),
+      __crashTrace: this.crashTrace
+    });
   }
 }

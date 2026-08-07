@@ -25,7 +25,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
   private lastResumeAt = 0;
   private visibilityObserver: IntersectionObserver | null = null;
-  
+  private fullRenderTimer: number | null = null;
 
   public isRenamingShield: boolean = false;
   /** Public visibility state constraint protecting viewport boundaries from early lifecycle pops */
@@ -225,20 +225,32 @@ export class MyBrainView extends ItemView implements HoverParent {
     this.teardownDomForSuspend();
   }
 
-  public resumeFromBackground() {
-    const now = Date.now();
-    if (now - this.lastResumeAt < 500) return;
-    this.lastResumeAt = now;
+public resumeFromBackground() {
+  const now = Date.now();
+  if (now - this.lastResumeAt < 1200) return;
+  this.lastResumeAt = now;
 
-    this.isSuspended = false;
-    this.restoreDomAfterSuspend();
-    if (!this.isFullyStarted) return;
-    const activeFile = this.getMostRecentMarkdownFile();
-    if (!activeFile) return;
+  this.isSuspended = false;
+  this.restoreDomAfterSuspend();
+  if (!this.isFullyStarted) return;
+
+  const activeFile = this.getMostRecentMarkdownFile();
+  if (!activeFile) return;
+  // Small delay to let WebView/layout settle after wake
+  window.setTimeout(() => {
+    if (this.isSuspended) return;
     void this.onFileChange(activeFile).then(() => {
       this.areaManager?.renderGraph();
     });
-  }
+  }, 250);
+
+  // delayed redraw after warmup window
+  if (this.fullRenderTimer) window.clearTimeout(this.fullRenderTimer);
+  this.fullRenderTimer = window.setTimeout(() => {
+    if (this.isSuspended) return;
+    this.areaManager?.requestRedraw();
+  }, 2800);
+}
 
 
   private teardownDomForSuspend() {
@@ -265,6 +277,7 @@ export class MyBrainView extends ItemView implements HoverParent {
     if (this.orientationDebounceTimer) window.clearTimeout(this.orientationDebounceTimer);
     if (this.activeLeafDebounceTimer) window.clearTimeout(this.activeLeafDebounceTimer);
     if (this.visibilityResumeTimer) window.clearTimeout(this.visibilityResumeTimer);
+    if (this.fullRenderTimer) window.clearTimeout(this.fullRenderTimer);
 
     this.resolveDebounceTimer = null;
     this.renameDebounceTimer = null;
@@ -272,6 +285,8 @@ export class MyBrainView extends ItemView implements HoverParent {
     this.orientationDebounceTimer = null;
     this.activeLeafDebounceTimer = null;
     this.visibilityResumeTimer = null;
+    this.fullRenderTimer = null;
+
   }
 
 
@@ -379,14 +394,18 @@ export class MyBrainView extends ItemView implements HoverParent {
   async onFileChange(file: TFile | null) {
     if (!file) return;
     if (this.isSuspended) return;
-
+    
     // HARDWARE INITIALIZATION FILTER: Safeguards the startup visual shield from premature data leaks
     if (!this.isFullyStarted) {
       return; 
     }
 
     this.currentFilePath = file.path; 
-    await this.plugin.networkGraph.update(file); 
+    this.plugin.markOnFileChangeAt(Date.now());
+
+    this.plugin.markCrashEvent("onFileChange", file.path);
+    await this.plugin.networkGraph.update(file);
+    this.plugin.markCrashEvent("onFileChange:done", this.plugin.networkGraph.centerNote?.path ?? file.path);
   }
 
   /**
@@ -481,31 +500,27 @@ export class MyBrainView extends ItemView implements HoverParent {
    * file path matches its own tracked active note context [dan]!
    * COMPLIANT REFACTOR: Eradicates recursive onFileChange calls to permanently destroy layout loops [dan].
    */
-  private setupDataReadyHandler() {
-    type GraphDataReadyBus = {
-      on(name: "graph:data-ready", callback: (cleanedPath: unknown) => void): EventRef;
-    };
+private setupDataReadyHandler() {
+  type GraphDataReadyBus = {
+    on(name: "graph:data-ready", callback: (cleanedPath: unknown) => void): EventRef;
+  };
 
-    const workspaceBus = this.app.workspace as unknown as Partial<GraphDataReadyBus>;
+  const workspaceBus = this.app.workspace as unknown as Partial<GraphDataReadyBus>;
 
-    if (workspaceBus.on) {
-      this.registerEvent(
-        workspaceBus.on("graph:data-ready", (cleanedPath: unknown) => {
-          // ===== FIX #2: Type guard for unknown value =====
-          // Enforce a strict string type guard to process the pathway safely [dan]
-          if (typeof cleanedPath === "string") {
-            const activeFile = this.getMostRecentMarkdownFile();
-            if (activeFile && activeFile.path === cleanedPath) {
-              this.currentFilePath = activeFile.path;
-              if (this.areaManager) {
-                this.areaManager.renderGraph();
-              }
-            }
+  if (workspaceBus.on) {
+    this.registerEvent(
+      workspaceBus.on("graph:data-ready", (cleanedPath: unknown) => {
+        if (typeof cleanedPath === "string") {
+          const activeFile = this.getMostRecentMarkdownFile();
+          if (activeFile && activeFile.path === cleanedPath) {
+            this.currentFilePath = activeFile.path;
+            this.areaManager?.renderGraph();
           }
-        })
-      );
-    }
+        }
+      })
+    );
   }
+}
 
   /**
    * Implements explicit hardware-level layout safeguards optimized for touch screen iOS/Android viewports.
@@ -576,6 +591,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
           if (this.visibilityResumeTimer) window.clearTimeout(this.visibilityResumeTimer);
           this.visibilityResumeTimer = window.setTimeout(() => {
+            if (Platform.isMobile && this.plugin.isInMobileWarmup()) return;
             if (this.areaManager) this.areaManager.requestRedraw();
           }, 90); 
               

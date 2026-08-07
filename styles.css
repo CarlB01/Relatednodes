@@ -115,7 +115,7 @@
   .rv-area.center {
     grid-column: 2;
     anchor-name: --center-area; 
-    min-width: clamp(4em, 15cqw, 40em);
+    min-width: clamp(6em, 30cqw, 40em);
     align-self: center;
     justify-self: center;
     width: max-content;
@@ -230,10 +230,12 @@
    * COMPLIANT REFACTOR: We chain the .rv-area quadrant class into the selector.
    * This guarantees that the column layout out-ranks any theme-level flex constraints [dan]!
    */
-  .rv-area .rv-columns-wrapper {
+  .rv-area .rv-columns-wrapper, 
+  .rv-columns-wrapper.rv-single-item-group,
+  .rv-columns-wrapper.rv-2-6-items-group {
     display: block;
-    columns: 9em; /* Balanced column width template in relative em [dan] */
-    column-gap: 1em; 
+    columns:clamp(6em, 10vw, 9em);
+    column-gap: 0.5em; 
     width: 100%;
     max-width: 100%;
     height: fit-content;
@@ -246,15 +248,12 @@
     padding-right: 1.4em; /* enough space for the info btn */
   }
 
-  /* GUARD 1: Centering fix deployed ONLY when there is strictly ONE single group/node block total */
-  .rv-columns-wrapper.rv-single-group {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    width: auto;
-    overflow-x: hidden;
-    overflow-y: visible;
+  .rv-columns-wrapper.rv-single-item-group {
+    column-count: 1;
+  }
+  
+  .rv-columns-wrapper.rv-2-6-items-group {
+    column-count: 2;
   }
 
   /* ==========================================================================

@@ -1,4 +1,4 @@
-import { App, BasesEntry, TFile } from "obsidian";
+import { App, BasesEntry, TFile, Platform } from "obsidian";
 import MyBrainPlugin from "./main.js";
 import { Node, Relation } from "./Node.js";
 import { StringUtils } from "./StringUtils.js";
@@ -66,26 +66,25 @@ export class NetworkGraph {
    * @param activeFile The targeted TFile record currently being opened or focused.
    */
   
-  async update(activeFile: TFile | null): Promise<void> {
-    if (!activeFile) return;
-    if (this.plugin.isAppPaused()) return;
+async update(activeFile: TFile | null): Promise<void> {
+  if (!activeFile) return;
+  if (this.plugin.isAppPaused()) return;
 
-    // 1. VIEWPORT SAFEGUARD: Immediate exit if the network side-panel leaf is minimized or hidden
-    const leaves = this.plugin.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE);
-    const visibleLeaf = leaves.find(l => l.view.containerEl.offsetHeight > 0);
-    if (!visibleLeaf) return;
+  const leaves = this.plugin.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE);
+  const visibleLeaf = leaves.find(l => l.view.containerEl.offsetHeight > 0);
+  if (!visibleLeaf) return;
 
-    this.pendingFile = activeFile;
-    this.updateRequestToken++;
- 
-    if (!this.updateInFlight) {
-      this.updateInFlight = this.runUpdateLoop().finally(() => {
-        this.updateInFlight = null;
-      });
-    }
+  this.pendingFile = activeFile;
+  this.updateRequestToken++;
 
-    await this.updateInFlight;
+  if (!this.updateInFlight) {
+    this.updateInFlight = this.runUpdateLoop().finally(() => {
+      this.updateInFlight = null;
+    });
   }
+
+  await this.updateInFlight;
+}
 
   private async runUpdateLoop(): Promise<void> {
     while (this.pendingFile) {
@@ -99,6 +98,7 @@ export class NetworkGraph {
       if (tokenAtStart !== this.updateRequestToken) continue;
 
       await this.processGraphDeterministic(file, tokenAtStart);
+
     }
   }
 
@@ -136,79 +136,90 @@ export class NetworkGraph {
     }
   }
 
-  private async processGraphDeterministic(activeFile: TFile, tokenAtStart: number): Promise<void> {
-    this.ignoredNotes.clear();
-    for (const note of this.noteCache.values()) {
-      note.isUsed = false;
-      note.isIndexedInThisRound = false;
-      note.relation = "undefined";
-      note.discoverySource = "bodytext";
-      note.assignedArea = "lower";
-      note.relations.parents.clear();
-      note.relations.children.clear();
-      note.relations.friends.clear();
-      note.relations.ignored.clear();
-      note.crossingBaits.clear();
-    }
+private async processGraphDeterministic(activeFile: TFile, tokenAtStart: number): Promise<void> {
 
-    Gate.cachedRadius = null;
+  const isMobileLite = Platform.isMobile && this.plugin.isInMobileWarmup();
 
-    for (const bait of this.anchorCache.values()) {
-      bait.isUsed = false;
-      bait.sources.clear();
-    }
+  this.ignoredNotes.clear();
+  for (const note of this.noteCache.values()) {
+    note.isUsed = false;
+    note.isIndexedInThisRound = false;
+    note.relation = "undefined";
+    note.discoverySource = "bodytext";
+    note.assignedArea = "lower";
+    note.relations.parents.clear();
+    note.relations.children.clear();
+    note.relations.friends.clear();
+    note.relations.ignored.clear();
+    note.crossingBaits.clear();
+  }
 
-    await this.yieldToUI();
+  Gate.cachedRadius = null;
 
-    this.centerNote = this.getOrCreateNote(activeFile);
-    if (!this.centerNote) return;
-    this.centerNote.relation = "center";
-    this.centerNote.assignedArea = "center";
-    this.centerNote.isUsed = true;
+  for (const bait of this.anchorCache.values()) {
+    bait.isUsed = false;
+    bait.sources.clear();
+  }
 
-    const firstDegreeFiles = this.getFirstDegreeFiles(this.centerNote.path);
-    await this.yieldToUI(); // naturlig pausepunkt etter 1.grad
+  await this.yieldToUI();
 
-    let preloadStep = 0;
-    for (const file of firstDegreeFiles) {
-      if (file.path !== this.centerNote.path) {
-        const preparedNote = this.getOrCreateNote(file);
-        if (preparedNote) {
-          preparedNote.isUsed = true;
+  this.centerNote = this.getOrCreateNote(activeFile);
 
-          const relasjonTilSenter = this.findRelation(this.centerNote, preparedNote);
-          if (relasjonTilSenter === "parent") {
-            const parentFiles = this.getFirstDegreeFiles(preparedNote.path);
-            for (const parentFile of parentFiles) {
-              this.getOrCreateNote(parentFile);
-            }
-          }
+  if (!this.centerNote) return;
+  this.centerNote.relation = "center";
+  this.centerNote.assignedArea = "center";
+  this.centerNote.isUsed = true;
+
+  let firstDegreeFiles = this.getFirstDegreeFiles(this.centerNote.path);
+  if (isMobileLite && firstDegreeFiles.size > 35) {
+    firstDegreeFiles = new Set(Array.from(firstDegreeFiles).slice(0, 35));
+  }
+  await this.yieldToUI();
+
+  let preloadStep = 0;
+  for (const file of firstDegreeFiles) {
+    if (file.path !== this.centerNote.path) {
+      const preparedNote = this.getOrCreateNote(file);
+      if (preparedNote) {
+        preparedNote.isUsed = true;
+
+        const relasjonTilSenter = this.findRelation(this.centerNote, preparedNote);
+        if (relasjonTilSenter === "parent") {
+          const parentFiles = this.getFirstDegreeFiles(preparedNote.path);
+          for (const parentFile of parentFiles) this.getOrCreateNote(parentFile);
         }
       }
-
-      if (++preloadStep % 40 === 0) await this.yieldToUI();
-      if (tokenAtStart !== this.updateRequestToken) return;
     }
 
-    this.determineFirstDegreeNotes(this.centerNote);
+    if (++preloadStep % 40 === 0) await this.yieldToUI();
     if (tokenAtStart !== this.updateRequestToken) return;
+  }
 
+  this.determineFirstDegreeNotes(this.centerNote);
+  if (tokenAtStart !== this.updateRequestToken) return;
+
+  // Skip expensive sibling expansion during mobile warmup
+  if (!isMobileLite) {
     await this.determineParentConnectionsAndSiblings(this.centerNote, tokenAtStart);
     if (tokenAtStart !== this.updateRequestToken) return;
+  }
 
+  // Skip cross-network scan during mobile warmup
+  if (!isMobileLite) {
     await this.determineCrossNetworkConnections(this.centerNote, tokenAtStart);
+  }
 
-    for (const [path, note] of this.noteCache.entries()) {
-      if (!note.isUsed) this.noteCache.delete(path);
-    }
-    for (const [path, bait] of this.anchorCache.entries()) {
-      if (!bait.isUsed || bait.sources.size === 0) this.anchorCache.delete(path);
-    }
+  for (const [path, note] of this.noteCache.entries()) {
+    if (!note.isUsed) this.noteCache.delete(path);
+  }
+  for (const [path, bait] of this.anchorCache.entries()) {
+    if (!bait.isUsed || bait.sources.size === 0) this.anchorCache.delete(path);
+  }
 
-    if (tokenAtStart === this.updateRequestToken) {
-      this.app.workspace.trigger("graph:data-ready", activeFile.path);
-    }
-  }  
+  if (tokenAtStart === this.updateRequestToken) {
+     this.app.workspace.trigger("graph:data-ready", activeFile.path);
+  }
+} 
 
 
   /**
