@@ -11,13 +11,9 @@
 
 > "Structure is liberation. Your notes belong to you, and your graph should think the way you do."
 
-**myBrain** is a high-performance, strictly native semantic network graph for Obsidian.
+Unlike standard chaotic force-directed link graphs, **myBrain** is a highly structured semantic graph view built for speed, clarity and large vaults. It layouts your notes using a predictable, clean layout matrix relative to your active focused note.
 
-It organizes your notes into a clean and predictable layout with **Parents · Friends · Center · Children · Siblings** — built for speed, clarity and large vaults.
-
-✨ **What's new in 1.0.19: Colorize Lines & Gates**
-This update adds colorization for relationship lines and gate nodes, improving readability and direction-scanning in dense graphs.
-It keeps the same core navigation model (Parents · Friends · Center · Children · Siblings) while making complex note neighborhoods faster to parse.
+All node partitions, column expansions, and connections are built inside a 100% Hardware-Accelerated CSS Grid. Bypasses text-parsing chains and heavy canvas layers via an O(1) Just-In-Time (JIT) memory mesh.
 
 **Typical display**
 
@@ -32,47 +28,55 @@ It keeps the same core navigation model (Parents · Friends · Center · Childre
 ## 📦 Installation
 
 ### Option 1: Community Plugins (recommended)
-1. Open **Settings → Community Plugins**
-2. Search for **myBrain**
-3. Click **Install**, then **Enable**
+* Search for `myBrain` in Obsidian's Community Plugins.
+* Click **Install** and then **Enable**.
 
 ### Option 2: BRAT (beta/testing)
-1. Install the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin
-2. Open **Settings → BRAT → Add Beta plugin**
-3. Enter: `CarlB01/myBrain`
-4. Click **Add Plugin**
+* Install the `BRAT` plugin from Community Plugins.
+* Go to BRAT settings -> Add Beta Plugin.
+* Paste this repository URL: `https://github.com/CarlB01/myBrain`
 
 ### Option 3: Manual installation
-1. Download the latest release from [Releases](https://github.com/CarlB01/myBrain/releases)
-2. Create the folder `.obsidian/plugins/mybrain/` in your vault
-3. Place these files in the folder:
-   - `main.js`
-   - `manifest.json`
-   - `styles.css`
-4. Restart Obsidian (or reload plugins)
-5. Enable **myBrain** under Community Plugins
+* Download the latest release (`main.js`, `manifest.json`, `styles.css`).
+* Create a folder named `mybrain` inside your vault under `.obsidian/plugins/`.
+* Move the downloaded files into that folder and restart Obsidian.
 
 ---
 
-## ⚡ Technical Core & Architecture
+## 🚀 Quick Start Guide
 
-Unlike standard chaotic force-directed link graphs, **myBrain** routes information into a highly organized, predictable layout matrix relative to your active focused note.
+Get up and running with **myBrain** in less than 2 minutes. The plugin works automatically with your existing links, but you can unlock its full power using note properties (frontmatter).
 
-### 📐 100% Hardware-Accelerated CSS Grid
-All node partitions, column expansions, and quadrant assignments are managed **100% by native, hardware-accelerated CSS Grid infrastructure** instead of heavy, laggy JavaScript calculation matrices.
+### 1. The 5-Minute Layout Map
+myBrain automatically organizes your vault relative to your active note based on how you link them:
 
-* **Zero Layout-Squeezing:** Nodes are generated in a protective off-screen render curtain (`.is-calculating`) to completely isolate DOM reflows.
-* **Predictable Layouts:** Quadrants expand fluidly only when needed, preserving snappier multi-direction responses.
-* **Native-style hover previews** — peek at note content on hover, consistent with Obsidian’s own page preview behavior.
-* **Excalibrain-like structure** If your existing structure is Excalibrain-friendly and front-matter based there would ble little or no rewrites necessary.
-* **Supercharged Links Ready:** Respects your existing tag-based font colors, customized icons, and core appearance settings natively out of the box.
+* **Parents:** Add links to your parent notes in the frontmatter properties.
+* **Friends:** Lateral peer connections. *Note: Unlike ExcaliBrain, notes do not become friends just by linking to each other. Instead, it is enough that **just one** of the notes explicitly defines the other as a friend in its properties.*
+* **Siblings:** Notes that share the exact same parent note. *Note: You do not define siblings manually; myBrain calculates and computes them automatically based on shared parents.*
+* **Children:** Standard forward links present inside your body text, or explicitly defined child properties.
 
-### Flexible workspace placement
-The myBrain graph is a normal Obsidian view. Drag its tab and drop it anywhere in the workspace—left or right sidebar, main editor area, or a separate window.
+💡 **Smart Link Direction:** You don't need to worry about link directionality for hierarchies. Whether a parent links down to a child, or a child links up to a parent, myBrain automatically resolves the relationship and routes them into the correct semantic quadrants.
 
-### 🚀 Pure O(1) JIT Cache Performance
-* **No Database Bottlenecks:** Bypasses text-parsing chains and heavy queries during active navigation cycles using an advanced asynchronous Just-In-Time (JIT) memory mesh.
-* **Instantaneous Cross-Linking ("Baits"):** Nodes dynamically cast multi-directional anchor tokens so that *"everyone discovers everyone"* across massive datasets instantly.
+### 2. Configure Your Note Properties (Optional)
+To tell myBrain explicitly how notes are related, add these keys to your note's properties (YAML frontmatter):
+
+```yaml
+---
+parents: [[My Parent Note]]
+children: [[My Child Note]]
+friends: [[My Friend Note]]
+---
+```
+
+*(You can customize these property names under **Settings → myBrain** if you prefer using `up`, `down`, `peer`, etc.).*
+
+### 3. Open the View
+You can open the semantic graph view in two ways:
+
+* **Method 1 (Fastest):** Click the ✨ (**Sparkle**) icon in your Obsidian left ribbon/toolbar.
+* **Method 2:** Open the command palette (`Ctrl+P` or `Cmd+P`), type `myBrain: Open semantic graph view`, and press Enter.
+
+*Tip: Drag and drop the opened myBrain tab anywhere you like in your workspace sidebar or main layout!*
 
 ---
 
@@ -107,6 +111,18 @@ When a quadrant contains many nodes of the same type, they can optionally be **c
 
 ---
 
+## ⚡ Technical Core & Architecture
+
+Unlike standard chaotic force-directed link graphs, myBrain gives you local orientation. Native-style hover previews — peek at note content on hover, consistent with Obsidian's own page preview behavior.
+
+### Excalibrain-like structure
+If your existing structure is Excalibrain-friendly and front-matter based there would be little or no rewrites necessary.
+
+### Supercharged Links Ready
+Respects your existing tag-based font colors, customized icons, and core appearance settings natively out of the box.
+
+---
+
 ## 🔒 Privacy & Data Safety
 
 This plugin triggers an automated notice during the Obsidian community review process called **Vault Enumeration** (due to the use of `vault.getMarkdownFiles()`). 
@@ -132,8 +148,7 @@ When Zsolt hinted at gatherings that it was time for a native implementation to 
 
 ## 🔮 Roadmap & Future Horizons
 
-This is only the baseline foundation of a completely native semantic framework. Planned milestones include:
-
+- [x] Colorize Lines & Gates: This update adds colorization for relationship lines and gate nodes, improving readability and direction-scanning in dense graphs.
 - [ ] Interactive context popup menus to add parents/children on the fly.
 - [ ] Multi-generation expansion toggles to view grandparents/grandchildren rows.
 - [ ] Inline node image decoding when targeted hyperlink references represent image assets.
