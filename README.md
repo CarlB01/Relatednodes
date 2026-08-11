@@ -78,14 +78,14 @@ The myBrain graph is a normal Obsidian view. Drag its tab and drop it anywhere i
 ## 🎨 Conceptual Layout Matrix
 
 ```text
-		   PARENTS
-			 │  \
-			 │   ---┐
-			 ▼      ▼
+           PARENTS
+             │  \
+             │   ---┐
+             ▼      ▼
 FRIENDS ◄► CENTER   SIBLINGS
-			 │
-			 ▼
-		   CHILDREN 
+             │
+             ▼
+           CHILDREN 
 ```
 ### Architectural Mapping Matrix
 
