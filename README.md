@@ -63,8 +63,9 @@ All node partitions, column expansions, and quadrant assignments are managed **1
 
 * **Zero Layout-Squeezing:** Nodes are generated in a protective off-screen render curtain (`.is-calculating`) to completely isolate DOM reflows.
 * **Predictable Layouts:** Quadrants expand fluidly only when needed, preserving snappier multi-direction responses.
-* **Supercharged Links Ready:** Respects your existing tag-based font colors, customized icons, and core appearance settings natively out of the box.
 * **Native-style hover previews** — peek at note content on hover, consistent with Obsidian’s own page preview behavior.
+* **Excalibrain-like structure** If your existing structure is Excalibrain-friendly and front-matter based there would ble little or no rewrites necessary.
+* **Supercharged Links Ready:** Respects your existing tag-based font colors, customized icons, and core appearance settings natively out of the box.
 
 ### Flexible workspace placement
 The myBrain graph is a normal Obsidian view. Drag its tab and drop it anywhere in the workspace—left or right sidebar, main editor area, or a separate window.
