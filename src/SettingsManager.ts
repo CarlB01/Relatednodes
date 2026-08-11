@@ -5,7 +5,8 @@ import { StringUtils } from "./StringUtils";
  * Handles migration mapping, runtime parsing, and low-latency array hydration.
  */
 export class SettingsManager {
-  [key: string]: any; 
+  [key: string]: unknown;
+   
   // ==========================================================================
   // Core Configuration State Fields (Acts as both Types and Runtime Defaults)
   // ==========================================================================

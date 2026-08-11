@@ -487,7 +487,7 @@ export class AreaManager {
     if (!centerDiv) return;
 
     // Prefer stable anchor: gates + link container
-    const anchorEl = centerDiv.querySelector(".rv-linkdiv") as HTMLElement | null;
+    const anchorEl = centerDiv.querySelector(".rv-linkdiv");
     if (!anchorEl) return;
 
     // Remove stale button from previous render pass
