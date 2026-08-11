@@ -104,7 +104,7 @@
   .rv-area.center {
     grid-column: 2;
     anchor-name: --center-area; 
-    min-width: clamp(6em, 30cqw, 40em);
+    min-width: 10cqw;
     align-self: center;
     justify-self: center;
     width: max-content;
@@ -362,8 +362,7 @@
     backdrop-filter: blur(0px); 
     -webkit-backdrop-filter: blur(0px);
     background-color: color-mix(in srgb, var(--background-secondary), transparent 30%);
-    transition: background-color 0.15s ease, color 0.15s ease;
-    transition: transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
+    transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
   }
 
   /* Forces text-spans to break row blocks inside frames smoothly */
