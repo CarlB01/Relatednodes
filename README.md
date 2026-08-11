@@ -112,8 +112,21 @@ When a quadrant contains many nodes of the same type, they can optionally be **c
 ---
 
 ## ⚡ Technical Core & Architecture
-
 Unlike standard chaotic force-directed link graphs, myBrain gives you local orientation. Native-style hover previews — peek at note content on hover, consistent with Obsidian's own page preview behavior.
+
+### Flexible workspace placement
+The myBrain graph is a normal Obsidian view. Drag its tab and drop it anywhere in the workspace—left or right sidebar, main editor area, or a separate window.
+
+### Native-style hover previews
+— peek at note content on hover, consistent with Obsidian’s own page preview behavior.
+
+### 📐 100% Hardware-Accelerated CSS Grid
+All node partitions, column expansions, and quadrant assignments are managed **100% by native, hardware-accelerated CSS Grid infrastructure** instead of heavy, laggy JavaScript calculation matrices.
+* **Zero Layout-Squeezing:** Nodes are generated in a protective off-screen render curtain (`.is-calculating`) to completely isolate DOM reflows.
+
+### 🚀 Pure O(1) JIT Cache Performance
+* **No Database Bottlenecks:** Bypasses text-parsing chains and heavy queries during active navigation cycles using an advanced asynchronous Just-In-Time (JIT) memory mesh.
+* **Instantaneous Cross-Linking ("Baits"):** Nodes dynamically cast multi-directional anchor tokens so that *"everyone discovers everyone"* across massive datasets instantly.
 
 ### Excalibrain-like structure
 If your existing structure is Excalibrain-friendly and front-matter based there would be little or no rewrites necessary.
