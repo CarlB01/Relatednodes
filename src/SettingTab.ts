@@ -1,23 +1,53 @@
+import { App, debounce, PluginSettingTab, SettingDefinitionItem } from "obsidian";
+import { RV } from "./constants.js"
 import MyBrainPlugin from "./main.js";
-import { App, PluginSettingTab, SettingDefinitionItem } from "obsidian";
-import { RV } from "./constants.js";
 import { MyBrainView } from "./view.js";
+import { StringUtils } from "./StringUtils.js";
 
 export class SettingTab extends PluginSettingTab {
   plugin: MyBrainPlugin;
 
+  // Obsidian-native debounce wrapper (no manual timers).
+  private readonly debouncedRefresh: () => void;
+
   constructor(app: App, plugin: MyBrainPlugin) {
     super(app, plugin);
     this.plugin = plugin;
+
+    this.debouncedRefresh = debounce(
+      () => { void this.refreshAllMyBrainViews(); },
+      220,
+      true // reset timer on repeated calls
+    );
+  }
+
+  private async refreshAllMyBrainViews(): Promise<void> {
+    if (this.plugin.networkGraph?.noteCache) {
+      this.plugin.networkGraph.noteCache.clear();
+    }
+
+    const leaves = this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE);
+    for (const leaf of leaves) {
+      if (!(leaf.view instanceof MyBrainView)) continue;
+      const myView = leaf.view;
+      const activeFile = this.app.workspace.getActiveFile();
+      if (!activeFile) continue;
+
+      const historicalGateState = myView.isFullyStarted;
+      myView.isFullyStarted = true;
+      await myView.onFileChange(activeFile);
+      myView.isFullyStarted = historicalGateState || true;
+
+      myView.areaManager?.renderGraph();
+      myView.areaManager?.requestRedraw();
+    }
   }
 
   /**
    * Declares the full structural configuration scheme for Obsidian's global database indexing framework.
    * Natively registers each parameter with the application core to ensure reliable settings search indexing.
    */
-
-
-  override getSettingDefinitions(): SettingDefinitionItem[] {
+  override getSettingDefinitions(): SettingDefinitionItem[] {    
     return [
       {
         type: "group",
@@ -80,7 +110,7 @@ export class SettingTab extends PluginSettingTab {
               type: "textarea",
               key: "friendTags",
               placeholder: "Comma separated list",
-              rows: 2
+              rows: 2,
             },
           },
         ],
@@ -129,91 +159,56 @@ export class SettingTab extends PluginSettingTab {
               key: "groupsCollapsed",
             },
           },
+          {
+            name: "Colorful links",
+            desc: "When enabled, line and receiving gate color follow the gate node color.",
+            control: {
+              type: "toggle",
+              key: "colorful",
+            },
+          }
         ],
       },
     ];
   }
 
-  /**
-   * Triggers automatically when the user exits the settings control tab pane panel.
-   * Normalizes list inputs alphabetically, wipes the stale memory graphs cache, and triggers live view redraws.
-   * COMPLIANT REFACTOR: Replaces deep .then() nesting and illegal unsafe async forEach loops 
-   * with a flat, isolated async execution envelope guarded by the strict void operator [dan]!
-   */
-  hide(): void {
+override async setControlValue(key: string, value: unknown): Promise<void> {
     const settings = this.plugin.settings;
 
-    // Alphabetically compile and wash raw configuration sequences prior to disk writes
-    settings.parentProperties = this.sortItems(settings.parentProperties);
-    settings.parentTags = this.sortItems(settings.parentTags);
-    settings.childProperties = this.sortItems(settings.childProperties);
-    settings.childTags = this.sortItems(settings.childTags);
-    settings.friendProperties = this.sortItems(settings.friendProperties);
-    settings.friendTags = this.sortItems(settings.friendTags);
-    settings.ignoreTags = this.sortItems(settings.ignoreTags);
-    settings.ignoreNameFragments = this.sortItems(settings.ignoreNameFragments);
+    const textKeys = new Set([
+      "parentProperties",
+      "parentTags",
+      "childProperties",
+      "childTags",
+      "friendProperties",
+      "friendTags",
+      "ignoreTags",
+      "ignoreNameFragments",
+    ]);
 
-    // ==========================================================================
-    // COMPLIANT ASYNCHRONOUS STORAGE CONVOLUT OVERRIDE:
-    // Prefixed with the explicit 'void' operator to satisfy Obsidian's floating promises guard.
-    // Converted the loops to standard 'for...of' structures to properly handle inner await calls [dan]!
-    // ==========================================================================
-    void (async () => {
-      
-      // Commit the sorted layout mutations down to the device configuration database layers cleanly
-      await this.plugin.saveSettings();
+    const toggleKeys = new Set([
+      "displayAliases",
+      "groupsCollapsed",
+      "colorful",
+    ]);
 
-      // Clear the network cache completely since filter structures mutated
-      if (this.plugin.networkGraph && this.plugin.networkGraph.noteCache) {
-        this.plugin.networkGraph.noteCache.clear();
-      }
+    if (textKeys.has(key)) {
+      const str = typeof value === "string" ? value : "";
+      (settings as Record<string, unknown>)[key] = StringUtils.sortItems(str);
+    } else if (toggleKeys.has(key)) {
+      (settings as Record<string, unknown>)[key] = Boolean(value);
+    } else {
+      (settings as Record<string, unknown>)[key] = value;
+    }
 
-      // Hot-reloads all active leaves using our official application views identifiers
-      const leaves = this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE);
-      
-      for (const leaf of leaves) {
-        if (leaf.view instanceof MyBrainView) {
-          const myView = leaf.view;
-          const activeFile = this.app.workspace.getActiveFile();
-          
-          if (activeFile) {
-            // Temporarily lift execution slots to bypass the initial onFileChange shield cleanly
-            const historicalGateState = myView.isFullyStarted;
-            myView.isFullyStarted = true; 
+    settings.prepare();
+    await this.plugin.saveData(settings);
 
-            // Standardized await call safely enclosed inside compliant for...of iteration tracks [dan]
-            await myView.onFileChange(activeFile);
-            
-            // Restore the authentic runtime gate perimeter safely
-            myView.isFullyStarted = historicalGateState || true;
-
-            if (myView.areaManager) {
-              myView.areaManager.renderGraph(); // Redraws the view with your brand new filters instantly!
-            }
-          }
-        }
-      }
-
-    })(); // The trailing double parenthesis invokes the async settings write block instantly [dan]
-
-    // Execute the super boundary cleanup synchronously to satisfy the strict signature return criteria
-    super.hide();
+    // Immediate for toggles, debounced for text typing.
+    if (toggleKeys.has(key)) {
+      await this.refreshAllMyBrainViews();
+    } else {
+      this.debouncedRefresh();
+    }
   }
-
-  /**
-   * Separates comma-delimited strings, normalizes items alphabetically, 
-   * and compiles them back into a clean, standardized string format.
-   * COMPLIANT ENCAPSULATION: Centralizes string mutations to clean up the hide pipeline [dan].
-   */
-  private sortItems(rawString: string): string {
-    if (!rawString || typeof rawString !== "string") return "";
-    
-    return rawString
-      .split(",")
-      .map((item) => item.trim())
-      .filter((item) => item.length > 0)
-      .sort((a, b) => a.localeCompare(b))
-      .join(", ");
-  }
-
 }

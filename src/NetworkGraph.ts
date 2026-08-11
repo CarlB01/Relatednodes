@@ -1,4 +1,4 @@
-import { App, BasesEntry, TFile, Platform } from "obsidian";
+import { App, BasesEntry, TFile } from "obsidian";
 import MyBrainPlugin from "./main.js";
 import { Node, Relation } from "./Node.js";
 import { StringUtils } from "./StringUtils.js";
@@ -138,8 +138,6 @@ async update(activeFile: TFile | null): Promise<void> {
 
 private async processGraphDeterministic(activeFile: TFile, tokenAtStart: number): Promise<void> {
 
-  const isMobileLite = Platform.isMobile && this.plugin.isInMobileWarmup();
-
   this.ignoredNotes.clear();
   for (const note of this.noteCache.values()) {
     note.isUsed = false;
@@ -170,10 +168,8 @@ private async processGraphDeterministic(activeFile: TFile, tokenAtStart: number)
   this.centerNote.assignedArea = "center";
   this.centerNote.isUsed = true;
 
-  let firstDegreeFiles = this.getFirstDegreeFiles(this.centerNote.path);
-  if (isMobileLite && firstDegreeFiles.size > 35) {
-    firstDegreeFiles = new Set(Array.from(firstDegreeFiles).slice(0, 35));
-  }
+  const firstDegreeFiles = this.getFirstDegreeFiles(this.centerNote.path);
+
   await this.yieldToUI();
 
   let preloadStep = 0;
@@ -198,16 +194,10 @@ private async processGraphDeterministic(activeFile: TFile, tokenAtStart: number)
   this.determineFirstDegreeNotes(this.centerNote);
   if (tokenAtStart !== this.updateRequestToken) return;
 
-  // Skip expensive sibling expansion during mobile warmup
-  if (!isMobileLite) {
-    await this.determineParentConnectionsAndSiblings(this.centerNote, tokenAtStart);
-    if (tokenAtStart !== this.updateRequestToken) return;
-  }
-
-  // Skip cross-network scan during mobile warmup
-  if (!isMobileLite) {
-    await this.determineCrossNetworkConnections(this.centerNote, tokenAtStart);
-  }
+  await this.determineParentConnectionsAndSiblings(this.centerNote, tokenAtStart);
+  
+  await this.determineCrossNetworkConnections(this.centerNote, tokenAtStart);
+  if (tokenAtStart !== this.updateRequestToken) return;
 
   for (const [path, note] of this.noteCache.entries()) {
     if (!note.isUsed) this.noteCache.delete(path);

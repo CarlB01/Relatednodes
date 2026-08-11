@@ -1,4 +1,4 @@
-import { Plugin, Notice, WorkspaceLeaf, EventRef, TFile, TAbstractFile } from 'obsidian';
+import { Plugin, Notice, WorkspaceLeaf, EventRef, TFile, TAbstractFile, SettingDefinitionItem } from 'obsidian';
 import { SettingTab } from "./SettingTab.js";
 import { MyBrainView } from './view.js';
 import { RV } from './constants.js';
@@ -15,27 +15,6 @@ export default class MyBrainPlugin extends Plugin {
   private resumeInFlight = false;
   private mobileWarmupUntil = 0;
 
-  private crashTrace: {
-    bootCount: number;
-    lastBootAt: number;
-    lastSuspendAt: number;
-    lastResumeAt: number;
-    lastOnFileChangeAt: number;
-    lastCenterPath: string;
-    lastEvent: string;
-  } = {
-    bootCount: 0,
-    lastBootAt: 0,
-    lastSuspendAt: 0,
-    lastResumeAt: 0,
-    lastOnFileChangeAt: 0,
-    lastCenterPath: "",
-    lastEvent: "init"
-  };
-
-  private persistTimer: number | null = null;
-
-
   public isAppPaused(): boolean {
     return this.appPaused;
   }
@@ -49,37 +28,12 @@ export default class MyBrainPlugin extends Plugin {
     this.mobileWarmupUntil = this.resumedAt + 2000; // 1.5s warmup gate after resume
   }
 
-  private queueCrashTracePersist() {
-    if (this.persistTimer) window.clearTimeout(this.persistTimer);
-    this.persistTimer = window.setTimeout(() => {
-      void this.saveData({
-        ...(this.settings as unknown as Record<string, unknown>),
-        __crashTrace: this.crashTrace
-      });
-    }, 120);
-  }
-
-  public markCrashEvent(event: string, centerPath?: string) {
-    this.crashTrace.lastEvent = event;
-    if (centerPath !== undefined) this.crashTrace.lastCenterPath = centerPath;
-    this.queueCrashTracePersist();
-  }
-  public markOnFileChangeAt(ts: number) {
-    this.crashTrace.lastOnFileChangeAt = ts;
-    this.queueCrashTracePersist();
-  }
-
   public isInMobileWarmup(): boolean {
     return Date.now() < this.mobileWarmupUntil;
   }
 
   async onload() {
     await this.loadSettings();
-    this.crashTrace.bootCount += 1;
-    this.crashTrace.lastBootAt = Date.now();
-    this.crashTrace.lastEvent = "onload";
-    this.queueCrashTracePersist();
-
     this.networkGraph = new NetworkGraph(this, this.settings);
 
     this.addSettingTab(new SettingTab(this.app, this));
@@ -252,8 +206,6 @@ export default class MyBrainPlugin extends Plugin {
   // Only document visibility + Obsidian views
   private registerAppLifecycleEvents() {
     const suspendAllViews = () => {
-      this.crashTrace.lastSuspendAt = Date.now();
-      this.markCrashEvent("suspendAllViews", this.networkGraph?.centerNote?.path ?? "");
       this.appPaused = true;
       this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
         if (leaf.view instanceof MyBrainView) {
@@ -267,8 +219,6 @@ export default class MyBrainPlugin extends Plugin {
       this.resumeInFlight = true;
       this.appPaused = false;
       this.resumedAt = Date.now();
-      this.crashTrace.lastResumeAt = this.resumedAt;
-      this.markCrashEvent("resumeAllViews", this.networkGraph?.centerNote?.path ?? "");
       this.markResumedNow();
 
       this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
@@ -347,8 +297,6 @@ export default class MyBrainPlugin extends Plugin {
 
   
   onunload() {
-    this.markCrashEvent("onunload", this.networkGraph?.centerNote?.path ?? "");
-
     this.appPaused = true;
     this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
       if (leaf.view instanceof MyBrainView) {
@@ -383,34 +331,11 @@ export default class MyBrainPlugin extends Plugin {
     }
     
     this.settings.prepare();
-    type CrashTrace = {
-      bootCount: number;
-      lastBootAt: number;
-      lastSuspendAt: number;
-      lastResumeAt: number;
-      lastOnFileChangeAt: number;
-      lastCenterPath: string;
-      lastEvent: string;
-    };
-
-    type LoadedWithCrashTrace = Partial<SettingsManager> & {
-      __crashTrace?: Partial<CrashTrace>;
-    };
-
-    const raw = loadedData as LoadedWithCrashTrace | null;
-    if (raw?.__crashTrace) {
-      this.crashTrace = {
-        ...this.crashTrace,
-        ...raw.__crashTrace,
-      };
-    }
   }
-
+  
   async saveSettings() {
-    this.settings.prepare();
-    await this.saveData({
-      ...(this.settings as unknown as Record<string, unknown>),
-      __crashTrace: this.crashTrace
-    });
+    this.settings.prepareForSave();
+    await this.saveData(this.settings);
   }
+
 }

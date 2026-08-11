@@ -1,8 +1,11 @@
+import { StringUtils } from "./StringUtils";
+
 /**
  * Configuration and Settings State Manager for myBrain Graph Notes Network.
  * Handles migration mapping, runtime parsing, and low-latency array hydration.
  */
 export class SettingsManager {
+  [key: string]: any; 
   // ==========================================================================
   // Core Configuration State Fields (Acts as both Types and Runtime Defaults)
   // ==========================================================================
@@ -16,6 +19,7 @@ export class SettingsManager {
   public ignoreNameFragments: string = '@';
   public displayAliases: boolean = false;
   public groupsCollapsed: boolean = false;
+  public colorful: boolean = true; // line color follows destination node color
 
   // ==========================================================================
   // Pre-Compiled Hydrated Arrays (Low-latency cache targets for the graph loop)
@@ -57,5 +61,22 @@ export class SettingsManager {
     this.optFriendTags      = parseStr(this.friendTags).map(t => t.toLowerCase());
     this.optIgnoreFragments = parseStr(this.ignoreNameFragments).map(f => f.toLowerCase());
     this.optIgnoreTags      = parseStr(this.ignoreTags).map(t => t.toLowerCase());
+  }
+
+  public prepareForSave() {
+    const s = this;
+
+    // Her vasker og sorterer vi alle strengene alfabetisk
+    s.parentProperties     = StringUtils.sortItems(s.parentProperties);
+    s.parentTags           = StringUtils.sortItems(s.parentTags);
+    s.childProperties      = StringUtils.sortItems(s.childProperties);
+    s.childTags            = StringUtils.sortItems(s.childTags);
+    s.friendProperties     = StringUtils.sortItems(s.friendProperties);
+    s.friendTags           = StringUtils.sortItems(s.friendTags);
+    s.ignoreTags           = StringUtils.sortItems(s.ignoreTags);
+    s.ignoreNameFragments = StringUtils.sortItems(s.ignoreNameFragments);
+
+    // Bygg cachen på nytt basert på de nysorterte strengene
+    s.prepare();
   }
 }

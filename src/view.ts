@@ -25,7 +25,6 @@ export class MyBrainView extends ItemView implements HoverParent {
 
   private lastResumeAt = 0;
   private visibilityObserver: IntersectionObserver | null = null;
-  private fullRenderTimer: number | null = null;
 
   public isRenamingShield: boolean = false;
   /** Public visibility state constraint protecting viewport boundaries from early lifecycle pops */
@@ -243,13 +242,6 @@ public resumeFromBackground() {
       this.areaManager?.renderGraph();
     });
   }, 250);
-
-  // delayed redraw after warmup window
-  if (this.fullRenderTimer) window.clearTimeout(this.fullRenderTimer);
-  this.fullRenderTimer = window.setTimeout(() => {
-    if (this.isSuspended) return;
-    this.areaManager?.requestRedraw();
-  }, 2800);
 }
 
 
@@ -277,7 +269,6 @@ public resumeFromBackground() {
     if (this.orientationDebounceTimer) window.clearTimeout(this.orientationDebounceTimer);
     if (this.activeLeafDebounceTimer) window.clearTimeout(this.activeLeafDebounceTimer);
     if (this.visibilityResumeTimer) window.clearTimeout(this.visibilityResumeTimer);
-    if (this.fullRenderTimer) window.clearTimeout(this.fullRenderTimer);
 
     this.resolveDebounceTimer = null;
     this.renameDebounceTimer = null;
@@ -285,8 +276,6 @@ public resumeFromBackground() {
     this.orientationDebounceTimer = null;
     this.activeLeafDebounceTimer = null;
     this.visibilityResumeTimer = null;
-    this.fullRenderTimer = null;
-
   }
 
 
@@ -401,11 +390,7 @@ public resumeFromBackground() {
     }
 
     this.currentFilePath = file.path; 
-    this.plugin.markOnFileChangeAt(Date.now());
-
-    this.plugin.markCrashEvent("onFileChange", file.path);
     await this.plugin.networkGraph.update(file);
-    this.plugin.markCrashEvent("onFileChange:done", this.plugin.networkGraph.centerNote?.path ?? file.path);
   }
 
   /**
@@ -581,7 +566,6 @@ private setupDataReadyHandler() {
               this.areaManager.containerEl.className = "view-content rv-container is-calculating";
             }
 
-            const historicalGateState = this.isFullyStarted;
             this.isFullyStarted = true; 
             
             void this.onFileChange(activeFile).then(() => {

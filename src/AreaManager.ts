@@ -340,7 +340,35 @@ export class AreaManager {
     area.appendChild(areaFragment);
   }
 
-    /**
+  /**
+   * Resolves display color from node link text (supercharged-compatible).
+   */
+  private getLandingNodeColor(note: Node, colorful: boolean): string | null {
+    if (!colorful) return null;
+    const linkEl = note.div?.querySelector(".focusable-note-link") as HTMLElement | null;
+    if (!linkEl) return null;
+    const c = getComputedStyle(linkEl).color;
+    return c && c.trim().length > 0 ? c : null;
+  }
+
+  /**
+   * Applies/removes gate color override with minimal DOM writes.
+   */
+  private applyGateColor(gate: Gate, color: string | null) {
+    const circle = gate.svg?.querySelector("circle") as SVGCircleElement | null;
+    if (!circle) return;
+
+    if (!color) {
+      if (circle.style.fill) circle.style.removeProperty("fill");
+      if (circle.style.stroke) circle.style.removeProperty("stroke");
+      return;
+    }
+
+    if (circle.style.fill !== color) circle.style.fill = color;
+    if (circle.style.stroke !== color) circle.style.stroke = color;
+  }
+
+  /**
     * Evaluates layout geography and draws vector paths across all active nodes.
     * Leverages localized structural memory caches to execute path tracking in O(1) velocity.
     */
@@ -353,6 +381,15 @@ export class AreaManager {
     
     const links = this.linkCache;
     const canvas = this.backContainerSVG;
+    const colorful = this.plugin.settings.colorful === true;
+
+    const colorCache = new Map<Node, string | null>();
+    const getColor = (n: Node): string | null => {
+      if (colorCache.has(n)) return colorCache.get(n)!;
+      const c = this.getLandingNodeColor(n, colorful); // node-owned color
+      colorCache.set(n, c);
+      return c;
+    };
 
     // 1. INITIALIZATION: Collect visible canvas nodes and clear active gate states
     const visibleNotes = Array.from(this.graph.noteCache.values())
@@ -366,6 +403,10 @@ export class AreaManager {
       note.upperGate.svg?.classList.remove('is-connected');
       note.lowerGate.svg?.classList.remove('is-connected');
       note.friendGate.svg?.classList.remove('is-connected');
+      // Reset gate inline colors each pass (CSS fallback when no active links)
+      this.applyGateColor(note.upperGate, null);
+      this.applyGateColor(note.lowerGate, null);
+      this.applyGateColor(note.friendGate, null);
     }
     
     // Core geometry safeguard validating if target layout elements have established concrete screen coordinates
@@ -388,28 +429,40 @@ export class AreaManager {
         const nodeB = visibleNotes[j];
         if (!nodeB) continue;
 
-        // RULE 1: Is Node A a biological parent to Node B? (Loddrett tracking down the spine)
+        // RULE 1: A -> B (child)
         if (nodeA.relations.children.has(nodeB) || nodeB.relations.parents.has(nodeA)) {
           if (canDraw(nodeA.lowerGate, nodeB.upperGate)) {
-            DrawingUtils.drawLink(nodeA.lowerGate, nodeB.upperGate, links, offBy, canvas);
+            // color belongs to receiving gate's host node (nodeB upperGate)
+            const strokeColor = getColor(nodeB);
+            DrawingUtils.drawLink(nodeA.lowerGate, nodeB.upperGate, links, offBy, canvas, strokeColor);
             nodeA.lowerGate.svg!.classList.add('is-connected');
             nodeB.upperGate.svg!.classList.add('is-connected');
+
+            this.applyGateColor(nodeB.upperGate, colorful ? strokeColor : null);
           }
-        } 
-        // RULE 2: Is Node B a biological parent to Node A? (Loddrett tracking up the spine)
+        }
+        // RULE 2: B -> A (child)
         else if (nodeB.relations.children.has(nodeA) || nodeA.relations.parents.has(nodeB)) {
           if (canDraw(nodeB.lowerGate, nodeA.upperGate)) {
-            DrawingUtils.drawLink(nodeB.lowerGate, nodeA.upperGate, links, offBy, canvas);
+            // color belongs to receiving gate's host node (nodeA upperGate)
+            const strokeColor = getColor(nodeA);
+            DrawingUtils.drawLink(nodeB.lowerGate, nodeA.upperGate, links, offBy, canvas, strokeColor);
             nodeB.lowerGate.svg!.classList.add('is-connected');
             nodeA.upperGate.svg!.classList.add('is-connected');
+
+            this.applyGateColor(nodeA.upperGate, colorful ? strokeColor : null);
           }
-        } 
-        // RULE 3: Horizontal gate connections (Symmetrically validated cross-quadrant friends)
+        }
+        // RULE 3: friend
         else if (nodeA.relations.friends.has(nodeB) || nodeB.relations.friends.has(nodeA)) {
           if (canDraw(nodeA.friendGate, nodeB.friendGate)) {
-            DrawingUtils.drawLink(nodeA.friendGate, nodeB.friendGate, links, offBy, canvas);
+            // deterministic friend rule: color by target-side gate host node (nodeB)
+            const strokeColor = getColor(nodeB);
+            DrawingUtils.drawLink(nodeA.friendGate, nodeB.friendGate, links, offBy, canvas, strokeColor);
             nodeA.friendGate.svg!.classList.add('is-connected');
             nodeB.friendGate.svg!.classList.add('is-connected');
+
+            this.applyGateColor(nodeB.friendGate, colorful ? strokeColor : null);
           }
         }
       }
@@ -425,37 +478,39 @@ export class AreaManager {
   }
 
   /**
-   * Compiles and mounts the elastic info satellite toggle button onto the center element.
-   * Encapsulates total metrics regarding suppressed data nodes to enrich metadata discovery.
+   * Renders (or removes) the center-node info button that displays ignored-note count.
+   * The button is anchored to `.rv-linkdiv` to avoid layout drift when `.item` width changes.
    */
-  private renderInfoBtnForCenterNode() {
+  private renderInfoBtnForCenterNode(): void {
     const centerNote = this.graph.centerNote;
-    if (!centerNote) return;
+    const centerDiv = centerNote?.div;
+    if (!centerDiv) return;
 
-    const centerDiv = centerNote.div; 
+    // Prefer stable anchor: gates + link container
+    const anchorEl = centerDiv.querySelector(".rv-linkdiv") as HTMLElement | null;
+    if (!anchorEl) return;
 
-    if (centerDiv) {
-      // 1. Flush obsolete info switches inherited from previous navigation states
-      const gammelBtn = centerDiv.querySelector('.rv-info-btn');
-      if (gammelBtn) gammelBtn.remove();
+    // Remove stale button from previous render pass
+    anchorEl.querySelector(".rv-info-btn")?.remove();
 
-      // 2. COUNTER: Totals all layout records condemned or flagged as ignored in the active cycle
-      const antallIgnorert = Array.from(this.graph.noteCache.values())
-        .filter(n => n.assignedArea === "ignored" || n.isInitiallyIgnored === true).length;
-
-      // 3. CONDITIONAL INJECTION: Activates only if ignored items are detected in memory bounds
-      if (antallIgnorert > 0) {
-        const infoBtn = centerDiv.createDiv("rv-plusminus rv-info-btn");
-
-        // Deploys the international standardized symbol for info metadata nodes
-        infoBtn.textContent = "i";
-
-        // Stamps the raw count directly as an HTML dataset attribute for hover telemetry consumption
-        infoBtn.setAttribute("data-ignored-count", antallIgnorert.toString());
-
-        centerDiv.appendChild(infoBtn);
+    // Count ignored notes for current graph snapshot
+    let ignoredCount = 0;
+    for (const n of this.graph.noteCache.values()) {
+      if (n.assignedArea === "ignored" || n.isInitiallyIgnored === true) {
+        ignoredCount++;
       }
     }
+
+    // Do not render button if there is nothing to report
+    if (ignoredCount <= 0) return;
+
+    // Create and mount info button
+    const infoBtn = createDiv({ cls: "rv-plusminus rv-info-btn" });
+    infoBtn.textContent = "i";
+    infoBtn.setAttribute("data-ignored-count", String(ignoredCount));
+    // infoBtn.setAttribute("aria-label", `Ignored notes: ${ignoredCount}`);
+
+    anchorEl.appendChild(infoBtn);
   }
 
   /**

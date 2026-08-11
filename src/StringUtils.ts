@@ -116,4 +116,15 @@ export class StringUtils {
     }
     return false;
   }
+
+  static sortItems(rawString: string): string {
+    if (!rawString || typeof rawString !== "string") return "";
+    return rawString
+        .split(",")
+        .map((item) => item.trim())
+        .filter((item) => item.length > 0)
+        .sort((a, b) => a.localeCompare(b))
+        .join(", ");
+  }
+
 }
