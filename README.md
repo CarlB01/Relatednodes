@@ -15,6 +15,10 @@
 
 It organizes your notes into a clean and predictable layout with **Parents · Friends · Center · Children · Siblings** — built for speed, clarity and large vaults.
 
+✨ **What's new in 1.0.19: Colorize Lines & Gates**
+This update adds colorization for relationship lines and gate nodes, improving readability and direction-scanning in dense graphs.
+It keeps the same core navigation model (Parents · Friends · Center · Children · Siblings) while making complex note neighborhoods faster to parse.
+
 **Typical display**
 
 <img src="images/mybrain2.gif" alt="myBrain typical display" style="max-width: 100%; width: 500px; height: auto; border-radius: 8px;">
