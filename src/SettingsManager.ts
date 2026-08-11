@@ -13,7 +13,7 @@ export class SettingsManager {
   public parentTags: string = '#boss, #👥group';
   public childProperties: string = 'down, children, members';
   public childTags: string = '#text, #coffee';
-  public friendProperties: string = 'partner, friend';
+  public friendProperties: string = 'left, partner, friends';
   public friendTags: string = '';
   public ignoreTags: string = '#excalidraw';
   public ignoreNameFragments: string = '@';
@@ -64,19 +64,17 @@ export class SettingsManager {
   }
 
   public prepareForSave() {
-    const s = this;
+    // strings are washed and sorted alphabetically
+    this.parentProperties     = StringUtils.sortItems(this.parentProperties);
+    this.parentTags           = StringUtils.sortItems(this.parentTags);
+    this.childProperties      = StringUtils.sortItems(this.childProperties);
+    this.childTags            = StringUtils.sortItems(this.childTags);
+    this.friendProperties     = StringUtils.sortItems(this.friendProperties);
+    this.friendTags           = StringUtils.sortItems(this.friendTags);
+    this.ignoreTags           = StringUtils.sortItems(this.ignoreTags);
+    this.ignoreNameFragments = StringUtils.sortItems(this.ignoreNameFragments);
 
-    // Her vasker og sorterer vi alle strengene alfabetisk
-    s.parentProperties     = StringUtils.sortItems(s.parentProperties);
-    s.parentTags           = StringUtils.sortItems(s.parentTags);
-    s.childProperties      = StringUtils.sortItems(s.childProperties);
-    s.childTags            = StringUtils.sortItems(s.childTags);
-    s.friendProperties     = StringUtils.sortItems(s.friendProperties);
-    s.friendTags           = StringUtils.sortItems(s.friendTags);
-    s.ignoreTags           = StringUtils.sortItems(s.ignoreTags);
-    s.ignoreNameFragments = StringUtils.sortItems(s.ignoreNameFragments);
-
-    // Bygg cachen på nytt basert på de nysorterte strengene
-    s.prepare();
+    // rebuild cache based on sorted values
+    this.prepare();
   }
 }
