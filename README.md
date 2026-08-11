@@ -74,24 +74,24 @@ The myBrain graph is a normal Obsidian view. Drag its tab and drop it anywhere i
 ## 🎨 Conceptual Layout Matrix
 
 ```text
-               [ PARENTS ]
-                    │  \
-                    │   - - - ┐
-                    ▼         ▼
-[ FRIENDS ] ◄► [ CENTER ]  [ SIBLINGS ]
-                    │
-                    ▼
-               [ CHILDREN ]
+		   PARENTS
+			 │  \
+			 │   ---┐
+			 ▼      ▼
+FRIENDS ◄► CENTER   SIBLINGS
+			 │
+			 ▼
+		   CHILDREN 
 ```
 ### Architectural Mapping Matrix
 
 | Quadrant Area | Target Content Routing | Sourcing Logic |
 | :--- | :--- | :--- |
-| **`[ PARENTS ]`** *(Upper)* | Native structural ancestors and collection headers. | Sourced explicitly via your configured properties/tags. |
-| **`[ FRIENDS ]`** *(Left)* | Reciprocal lateral relationships and peer connections. | Routed horizontally via direct cross-links. |
-| **`[ CENTER NOTE ]`** | The active focus anchor context of the current viewport. | Binds the primary origin coordinates live. |
-| **`[ CHILDREN ]`** *(Lower)* | Downstream target children and unmapped core links. | Sourced from child fields and raw bodytext tokens. |
-| **`[ SIBLINGS ]`** *(Right)* | Peer cluster nodes sharing a mutual parent anchor. | Tier 1: Verified frontmatter. Tier 2: Bodytext siblings. |
+| **`PARENTS`** *(Upper)* | Native structural ancestors and collection headers. | Sourced explicitly via your configured properties/tags. |
+| **`FRIENDS`** *(Left)* | Reciprocal lateral relationships and peer connections. | Routed horizontally via direct cross-links. |
+| **`CENTER NOTE`** | The active focus anchor context of the current viewport. | Binds the primary origin coordinates live. |
+| **`CHILDREN`** *(Lower)* | Downstream target children and unmapped core links. | Sourced from child fields and raw bodytext tokens. |
+| **`SIBLINGS`** *(Right)* | Peer cluster nodes sharing a mutual parent anchor. | Tier 1: Verified frontmatter. Tier 2: Bodytext siblings. |
 
 ### How undefined nodes are handled
 - Links from the center note that are not explicitly defined as children are treated as **undefined** and automatically gathered at the **bottom of the lower area**.
