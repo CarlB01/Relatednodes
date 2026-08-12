@@ -204,7 +204,13 @@
 
   /* ==========================================================================
      4. COLLECTIONS & COLUMNS (Multi-column content routing engines)
-     ========================================================================== */
+    ========================================================================== */
+    /**
+    * CENTRALIZED VERTICAL COLUMN STACKER
+    * Uses CSS multicolumn layout to achieve native top-to-bottom element wrapping.
+    * Protected by '.is-calculating' layout gating and 'break-inside: avoid' on child 
+    * nodes to guarantee stable geometric boundaries for accurate SVG curve rendering.
+    */
 
   .rv-collection {
     max-height: none;

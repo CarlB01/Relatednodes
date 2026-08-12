@@ -35,7 +35,7 @@ export class SettingTab extends PluginSettingTab {
 
       const historicalGateState = myView.isFullyStarted;
       myView.isFullyStarted = true;
-      await myView.onFileChange(activeFile);
+      myView.onFileChange(activeFile);
       myView.isFullyStarted = historicalGateState || true;
 
       myView.areaManager?.renderGraph();

@@ -808,7 +808,7 @@ export class NetworkGraph {
       const activeFile = this.app.workspace.getActiveFile();
       
       if (activeFile) {        
-        await this.update(activeFile);
+        void this.update(activeFile);
         return true; 
       }
     }

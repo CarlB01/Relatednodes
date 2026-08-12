@@ -841,6 +841,6 @@ export class MyBrainView extends ItemView implements HoverParent {
      * Re-rendering is safely decoupled and deferred until the background calculation 
      * finishes and broadcasts the global 'graph:data-ready' event.
      */
-    await this.onFileChange(selectedFile);
+    this.onFileChange(selectedFile);
   }
 }
