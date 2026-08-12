@@ -134,6 +134,11 @@ If your existing structure is Excalibrain-friendly and front-matter based there 
 ### Supercharged Links Ready
 Respects your existing tag-based font colors, customized icons, and core appearance settings natively out of the box.
 
+### Dynamic Top-to-Bottom Column Wrapping
+Unlike standard horizontal CSS flex layouts, myBrain utilizes CSS Multi-column layout containers inside its responsive areas. 
+* **Design Intent:** This enforces a strict top-to-bottom, left-to-right newspaper-style wrapping for clustered note groups, preserving structural hierarchy without hardcoding element heights.
+* **Obsidian Partial Support Mitigation:** To fully shield the layout engine from edge-case Chromium reflow bugs during high-frequency tab swaps, the plugin encapsulates this layout using a protective off-screen render curtain (`.is-calculating`) combined with strict element containment rules (`break-inside: avoid`). This ensures flawless geometric coordinate tracking across both desktop and mobile viewports.
+
 ---
 
 ## 🔒 Privacy & Data Safety
