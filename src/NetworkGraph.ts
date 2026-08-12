@@ -1,4 +1,4 @@
-import { App, BasesEntry, TFile } from "obsidian";
+import { App, BasesEntry, debounce, Debouncer, TFile } from "obsidian";
 import MyBrainPlugin from "./main.js";
 import { Node, Relation } from "./Node.js";
 import { StringUtils } from "./StringUtils.js";
@@ -45,9 +45,13 @@ export class NetworkGraph {
   private plugin: MyBrainPlugin;
   private settings: SettingsManager;
 
- // Serialisert async update-loop (erstatter intern debounce/timer-styring)
-  private updateInFlight: Promise<void> | null = null;
-  private pendingFile: TFile | null = null;
+  private debouncedUpdate: Debouncer<[TFile | null], Promise<void>>;
+
+  // updateRequestToken: token system for incremental cache synchronization.
+  // Tracks if new anchors are discovered during build.
+  // This happens if obsidian cache was not fully ready.
+  // Helps keeping noteCache and anchorCache while next tread in progress 
+  // takes over and finishes the partly updated caches.
   private updateRequestToken = 0;
 
   constructor(
@@ -57,49 +61,23 @@ export class NetworkGraph {
     this.plugin = plugin;
     this.settings = settingsManager;
     this.app = plugin.app; 
+
+    this.debouncedUpdate = debounce(
+      this.executeUpdate.bind(this), 
+      250, 
+      true
+    );
   }
 
-  /**
-   * Orchestrates the primary asynchronous calculation cycle for active vault notes.
-   * Completely debounced to handle intensive tab-switching or cold-start indexing overhead.
-   * COMPLIANT REFACTOR: Silences floating promise warnings via explicit void operators [dan].
-   * @param activeFile The targeted TFile record currently being opened or focused.
-   */
+  public cancel(): void {
+    this.debouncedUpdate.cancel();
+  }
   
-async update(activeFile: TFile | null): Promise<void> {
-  if (!activeFile) return;
-  if (this.plugin.isAppPaused()) return;
-
-  const leaves = this.plugin.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE);
-  const visibleLeaf = leaves.find(l => l.view.containerEl.offsetHeight > 0);
-  if (!visibleLeaf) return;
-
-  this.pendingFile = activeFile;
-  this.updateRequestToken++;
-
-  if (!this.updateInFlight) {
-    this.updateInFlight = this.runUpdateLoop().finally(() => {
-      this.updateInFlight = null;
-    });
-  }
-
-  await this.updateInFlight;
-}
-
-  private async runUpdateLoop(): Promise<void> {
-    while (this.pendingFile) {
-      if (this.plugin.isAppPaused()) return;
-
-      const file = this.pendingFile;
-      this.pendingFile = null;
-      const tokenAtStart = this.updateRequestToken;
-
-      await this.waitUntilCacheStable(file);
-      if (tokenAtStart !== this.updateRequestToken) continue;
-
-      await this.processGraphDeterministic(file, tokenAtStart);
-
-    }
+// #region PRIVATE HELPER FUNCTIONS
+  private isViewVisible(): boolean {
+    const leaves = this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE);
+    const visibleLeaf = leaves.find(l => l.view.containerEl.offsetHeight > 0);
+    return !!visibleLeaf;
   }
 
   private sleep(ms: number): Promise<void> {
@@ -135,88 +113,138 @@ async update(activeFile: TFile | null): Promise<void> {
       await this.sleep(stepMs);
     }
   }
+// #endregion
 
-private async processGraphDeterministic(activeFile: TFile, tokenAtStart: number): Promise<void> {
 
-  this.ignoredNotes.clear();
-  for (const note of this.noteCache.values()) {
-    note.isUsed = false;
-    note.isIndexedInThisRound = false;
-    note.relation = "undefined";
-    note.discoverySource = "bodytext";
-    note.assignedArea = "lower";
-    note.relations.parents.clear();
-    note.relations.children.clear();
-    note.relations.friends.clear();
-    note.relations.ignored.clear();
-    note.crossingBaits.clear();
+// #region MAIN STRUCTURE
+
+//=================
+// OVERVIEW:
+// update(): Synchronous 'trigger'.
+// - accepts file from Obsidian, increases token, and pushes it into the debounce-queue.
+// debouncedUpdate(): Time-buffer
+// executeUpdate(): The asynchronous worker
+//=================
+
+
+  /**
+   * 1. THE TRIGGER (Synchronous)
+   * Receives the raw event from Obsidian, increments the request token, 
+   * and passes execution context safely to the debounce layer.
+   */
+  update(activeFile: TFile | null): void {
+    if (!activeFile || this.plugin.isAppPaused()) return;
+    if (!this.isViewVisible()) return;
+
+    /** Increment token immediately to invalidate any legacy async slices currently yielding */
+    this.updateRequestToken++;
+
+    /** Fire the debounce buffer */
+    void this.debouncedUpdate(activeFile);
   }
 
-  Gate.cachedRadius = null;
+  /**
+   * 2. THE WORKER (Asynchronous)
+   * Runs only after the user stops navigating.
+   */
+  private async executeUpdate(activeFile: TFile | null): Promise<void> {
+    if (!activeFile || this.plugin.isAppPaused() || !this.isViewVisible()) return;
 
-  for (const bait of this.anchorCache.values()) {
-    bait.isUsed = false;
-    bait.sources.clear();
-  }
+    /** Capture the exact token state before we initiate asynchronous cache polling */
+    const tokenAtStart = this.updateRequestToken;
 
-  await this.yieldToUI();
+    /** Wait for Obsidian's background indexer to stabilize links */
+    await this.waitUntilCacheStable(activeFile);
+    
+    /** Context safety check: Abort if cache wait was intercepted by a newer file-open event */
+    if (tokenAtStart !== this.updateRequestToken || !this.isViewVisible()) return;
 
-  this.centerNote = this.getOrCreateNote(activeFile);
-
-  if (!this.centerNote) return;
-  this.centerNote.relation = "center";
-  this.centerNote.assignedArea = "center";
-  this.centerNote.isUsed = true;
-
-  const firstDegreeFiles = this.getFirstDegreeFiles(this.centerNote.path);
-
-  await this.yieldToUI();
-
-  let preloadStep = 0;
-  for (const file of firstDegreeFiles) {
-    if (file.path !== this.centerNote.path) {
-      const preparedNote = this.getOrCreateNote(file);
-      if (preparedNote) {
-        preparedNote.isUsed = true;
-
-        const relasjonTilSenter = this.findRelation(this.centerNote, preparedNote);
-        if (relasjonTilSenter === "parent") {
-          const parentFiles = this.getFirstDegreeFiles(preparedNote.path);
-          for (const parentFile of parentFiles) this.getOrCreateNote(parentFile);
-        }
-      }
+    // ================================
+    // HEAVY DETERMINISTIC CALCULATIONS
+    // ================================      
+    this.ignoredNotes.clear();
+    for (const note of this.noteCache.values()) {
+      note.isUsed = false;
+      note.isIndexedInThisRound = false;
+      note.relation = "undefined";
+      note.discoverySource = "bodytext";
+      note.assignedArea = "lower";
+      note.relations.parents.clear();
+      note.relations.children.clear();
+      note.relations.friends.clear();
+      note.relations.ignored.clear();
+      note.crossingBaits.clear();
     }
 
-    if (++preloadStep % 40 === 0) await this.yieldToUI();
+    Gate.cachedRadius = null;
+
+    for (const bait of this.anchorCache.values()) {
+      bait.isUsed = false;
+      bait.sources.clear();
+    }
+
+    await this.yieldToUI();
+    if (tokenAtStart !== this.updateRequestToken) return
+
+    this.centerNote = this.getOrCreateNote(activeFile);
+    if (!this.centerNote) return;
+
+    this.centerNote.relation = "center";
+    this.centerNote.assignedArea = "center";
+    this.centerNote.isUsed = true;
+
+    const firstDegreeFiles = this.getFirstDegreeFiles(this.centerNote.path);
+
+    await this.yieldToUI();
     if (tokenAtStart !== this.updateRequestToken) return;
-  }
 
-  this.determineFirstDegreeNotes(this.centerNote);
-  if (tokenAtStart !== this.updateRequestToken) return;
+    let preloadStep = 0;
+    for (const file of firstDegreeFiles) {
+      if (file.path !== this.centerNote.path) {
+        const preparedNote = this.getOrCreateNote(file);
+        if (preparedNote) {
+          preparedNote.isUsed = true;
 
-  await this.determineParentConnectionsAndSiblings(this.centerNote, tokenAtStart);
-  
-  await this.determineCrossNetworkConnections(this.centerNote, tokenAtStart);
-  if (tokenAtStart !== this.updateRequestToken) return;
+          const relasjonTilSenter = this.findRelation(this.centerNote, preparedNote);
+          if (relasjonTilSenter === "parent") {
+            const parentFiles = this.getFirstDegreeFiles(preparedNote.path);
+            for (const parentFile of parentFiles) this.getOrCreateNote(parentFile);
+          }
+        }
+      }
 
-  for (const [path, note] of this.noteCache.entries()) {
-    if (!note.isUsed) this.noteCache.delete(path);
-  }
-  for (const [path, bait] of this.anchorCache.entries()) {
-    if (!bait.isUsed || bait.sources.size === 0) this.anchorCache.delete(path);
-  }
+      if (++preloadStep % 40 === 0) 
+        await this.yieldToUI();
+        if (tokenAtStart !== this.updateRequestToken) return;
+    }
 
-  if (tokenAtStart === this.updateRequestToken) {
-     this.app.workspace.trigger("graph:data-ready", activeFile.path);
-  }
-} 
+    this.determineFirstDegreeNotes(this.centerNote);
+    if (tokenAtStart !== this.updateRequestToken) return;
 
+    await this.determineParentConnectionsAndSiblings(this.centerNote, tokenAtStart);
+    if (tokenAtStart !== this.updateRequestToken) return;
+
+    await this.determineCrossNetworkConnections(this.centerNote, tokenAtStart);
+    if (tokenAtStart !== this.updateRequestToken) return;
+
+    for (const [path, note] of this.noteCache.entries()) {
+      if (!note.isUsed) this.noteCache.delete(path);
+    }
+    for (const [path, bait] of this.anchorCache.entries()) {
+      if (!bait.isUsed || bait.sources.size === 0) this.anchorCache.delete(path);
+    }
+
+    /** Final commit boundary: Verify data integrity before deploying to the UI */
+    if (tokenAtStart === this.updateRequestToken) {
+      this.app.workspace.trigger("graph:data-ready", activeFile.path);
+    }
+  } 
 
   /**
    * Retrieves or instantiates a specialized note object within the localized layout cache.
    * Leverages high-performance structural memory bounds to fetch elements in O(1) velocity.
    */
-  public getOrCreateNote(file: TFile): Node | null {
+  private getOrCreateNote(file: TFile): Node | null {
     if (!file) return null;
 
     // 1. MEMORY SKEW: Check if the node element already populates the path-indexed database
@@ -635,46 +663,6 @@ private async processGraphDeterministic(activeFile: TFile, tokenAtStart: number)
   }
 
   /**
-   * High-performance memory sorting engine consolidating nodes into explicit quadrant arrays.
-   * Leverages memory-safe clones via Array.from() to neutralize unintended asynchronous mutations.
-   * @param connections The active target collection stack (Array or Map-Set context).
-   * @param isSiblingQuadrant Flag triggering primary relational ordering for flank clusters.
-   */
-  public getSortedNotesForQuadrant(connections: Node[] | Set<Node>, isSiblingQuadrant = false): Node[] {
-    if (!connections) return [];
-    
-    const notesArray = Array.from(connections);
-    if (notesArray.length === 0) return [];
-
-    return notesArray.sort((a, b) => {
-      // 1. PRIMARY WEIGHT SORT (Flank specific: Groups explicit siblings above bodytext siblings)
-      if (isSiblingQuadrant) {
-        const orderA = relationOrder[a.relation] ?? 999;
-        const orderB = relationOrder[b.relation] ?? 999;
-        if (orderA !== orderB) return orderA - orderB;
-      }
-
-      // 2. SECONDARY WEIGHT SORT: Frontmatter primary tag (Alphabetical alpha tracking)
-      const tagA = a.tags && a.tags.length > 0 ? a.tags[0] : null;
-      const tagB = b.tags && b.tags.length > 0 ? b.tags[0] : null;
-
-      if (tagA !== tagB) {
-        if (!tagA) return 1;  // Routes unassigned elements down to the bottom gutters safely
-        if (!tagB) return -1;
-        return tagA.localeCompare(tagB);
-      }
-
-      // 3. TERTIARY WEIGHT SORT: Structural relevance metric (Vault link density count)
-      const countA = a.connectionCount ?? 0;
-      const countB = b.connectionCount ?? 0;
-      if (countA !== countB) return countB - countA;
-
-      // 4. FALLBACK RESOLUTION: Final raw alphabetical string compare matching baseline names
-      return a.basename.localeCompare(b.basename);
-    });
-  }
-
-  /**
    * Fetches incoming backlinks in high-velocity RAM space.
    * Directly accesses Obsidian's pre-indexed internal metadata resolved link mappings
    * to bypass disk I/O bottlenecks.
@@ -731,7 +719,50 @@ private async processGraphDeterministic(activeFile: TFile, tokenAtStart: number)
 
     return connections;
   }
+  // #endregion
+
+
+  // #region PUBLIC HELPER FUNCTIONS
+    /**
+   * High-performance memory sorting engine consolidating nodes into explicit quadrant arrays.
+   * Leverages memory-safe clones via Array.from() to neutralize unintended asynchronous mutations.
+   * @param connections The active target collection stack (Array or Map-Set context).
+   * @param isSiblingQuadrant Flag triggering primary relational ordering for flank clusters.
+   */
+  public getSortedNotesForQuadrant(connections: Node[] | Set<Node>, isSiblingQuadrant = false): Node[] {
+    if (!connections) return [];
     
+    const notesArray = Array.from(connections);
+    if (notesArray.length === 0) return [];
+
+    return notesArray.sort((a, b) => {
+      // 1. PRIMARY WEIGHT SORT (Flank specific: Groups explicit siblings above bodytext siblings)
+      if (isSiblingQuadrant) {
+        const orderA = relationOrder[a.relation] ?? 999;
+        const orderB = relationOrder[b.relation] ?? 999;
+        if (orderA !== orderB) return orderA - orderB;
+      }
+
+      // 2. SECONDARY WEIGHT SORT: Frontmatter primary tag (Alphabetical alpha tracking)
+      const tagA = a.tags && a.tags.length > 0 ? a.tags[0] : null;
+      const tagB = b.tags && b.tags.length > 0 ? b.tags[0] : null;
+
+      if (tagA !== tagB) {
+        if (!tagA) return 1;  // Routes unassigned elements down to the bottom gutters safely
+        if (!tagB) return -1;
+        return tagA.localeCompare(tagB);
+      }
+
+      // 3. TERTIARY WEIGHT SORT: Structural relevance metric (Vault link density count)
+      const countA = a.connectionCount ?? 0;
+      const countB = b.connectionCount ?? 0;
+      if (countA !== countB) return countB - countA;
+
+      // 4. FALLBACK RESOLUTION: Final raw alphabetical string compare matching baseline names
+      return a.basename.localeCompare(b.basename);
+    });
+  }
+
   /**
    * Consolidates node stacks dynamically into groups partitioned by their primary frontmatter tag.
    * Leverages clean Map-reducers and sorts untagged segments securely down to the layout gutters.
@@ -760,6 +791,29 @@ private async processGraphDeterministic(activeFile: TFile, tokenAtStart: number)
         if (b.tag === "untagged") return -1;
         return a.tag.localeCompare(b.tag);
       });
+  }
+
+  /**
+   * Intercepts file resolution events triggered when a user writes inside an active note editor pane.
+   * Evaluates layout dependencies instantly to process live, hot-reloading graph redraws.
+   * @param file The TFile record receiving active markdown metadata modifications.
+   * @returns A promise resolving to a boolean confirming if the structural graph view required a update pass.
+   */
+  public async handleFileResolve(file: TFile): Promise<boolean> {
+    // GATE GUARD: High-velocity validation checking if the modified file impacts currently tracked memory paths
+    const påvirkerVisning = this.noteCache.has(file.path) || 
+                            this.anchorCache.has(file.path);
+    
+    if (påvirkerVisning) {  
+      const activeFile = this.app.workspace.getActiveFile();
+      
+      if (activeFile) {        
+        await this.update(activeFile);
+        return true; 
+      }
+    }
+    
+    return false; 
   }
 
   /**
@@ -813,28 +867,6 @@ private async processGraphDeterministic(activeFile: TFile, tokenAtStart: number)
       }
     }
   }
+  // #endregion
 
-
-  /**
-   * Intercepts file resolution events triggered when a user writes inside an active note editor pane.
-   * Evaluates layout dependencies instantly to process live, hot-reloading graph redraws.
-   * @param file The TFile record receiving active markdown metadata modifications.
-   * @returns A promise resolving to a boolean confirming if the structural graph view required a update pass.
-   */
-  public async handleFileResolve(file: TFile): Promise<boolean> {
-    // GATE GUARD: High-velocity validation checking if the modified file impacts currently tracked memory paths
-    const påvirkerVisning = this.noteCache.has(file.path) || 
-                            this.anchorCache.has(file.path);
-    
-    if (påvirkerVisning) {  
-      const activeFile = this.app.workspace.getActiveFile();
-      
-      if (activeFile) {        
-        await this.update(activeFile);
-        return true; 
-      }
-    }
-    
-    return false; 
-  }
 }

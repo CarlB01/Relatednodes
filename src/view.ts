@@ -1,10 +1,56 @@
 import myBrainPlugin from './main.js';
-import { HoverPopover, TFile, WorkspaceLeaf, HoverParent, MarkdownView, FileView, Platform, ItemView, App, EventRef } from 'obsidian';
+import { HoverPopover, TFile, WorkspaceLeaf, HoverParent, MarkdownView, FileView, Platform, ItemView, App, EventRef, debounce, Debouncer } from 'obsidian';
 import { AreaManager } from './AreaManager.js';
 import { RV } from './constants.js';
 
+/**
+ * ============================================================================
+ * 🧠 MYBRAIN ARCHITECTURAL LIFECYCLE & THREAD COUPLING DATAFLOW
+ * ============================================================================
+ * This view drives a highly decoupled, reactive asynchronous state machine designed
+ * to handle rapid navigation cascades, background cache lag, and high-frequency 
+ * UI events without memory leaks, visual flickering, or thread collisions.
+ * 
+ * ─── STAGE 1: NAVIGATION & SYNCHRONOUS DISPATCH ─────────────────────────────
+ * User interacts with a node (e.g., via click or workspace tab navigation). 
+ * `onInternalLinkClicked` routes the target document to the split workspace pane,
+ * then dispatches a synchronous fire-and-forget call to `onFileChange(file)`.
+ * 
+ * ─── STAGE 2: THREAD SHIELDING & DEBOUNCE GATEWAYS ──────────────────────────
+ * `onFileChange` invokes the core `NetworkGraph.update` pipeline. The framework 
+ * instantly increments `updateRequestToken`, invalidating all legacy asynchronous 
+ * loops currently yielding control. The fresh file request is safely buffered 
+ * inside a hardware-protective 250ms `Debouncer` window.
+ * 
+ * ─── STAGE 3: ASYNC CACHE POLLING & ISOLATED COMPUTATION ────────────────────
+ * Once navigation stabilizes, the async background execution thread checks if the 
+ * cache is stable via polling hooks (`waitUntilCacheStable`). Deterministic matrix 
+ * parsing and coordinate allocation then compile entirely within memory maps 
+ * (`noteCache` and `anchorCache`), keeping the visual main UI thread unblocked.
+ * 
+ * ─── STAGE 4: REACTIVE EMISSION & MULTIVIEW ISOLATION ───────────────────────
+ * Upon database validation commit, `NetworkGraph` emits a central global event 
+ * broadcast: `graph:data-ready`. The localized `setupDataReadyHandler` captures 
+ * this event, executing path isolation checks to guarantee that this exact panel 
+ * instance only triggers a redraw if the broadcast data matches its active path.
+ * 
+ * ─── STAGE 5: VISUAL RENDERING MATRIX SHIELDING ──────────────────────────────
+ * `AreaManager.renderGraph()` executes within a rapid 40ms DOM debounce wrapper. 
+ * An off-screen geometric rendering shield token (`is-calculating`) is applied 
+ * to the DOM tree container while an in-memory `DocumentFragment` updates the elements.
+ * This prevents column squeezing, visual jumping, and layout reflow flutters.
+ * 
+ * ─── STAGE 6: HARDWARE-COUPLED VECTOR SCROLLING ──────────────────────────────
+ * Symmetrical local quadrant scrolling bypasses data debouncers entirely. Scroll 
+ * loops hook directly into a hardware-synchronized double `requestAnimationFrame` 
+ * refresh motor (`requestRedraw`), delivering buttery smooth 60Hz-120Hz bezier 
+ * curve recalculations completely native to WebKit and Chromium viewports.
+ * ============================================================================
+ */
+
 export class MyBrainView extends ItemView implements HoverParent {
 
+  // #region DECLARATIONS
   private plugin: myBrainPlugin;
   app: App;
   public areaManager!: AreaManager;
@@ -13,40 +59,57 @@ export class MyBrainView extends ItemView implements HoverParent {
   private lastMouseEvent: MouseEvent | null = null;
   private lastMouseTarget: HTMLElement | null = null;
   public hoverPopover: HoverPopover | null = null;
-  public resolveDebounceTimer: number | null = null; 
-  public renameDebounceTimer: number | null = null;
 
-  private layoutDebounceTimer: number | null = null;
-  private orientationDebounceTimer: number | null = null;
-  private activeLeafDebounceTimer: number | null = null;
-  private visibilityResumeTimer: number | null = null;
+  /**
+   * Centralized Debouncer registry.
+   * Tailored to protect workspace boundaries and stabilize view lifecycle hops.
+   */
+  private debouncedLayout: Debouncer<[], void>;
+  private debouncedOrientation: Debouncer<[], void>;
+  private debouncedActiveLeaf: Debouncer<[], void>;
+  private debouncedVisibilityResume: Debouncer<[], void>;
+  private debouncedResolve: Debouncer<[], void>;
+
   private isSuspended: boolean = false;
   private isDomSuspended: boolean = false;
 
   private lastResumeAt = 0;
   private visibilityObserver: IntersectionObserver | null = null;
 
-  public isRenamingShield: boolean = false;
-  /** Public visibility state constraint protecting viewport boundaries from early lifecycle pops */
+  // Public visibility state constraint protecting viewport boundaries from early lifecycle pops.
   public isFullyStarted: boolean = false;
   
   // DEBOUNCE LOOP TRACKER: Tracks dynamic workspace visibility state transitions.
   // Set to true by default to force a clean, definitive re-sync pass on initial boots [dan]!
   private wasPanelHidden: boolean = true;
+  // #endregion
+
+  public getDisplayText(): string {return "myBrain"; }
+  public getViewType(): string { return RV.MYBRAIN_VIEW_TYPE; }
   
   constructor(leaf: WorkspaceLeaf, plugin: myBrainPlugin) {
     super(leaf);
     this.plugin = plugin;
     this.app = plugin.app;
+  
+    /** 
+     * Initialize all lifecycle and state debouncers.
+     * Intervals are micro-optimized based on structural execution weight.
+     * Binding execution context ensures strict variable access within implementation targets.
+     */
+    this.debouncedLayout = debounce(this.executeLayoutRefresh.bind(this), 100, true);
+    this.debouncedOrientation = debounce(this.executeOrientationChange.bind(this), 150, true);
+    this.debouncedActiveLeaf = debounce(this.executeActiveLeafChange.bind(this), 50, true);
+    this.debouncedVisibilityResume = debounce(this.executeVisibilityResume.bind(this), 250, true);
+    this.debouncedResolve = debounce(this.executeResolve.bind(this), 200, true);
   }
 
-  // ==========================================================================
-  // VIEW IDENTIFIERS & META ATTRIBUTES
-  // ==========================================================================
-  
-  getViewType(): string { return RV.MYBRAIN_VIEW_TYPE; }
-  getDisplayText(): string { return "myBrain"; }
+  override onResize() {
+    super.onResize();
+    this.areaManager.requestRedraw();
+  }
 
+  // #region PRIVATE METHODS
   /**
    * Robust high-velocity file resolver parsing incoming strings using multi-layered fallbacks.
    * Accesses cached indices natively to guarantee fast, disk-free string matching.
@@ -217,33 +280,87 @@ export class MyBrainView extends ItemView implements HoverParent {
     welcomeDiv.createEl("p", { text: RV.WELCOME, cls: "rv-welcome-text" });
   }
 
+  /**
+   * Implementation target for debouncedActiveLeafChange.
+   */
+  private executeActiveLeafChange(): void {
+    if (this.isSuspended || !this.isFullyStarted) return;
+
+    const activeFile = this.getMostRecentMarkdownFile();
+    if (activeFile && activeFile.path !== this.currentFilePath) {
+      this.onFileChange(activeFile);
+    }
+  }
+
+  /**
+   * Implementation target for debouncedLayout.
+   */
+  private executeLayoutRefresh(): void {
+    if (this.areaManager) {
+      this.areaManager.requestRedraw();
+    }
+  }
+
+  /**
+   * Implementation target for debouncedOrientation.
+   */
+  private executeOrientationChange(): void {
+    if (this.areaManager) {
+      this.areaManager.requestRedraw();
+    }
+  }
+
+  private cancelAllDebouncers() {
+    this.debouncedLayout.cancel();
+    this.debouncedOrientation.cancel();
+    this.debouncedActiveLeaf.cancel();
+    this.debouncedVisibilityResume.cancel();
+    this.debouncedResolve.cancel(); 
+  }
+
+  // #endregion
+
+
+  // #region PUBLIC METHODS
   public suspendForBackground() {
     this.isSuspended = true;
-    this.clearAllTimers();
+    this.cancelAllDebouncers();
     this.areaManager?.cancelPendingRedraw();
     this.teardownDomForSuspend();
   }
 
-public resumeFromBackground() {
-  const now = Date.now();
-  if (now - this.lastResumeAt < 1200) return;
-  this.lastResumeAt = now;
+  public resumeFromBackground() {
+    const now = Date.now();
+    /** Throttle fast accidental double-resume triggers */
+    if (now - this.lastResumeAt < 1200) return;
+    this.lastResumeAt = now;
 
-  this.isSuspended = false;
-  this.restoreDomAfterSuspend();
-  if (!this.isFullyStarted) return;
+    this.isSuspended = false;
+    this.restoreDomAfterSuspend();
+    if (!this.isFullyStarted) return;
 
-  const activeFile = this.getMostRecentMarkdownFile();
-  if (!activeFile) return;
-  // Small delay to let WebView/layout settle after wake
-  window.setTimeout(() => {
+    const activeFile = this.getMostRecentMarkdownFile();
+    if (!activeFile) return;
+    
+    //This lets the workspace/WebView settle safely before rebuilding the graph.
+    void this.debouncedVisibilityResume();
+  }
+
+  /**
+   * The actual implementation target for debouncedVisibilityResume.
+   */
+  private async executeVisibilityResume(): Promise<void> {
     if (this.isSuspended) return;
-    void this.onFileChange(activeFile).then(() => {
-      this.areaManager?.renderGraph();
-    });
-  }, 250);
-}
 
+    const activeFile = this.getMostRecentMarkdownFile();
+    if (!activeFile) return;
+
+    /** 
+     * Synchronous fire-and-forget: pushes the file change event to NetworkGraph.
+     * Rendering is deferred and handled automatically via the global 'graph:data-ready' event.
+     */
+    this.onFileChange(activeFile);
+  }
 
   private teardownDomForSuspend() {
     if (this.isDomSuspended) return;
@@ -262,31 +379,8 @@ public resumeFromBackground() {
     this.isDomSuspended = false;
   }
 
-  private clearAllTimers() {
-    if (this.resolveDebounceTimer) window.clearTimeout(this.resolveDebounceTimer);
-    if (this.renameDebounceTimer) window.clearTimeout(this.renameDebounceTimer);
-    if (this.layoutDebounceTimer) window.clearTimeout(this.layoutDebounceTimer);
-    if (this.orientationDebounceTimer) window.clearTimeout(this.orientationDebounceTimer);
-    if (this.activeLeafDebounceTimer) window.clearTimeout(this.activeLeafDebounceTimer);
-    if (this.visibilityResumeTimer) window.clearTimeout(this.visibilityResumeTimer);
-
-    this.resolveDebounceTimer = null;
-    this.renameDebounceTimer = null;
-    this.layoutDebounceTimer = null;
-    this.orientationDebounceTimer = null;
-    this.activeLeafDebounceTimer = null;
-    this.visibilityResumeTimer = null;
-  }
-
-
-  // ==========================================================================
-  // APPLICATION LIFECYCLE RECEPTORS & HOOKS
-  // ==========================================================================
-
   /**
    * Executed when the view workspace partition leaf is physically mounted.
-   * COMPLIANT REFACTOR: Eradicates blind, hardcoded timeouts to achieve instantaneous 
-   * data ignition. Conditionality bypasses coldstart gates if indexing is already finalized [dan].
    */
   async onOpen() {
     this.contentEl.empty();
@@ -298,7 +392,7 @@ public resumeFromBackground() {
     // Bind localized viewport context listeners and gesture bus matrices
     this.registerWorkspaceLayoutChanges();
     this.registerHoverLinkSource();
-    this.setupDataReadyHandler();
+    this.setupDataReadyHandler(); // Ensure this calls areaManager.renderGraph() on 'graph:data-ready'
     this.setupMobileSafeguards();
     this.setupVisibilitySafeguards();
     this.setupInternalLinkHandler();
@@ -317,42 +411,49 @@ public resumeFromBackground() {
       
       const activeFile = this.getMostRecentMarkdownFile();
       if (activeFile) {
-        await this.onFileChange(activeFile);
-        if (this.areaManager) {
-          this.areaManager.renderGraph();
-        }
+        // Sync the file. NetworkGraph's internal debounce will fire 'graph:data-ready' when done.
+        this.onFileChange(activeFile);
       }
     } else {
-      // ==========================================================================
-      // COLD-START LIFECYCLE GATE (Fallback for massive hvelv under oppstart):
-      // If the cache is still validating vault files, we establish a strict event
-      // listener hook that drops the shield only when Obsidian core signals resolution [dan].
-      // ==========================================================================
-      this.plugin.registerEvent(
+      // Synchronize graph activation with background cache initialization events
+      this.registerEvent(
         this.app.metadataCache.on('resolved', () => {
           if (this.isFullyStarted) return; 
           
-          void (async () => {
-            this.isFullyStarted = true; 
-            this.wasPanelHidden = false;
-            
-            const activeFile = this.getMostRecentMarkdownFile();
-            if (activeFile) {
-              await this.onFileChange(activeFile);
-              if (this.areaManager) {
-                this.areaManager.renderGraph(); 
-              }
-            }
-          })();
+          /** 
+           * Fire the resolve debouncer. 
+           * It gathers up cascading resolution blips and executes safely once.
+           */
+          this.debouncedResolve();
         })
       );
     }
   }
 
   async onClose() {
-    this.clearAllTimers();
+    /** 
+     * STAGE 1: EMERGENCY BRAKE (CRITICAL)
+     * Cancel all pending asynchronous and debounced tasks immediately.
+     * Prevents mid-flight execution loops from firing on a destroyed DOM context.
+     */
+    this.cancelAllDebouncers(); 
+
+    /** 
+     * STAGE 2: VISUAL COMPONENT TEARDOWN
+     * Abort hardware-coupled animation frames and clear local SVG caches.
+     */
     this.areaManager?.cancelPendingRedraw();
+
+    /** 
+     * STAGE 3: DOM EVACUATION
+     * Safely empty container elements to free up memory trees.
+     */
     this.teardownDomForSuspend();
+
+    /** 
+     * STAGE 4: HARDWARE OBSERVATION DISCONNECT
+     * Clean up screen detection tracking layers completely.
+     */
     if (this.visibilityObserver) {
       this.visibilityObserver.disconnect();
       this.visibilityObserver = null;
@@ -361,7 +462,6 @@ public resumeFromBackground() {
 
   /**
    * Fuses layout rendering updates when user focuses structural tab partitions.
-   * Incorporates an asynchronous breathing delay allowing sliding layout panes to lock calculations.
    */
   private onActiveLeafChanged(leaf: WorkspaceLeaf | null) {
     if (this.isSuspended) return;
@@ -376,74 +476,19 @@ public resumeFromBackground() {
 
   /**
    * Hot-reloads memory structures when the focused file target changes context.
-   * RECONCILED GOLDEN GUARD: Keeps the initial welcome shield intact during cold starts
-   * by dropping background file streams until the core application is fully initialized.
    * @param file The targeted TFile record currently being opened or focused.
    */
-  async onFileChange(file: TFile | null) {
-    if (!file) return;
-    if (this.isSuspended) return;
-    
-    // HARDWARE INITIALIZATION FILTER: Safeguards the startup visual shield from premature data leaks
-    if (!this.isFullyStarted) {
-      return; 
-    }
+  public onFileChange(file: TFile | null) {
+    if (!file || this.isSuspended || !this.isFullyStarted) return;
 
     this.currentFilePath = file.path; 
-    await this.plugin.networkGraph.update(file);
+    
+    /** 
+     * Synchronous fire-and-forget: triggers the NetworkGraph debounce layer.
+     * Rendering is deferred until the global 'graph:data-ready' ecosystem event is triggered.
+     */
+    this.plugin.networkGraph.update(file);
   }
-
-  /**
-   * Orchestrates the dynamic layout mutation expansion and collapse toggling when a cluster badge is clicked.
-   * Modifies inline visibility tokens safely and demands an instant Bezier curve recalculation from AreaManager [dan].
-   */
-  private onPlusMinusBtnClicked(target: HTMLElement) {
-    const plus = RV.PLUS;   
-    const minus = RV.MINUS; 
-
-    // Isolates the closest tag group cluster element container currently routing these nodes [dan]
-    const groupDiv = target.closest(`.${RV.GROUPS}`) as HTMLElement;
-    if (!groupDiv) return;
-
-    // Collects all individual visible cells inside this localized structural cluster wrapper
-    const items = Array.from(groupDiv.querySelectorAll('.item'));
-    if (items.length <= 1) return;
-
-    const textContent = target.textContent || "";
-    const count = items.length.toString();
-
-    const rawTag = target.getAttribute("data-tag") || "";
-    const cleanTagName = rawTag.replace(/^#/, "");
-      
-    // CONFIGURATION A: Active token contains the '+' sign; expand layout elements and toggle label state
-    if (textContent.includes(plus)) {
-      groupDiv.classList.add('expanded');
-      
-      // Reveals all nested children nodes within this group by stripping out hidden layout rules
-      items.slice(1).forEach(item => item.classList.remove('hidden'));
-      target.textContent = `${minus}${cleanTagName}(${count})`;
-    } 
-    // CONFIGURATION B: Active token contains the '-' sign; collapse elements down to a compact single root cell
-    else {
-      groupDiv.classList.remove('expanded');
-      
-      // Conceals secondary index nodes to collapse viewport canvas density
-      items.slice(1).forEach(item => item.classList.add('hidden'));      
-      target.textContent = `${plus}${cleanTagName}(${count})`;
-    }
-
-    // Forces an immediate geometric update pass to recalibrate lines according to new layout height metrics [dan]
-    this.areaManager.requestRedraw();
-  }
-
-  override onResize() {
-    super.onResize();
-    this.areaManager.requestRedraw();
-  }
-
-  // ==========================================================================
-  // VIEW MONITORS & EVENTS REGISTRATION LAYERS
-  // ==========================================================================
   
   /**
    * Subscribes to window boundary changes or sidebar dragging.
@@ -451,23 +496,27 @@ public resumeFromBackground() {
    * Obsidian's core drag-and-drop layout pipelines from structural rendering drops [dan].
    */
   private registerWorkspaceLayoutChanges() {
-
     this.registerEvent(
       this.app.workspace.on('layout-change', () => {
-        if (this.isSuspended) return;
-        if (!this.isFullyStarted) return; // Drop updates entirely if initialization shield is active
+        if (this.isSuspended || !this.isFullyStarted) return;
 
-        if (this.layoutDebounceTimer) {
-          window.clearTimeout(this.layoutDebounceTimer);
-        }
-
-        this.layoutDebounceTimer = window.setTimeout(() => {
-          if (this.areaManager) this.areaManager.requestRedraw();
-        }, 120);
+        /** Dispatch the task directly to the localized layout debouncer */
+        this.debouncedLayout();
       })
     );
   }
 
+  private executeResolve(): void {
+    if (this.isFullyStarted) return; 
+
+    this.isFullyStarted = true; 
+    this.wasPanelHidden = false;
+      
+    const activeFile = this.getMostRecentMarkdownFile();
+    if (activeFile) {
+      this.onFileChange(activeFile);
+    }
+  }
   
   /**
    * Registers custom view identifiers within Obsidian Core to bind downstream Page Preview modifiers.
@@ -481,31 +530,33 @@ public resumeFromBackground() {
 
   /**
    * Multiview Isolation Bus: Captures central data-ready broadcasts.
-   * Evaluates pathway checks to guarantee this specific leaf instance only updates if the broadcasted 
-   * file path matches its own tracked active note context [dan]!
-   * COMPLIANT REFACTOR: Eradicates recursive onFileChange calls to permanently destroy layout loops [dan].
    */
-private setupDataReadyHandler() {
-  type GraphDataReadyBus = {
-    on(name: "graph:data-ready", callback: (cleanedPath: unknown) => void): EventRef;
-  };
+  private setupDataReadyHandler() {
+    type GraphDataReadyBus = {
+      on(name: "graph:data-ready", callback: (cleanedPath: unknown) => void): EventRef;
+    };
 
-  const workspaceBus = this.app.workspace as unknown as Partial<GraphDataReadyBus>;
+    const workspaceBus = this.app.workspace as unknown as Partial<GraphDataReadyBus>;
 
-  if (workspaceBus.on) {
-    this.registerEvent(
-      workspaceBus.on("graph:data-ready", (cleanedPath: unknown) => {
-        if (typeof cleanedPath === "string") {
-          const activeFile = this.getMostRecentMarkdownFile();
-          if (activeFile && activeFile.path === cleanedPath) {
-            this.currentFilePath = activeFile.path;
-            this.areaManager?.renderGraph();
+    if (workspaceBus.on) {
+      this.registerEvent(
+        workspaceBus.on("graph:data-ready", (cleanedPath: unknown) => {
+          if (typeof cleanedPath === "string") {
+            const activeFile = this.getMostRecentMarkdownFile();
+            if (activeFile && activeFile.path === cleanedPath) {
+              this.currentFilePath = activeFile.path;
+
+              /** 
+               * The calculation loop has finished successfully.
+               * We can now safely rebuild the DOM tree framework.
+               */
+              this.areaManager?.renderGraph();
+            }
           }
-        }
-      })
-    );
+        })
+      );
+    }
   }
-}
 
   /**
    * Implements explicit hardware-level layout safeguards optimized for touch screen iOS/Android viewports.
@@ -526,58 +577,42 @@ private setupDataReadyHandler() {
     // DISORIENTATION COMPENSATION: Recalibrates canvas coordinates on portrait/landscape screen rotation flips
     this.registerDomEvent(window, 'orientationchange', () => {
       if (this.isSuspended) return;
-      if (this.orientationDebounceTimer) window.clearTimeout(this.orientationDebounceTimer);
-      this.orientationDebounceTimer = window.setTimeout(() => {
-        this.areaManager.requestRedraw();
-      }, 140);
+      
+      /** Fire the orientation debouncer */
+      this.debouncedOrientation();
     });
   }
-	
+
   /**
    * Establishes advanced tracking mechanics guarding view visibility and layout shifts.
-   * UNIVERSAL SYNC ENGINE: Captures the exact microsecond the side pane returns from being hidden.
-   * PRODUCTION SAFEGUARD: Blocks recursive, self-triggering coldstart loop cascades cleanly [dan].
    */
   private setupVisibilitySafeguards() {
     this.visibilityObserver = new IntersectionObserver((entries) => {
       for (let entry of entries) {
-        
         if (entry.isIntersecting) {
-          
-          // ==========================================================================
-          // COLD-START ISOLATION FILTER (Knuser den automatiske evighets-loopen!):
-          // If the app is still in its coldstart indexing block, or if the view is 
-          // already open and visible on screen, drop this routine completely [dan]!
-          // This stops the observer from entering an infinite loop triggered by its 
-          // own initial renderGraph() cycles on startup [dan].
-          // ==========================================================================
           if (!this.isFullyStarted || !this.wasPanelHidden) {
             return; 
           }
 
-          // Mark the panel as actively open and locked against micro-reflows
           this.wasPanelHidden = false;
 
           const activeFile = this.getMostRecentMarkdownFile();
           if (activeFile) {
-            const harByttetNotatISkjul = activeFile.path !== this.currentFilePath;
+            const noteHasBeenSwitched = activeFile.path !== this.currentFilePath;
             
-            if (harByttetNotatISkjul && this.areaManager && this.areaManager.containerEl) {
+            if (noteHasBeenSwitched && this.areaManager && this.areaManager.containerEl) {
               this.areaManager.containerEl.className = "view-content rv-container is-calculating";
             }
 
             this.isFullyStarted = true; 
             
-            void this.onFileChange(activeFile).then(() => {
-              this.areaManager?.renderGraph(); 
-            });
+            // synchronous call (fire-and-forget): This triggers graph-calculation behind the scenes.
+            // When finished, 'graph:data-ready' will trigger renderGraph().
+            this.onFileChange(activeFile);
           }
 
-          if (this.visibilityResumeTimer) window.clearTimeout(this.visibilityResumeTimer);
-          this.visibilityResumeTimer = window.setTimeout(() => {
-            if (Platform.isMobile && this.plugin.isInMobileWarmup()) return;
-            if (this.areaManager) this.areaManager.requestRedraw();
-          }, 90); 
+          /** Trigger the visibility resume debouncer */
+          void this.debouncedVisibilityResume();
               
         } else {
           // The panel was physically closed or dragged away; activate the hidden gateway flag
@@ -611,18 +646,98 @@ private setupDataReadyHandler() {
   }
 
   /**
+   * Orchestrates the dynamic layout mutation expansion and collapse toggling when a cluster badge is clicked.
+   */
+  private onPlusMinusBtnClicked(target: HTMLElement) {
+    const plus = RV.PLUS;   
+    const minus = RV.MINUS; 
+
+    // Isolates the closest tag group cluster element container currently routing these nodes [dan]
+    const groupDiv = target.closest(`.${RV.GROUPS}`) as HTMLElement;
+    if (!groupDiv) return;
+
+    // Collects all individual visible cells inside this localized structural cluster wrapper
+    const items = Array.from(groupDiv.querySelectorAll('.item'));
+    if (items.length <= 1) return;
+
+    const textContent = target.textContent || "";
+    const count = items.length.toString();
+
+    const rawTag = target.getAttribute("data-tag") || "";
+    const cleanTagName = rawTag.replace(/^#/, "");
+      
+    if (textContent.includes(plus)) {
+      groupDiv.addClass('expanded');
+      items.slice(1).forEach(item => item.removeClass('hidden'));
+      target.textContent = `${minus}${cleanTagName}(${count})`;
+    } else {
+      groupDiv.removeClass('expanded');
+      items.slice(1).forEach(item => item.addClass('hidden'));      
+      target.textContent = `${plus}${cleanTagName}(${count})`;
+    }
+
+    /** Force an immediate geometric update pass to recalibrate lines */
+    this.areaManager.requestRedraw();
+  }
+
+  /**
+   * Comprehensive Event Hub orchestrating active hyperlink routing and native page preview bindings.
+   * Leverages explicit tracking structures to mirror native Obsidian hover popover lifecycles.
+   */
+  public setupInternalLinkHandler() {
+    // 1. PRIMARY ELEMENT SELECTION: Single left-click execution triggers navigation flow
+    this.contentEl.on("click", ".focusable-note-link", (event: MouseEvent, target: HTMLElement) => {
+      event.preventDefault();
+      const path = target.getAttribute("data-link-path");
+      if (path) void this.onInternalLinkClicked(path);
+    });
+
+    // 2. MOUSEOVER ENGINE: Caches active pointer vectors ahead of keyboard modifier flags
+    this.contentEl.on("mouseover", ".focusable-note-link", (event: MouseEvent, target: HTMLElement) => {
+      this.lastMouseEvent = event;
+      this.lastMouseTarget = target;
+
+      if (event.metaKey && !target.hasClass('is-hovered')) {
+        this.onMouseOverLink(event, target);
+        target.addClass('is-hovered');
+      }
+    });
+
+    // 3. MOUSELEAVE SAFEGUARD: Flushes history trackers when the pointer departs element boundaries
+    this.contentEl.on("mouseleave", ".focusable-note-link", (event: MouseEvent, target: HTMLElement) => {
+      target.removeClass('is-hovered');
+      this.lastMouseEvent = null;
+      this.lastMouseTarget = null;
+    });
+
+    // 4. KEYDOWN MONITOR: Intercepts active Meta keyboard strokes to invoke hot preview overlays
+    this.registerDomEvent(window, "keydown", (event: KeyboardEvent) => {
+      if (event.key === "Meta" || event.key === "Control") { // Added Control key fallback for Windows users
+        if (this.lastMouseTarget && this.lastMouseTarget.matches(':hover')) {
+          if (this.lastMouseEvent && !this.lastMouseTarget.hasClass('is-hovered')) {
+            this.onMouseOverLink(this.buildMouseEvent(), this.lastMouseTarget);
+            this.lastMouseTarget.addClass('is-hovered');
+          }
+        }
+      }
+    });
+
+    // 5. KEYUP MONITOR: Cleans up transient hover highlights instantly when modifiers release
+    this.registerDomEvent(window, "keyup", (event: KeyboardEvent) => {
+      if (event.key === "Meta" || event.key === "Control") {
+        const elements = this.contentEl.querySelectorAll(".focusable-note-link.is-hovered");
+        elements.forEach(el => el.classList.remove("is-hovered"));
+      }
+    });
+  }
+
+  /**
    * Configures the dynamic floating info satellite badge component.
-   * Tracks real-time boundary collision coordinates to fluidly push updates into layout splits.
-   * COMPLIANT REFACTOR: Re-anchored locally onto this.contentEl following the hover loop fix [dan].
    */
   private setupInfoBtnHandler() {
-    // Volatile instance tracking handling contextual popup lifecycles safely
     let activeInfoPopup: HTMLElement | null = null;
 
-    // INTERACTION HOOK: Hover entry into the target info element triggers absolute metric calculations
-    this.contentEl.on("mouseover", ".rv-info-btn", (event, target) => {
-      if (!target.instanceOf(HTMLElement)) return;
-
+    this.contentEl.on("mouseover", ".rv-info-btn", (event: MouseEvent, target: HTMLElement) => {
       if (activeInfoPopup) { 
         activeInfoPopup.remove(); 
         activeInfoPopup = null; 
@@ -642,9 +757,9 @@ private setupDataReadyHandler() {
       const btnRect = target.getBoundingClientRect();
       const padding = 10;
 
-      const vilKrasjePåHøyreSide = (btnRect.right + padding + popupWidth) > viewRect.right;
+      const collidesOnRightSide = (btnRect.right + padding + popupWidth) > viewRect.right;
 
-      if (vilKrasjePåHøyreSide) {
+      if (collidesOnRightSide) {
         activeInfoPopup.style.left = `${btnRect.left - viewRect.left - popupWidth - padding}px`;
       } else {
         activeInfoPopup.style.left = `${btnRect.right - viewRect.left + padding}px`;
@@ -655,65 +770,18 @@ private setupDataReadyHandler() {
       
     });
 
-    // INTERACTION HOOK: Hover departure sweeps instance trees to prevent application memory leaks
-    this.contentEl.on("mouseout", ".rv-info-btn", (event, target) => {
-      if (!target.instanceOf(HTMLElement)) return;
+    this.contentEl.on("mouseout", ".rv-info-btn", (event: MouseEvent, target: HTMLElement) => {
       if (activeInfoPopup) {
         activeInfoPopup.remove();
         activeInfoPopup = null;
       }
     });
-  }
 
-  // ==========================================================================
-  // HYPERLINK ANATOMY & NAVIGATION ADAPTERS
-  // ==========================================================================
-
-  public setupInternalLinkHandler() {
-    // 1. PRIMARY ELEMENT SELECTION: Single left-click execution triggers navigation flow
-    this.contentEl.on("click", ".focusable-note-link", (event, target) => {
-      event.preventDefault();
-		const path = target.getAttribute("data-link-path");
-		if (path) void this.onInternalLinkClicked(path);
-    });
-
-    // 2. MOUSEOVER ENGINE: Caches active pointer vectors ahead of keyboard modifier flags
-    this.contentEl.on("mouseover", ".focusable-note-link", (event: MouseEvent, target: HTMLElement) => {
-      this.lastMouseEvent = event;
-      this.lastMouseTarget = target;
-
-      // Fires core Page Preview instantly if the user holds Meta keys preceding pointer boundaries entry
-      if (event.metaKey && !target.hasClass('is-hovered')) {
-        this.onMouseOverLink(event, target);
-        target.addClass('is-hovered');
-      }
-    });
-
-    // 3. MOUSELEAVE SAFEGUARD: Flushes history trackers when the pointer departs element boundaries
-    this.contentEl.on("mouseleave", ".focusable-note-link", (event: MouseEvent, target: HTMLElement) => {
-      target.removeClass('is-hovered');
-      this.lastMouseEvent = null;
-      this.lastMouseTarget = null;
-    });
-
-    // 4. KEYDOWN MONITOR: Intercepts active Meta keyboard strokes to invoke hot preview overlays
-    this.registerDomEvent(window, "keydown", (event: KeyboardEvent) => {
-      if (event.key === "Meta") {
-        // Validates if the cursor is physically floating inside current node envelopes using pseudo selectors
-        if (this.lastMouseTarget && this.lastMouseTarget.matches(':hover')) {
-          if (this.lastMouseEvent && !this.lastMouseTarget.hasClass('is-hovered')) {
-            this.onMouseOverLink(this.buildMouseEvent(), this.lastMouseTarget);
-            this.lastMouseTarget.addClass('is-hovered');
-          }
-        }
-      }
-    });
-
-    // 5. KEYUP MONITOR: Cleans up transient hover highlights instantly when modifiers release
-    this.registerDomEvent(window, "keyup", (event: KeyboardEvent) => {
-      if (event.key === "Meta") {
-        const elements = document.querySelectorAll(".focusable-note-link.is-hovered");
-        elements.forEach(el => el.removeClass("is-hovered"));
+    /** Core lifecycle anchor: automatically flushes the satellite block during view close cycles */
+    this.register(() => {
+      if (activeInfoPopup) {
+        activeInfoPopup.remove();
+        activeInfoPopup = null;
       }
     });
   }
@@ -765,9 +833,14 @@ private setupDataReadyHandler() {
       return; 
     }
 
-    // Executes deep navigation pipelines when a fresh node block layout switch occurs
+    /** 1. Executes deep navigation pipelines to open the file in the split editor pane */
     await this.openLinkInAdjacentPane(internalLink);
+
+    /** 
+     * 2. Synchronous fire-and-forget: triggers the NetworkGraph calculation debounce engine.
+     * Re-rendering is safely decoupled and deferred until the background calculation 
+     * finishes and broadcasts the global 'graph:data-ready' event.
+     */
     await this.onFileChange(selectedFile);
-    this.areaManager.renderGraph();
   }
 }

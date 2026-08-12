@@ -1,6 +1,6 @@
 import { NetworkGraph } from "./NetworkGraph.js";
 import { Node } from "./Node.js";
-import { Platform, Point } from "obsidian";
+import { debounce, Debouncer, Platform, Point } from "obsidian";
 import { DrawingUtils } from "./DrawingUtils.js";
 import { Gate } from "./Gate.js";
 import { RV } from "./constants.js";
@@ -25,6 +25,8 @@ export class AreaManager {
   private animationFrameId: number | null = null;
   private redrawQueued = false;
 
+  private debouncedRender: Debouncer<[], void>;
+
   constructor(
     graph: NetworkGraph,
     parentEl: HTMLElement,
@@ -33,44 +35,24 @@ export class AreaManager {
     this.graph = graph;
     this.containerEl = parentEl;
     this.plugin = plugin;
+
+    /**
+     * Debounce the heavy DOM reconstruction layer.
+     * Prevents rapid successive data-ready events from causing UI flickering.
+     * 40ms is a tight window that shields the DOM while remaining perceptually instant.
+     */
+    this.debouncedRender = debounce(
+      this.executeRenderGraph.bind(this),
+      40,
+      true
+    );
   }
 
   initiate() {
     this.containerEl.addClass(RV.CONTAINER);
   }
 
-  /**
-   * Schedules a fresh redraw synchronized with the hardware screen refresh rate (60Hz).
-   * Automatically triggered by scroll vents, window resizing, and following initial DOM injection.
-   */
-  public requestRedraw() {
-    if (this.redrawQueued) return;
-    this.redrawQueued = true;
-
-    if (this.animationFrameId !== null) {
-      cancelAnimationFrame(this.animationFrameId);
-    }
-
-    // 2x rAF: first paint settles layout, second reads geometry and draws lines
-    this.animationFrameId = window.requestAnimationFrame(() => {
-      this.animationFrameId = window.requestAnimationFrame(() => {
-        this.redrawQueued = false;
-        this.animationFrameId = null;
-
-        if (!this.containerEl || !this.containerEl.isConnected) return;
-        const rect = this.containerEl.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return;
-
-        this.yieldIfLeftTall();
-        this.yieldIfRightTall();
-
-        if (this.graph?.centerNote) {
-          this.drawAllGraphLines();
-        }
-      });
-    });
-  }
-
+  // #region PRIVATE HELPER FUNCTIONS
   private setupScrollEventListeners() {
     // Collects all layout areas configured with layout-level scrolling
     const scrollableAreas = [this.upper, this.lower, this.left, this.right];
@@ -97,7 +79,7 @@ export class AreaManager {
    * Executed post graph data updates but preceding path vector rendering.
    * Forces upper area layout constraints to yield the top-left quadrant to the left area.
    */
-  yieldIfLeftTall() {
+  private yieldIfLeftTall() {
     const vc = this.containerEl;
     const descr = '.rv-area.left';
     const leftWrapper = vc.querySelector(descr) as HTMLElement;
@@ -118,7 +100,7 @@ export class AreaManager {
    * Evaluates layout height and updates CSS dataset flags (data-right-tall).
    * Operates symmetrically to yield the bottom-right quadrant to the right gate area.
    */
-  yieldIfRightTall() {
+  private yieldIfRightTall() {
     const vc = this.containerEl;
     const descr = '.rv-area.right';
     const rightWrapper = vc.querySelector(descr) as HTMLElement;
@@ -131,7 +113,7 @@ export class AreaManager {
     const newValue = isRightTall ? "true" : "false";
 
     if (currentValue !== newValue) {
-      vc.setAttribute('data-right-tall', newValue);
+      vc.setAttribute(RV.RIGHT_TALL, newValue);
     }
   }
 
@@ -168,16 +150,111 @@ export class AreaManager {
   }
 
   /**
+   * Resolves display color from node link text (supercharged-compatible).
+   */
+  private getLandingNodeColor(note: Node, colorful: boolean): string | null {
+    if (!colorful) return null;
+    const linkEl = note.div?.querySelector(".focusable-note-link") as HTMLElement | null;
+    if (!linkEl) return null;
+    const c = getComputedStyle(linkEl).color;
+    return c && c.trim().length > 0 ? c : null;
+  }
+
+  /**
+   * Applies/removes gate color override with minimal DOM writes.
+   */
+  private applyGateColor(gate: Gate, color: string | null) {
+    const circle = gate.svg?.querySelector("circle") as SVGCircleElement | null;
+    if (!circle) return;
+
+    if (!color) {
+      if (circle.style.fill) circle.style.removeProperty("fill");
+      if (circle.style.stroke) circle.style.removeProperty("stroke");
+      return;
+    }
+
+    if (circle.style.fill !== color) circle.style.fill = color;
+    if (circle.style.stroke !== color) circle.style.stroke = color;
+  }
+
+// #endregion
+
+
+  // #region PUBLIC FUNCTIONS
+  /**
+   * Schedules a fresh redraw synchronized with the hardware screen refresh rate (60Hz).
+   * Automatically triggered by scroll vents, window resizing, and following initial DOM injection.
+   */
+  public requestRedraw() {
+    if (this.redrawQueued) return;
+    this.redrawQueued = true;
+
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+    }
+
+    // 2x rAF: first paint settles layout, second reads geometry and draws lines
+    this.animationFrameId = window.requestAnimationFrame(() => {
+      this.animationFrameId = window.requestAnimationFrame(() => {
+        this.redrawQueued = false;
+        this.animationFrameId = null;
+
+        if (!this.containerEl || !this.containerEl.isConnected) return;
+        const rect = this.containerEl.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+
+        this.yieldIfLeftTall();
+        this.yieldIfRightTall();
+
+        if (this.graph?.centerNote) {
+          this.drawAllGraphLines();
+        }
+      });
+    });
+  }
+
+  /**
+   * Public entry point to build or rebuild the visual graph interface.
+   * Safely throttles consecutive rendering storms via Obsidian's debounce engine.
+   */
+  public renderGraph(): void {
+    if (this.plugin.isAppPaused()) return;
+    this.debouncedRender();
+  }
+
+  /**
+   * Safe lifecycle teardown to abort pending rendering pipelines on view destruction.
+   */
+  public cancelPendingRedraw() {
+    this.debouncedRender.cancel(); // Cleans up the Obsidian timer reference
+    
+    if (this.animationFrameId !== null) {
+      cancelAnimationFrame(this.animationFrameId);
+      this.animationFrameId = null;
+    }
+    this.redrawQueued = false;
+  }
+  // #endregion
+
+
+  // #region MAIN FUNCTIONS
+  /**
+   * The actual, isolated DOM injection and layout compilation core.
+   * Runs safely within the debounced execution window.
    * Renders the comprehensive network graph across all quadrants symmetrically.
    * Leverages a hardware-accelerated rendering shield class ("is-calculating") to isolate the DOM tree.
    * Prevents layout-level reflows, column-squeezing, and flickering cycles while element blocks are generated.
    */
-  public renderGraph() {
+  private executeRenderGraph(): void {  
     const centerNote = this.graph.centerNote;
     if (!centerNote) return;
 
     const graph = this.graph;
     const mainContainer = this.containerEl;
+
+    /** Safety boundary: ensure container is still mounted in the Obsidian workspace */
+    if (!mainContainer || !mainContainer.isConnected) return;
+    
     mainContainer.empty();
     
     // ==========================================================================
@@ -248,14 +325,6 @@ export class AreaManager {
     window.requestAnimationFrame(() => {
       mainContainer.classList.remove('is-calculating');
     });
-  }
-
-  public cancelPendingRedraw() {
-    if (this.animationFrameId !== null) {
-      cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = null;
-    }
-    this.redrawQueued = false;
   }
 
   private renderQuadrant(
@@ -341,38 +410,10 @@ export class AreaManager {
   }
 
   /**
-   * Resolves display color from node link text (supercharged-compatible).
-   */
-  private getLandingNodeColor(note: Node, colorful: boolean): string | null {
-    if (!colorful) return null;
-    const linkEl = note.div?.querySelector(".focusable-note-link") as HTMLElement | null;
-    if (!linkEl) return null;
-    const c = getComputedStyle(linkEl).color;
-    return c && c.trim().length > 0 ? c : null;
-  }
-
-  /**
-   * Applies/removes gate color override with minimal DOM writes.
-   */
-  private applyGateColor(gate: Gate, color: string | null) {
-    const circle = gate.svg?.querySelector("circle") as SVGCircleElement | null;
-    if (!circle) return;
-
-    if (!color) {
-      if (circle.style.fill) circle.style.removeProperty("fill");
-      if (circle.style.stroke) circle.style.removeProperty("stroke");
-      return;
-    }
-
-    if (circle.style.fill !== color) circle.style.fill = color;
-    if (circle.style.stroke !== color) circle.style.stroke = color;
-  }
-
-  /**
     * Evaluates layout geography and draws vector paths across all active nodes.
     * Leverages localized structural memory caches to execute path tracking in O(1) velocity.
     */
-  drawAllGraphLines() {
+  private drawAllGraphLines() {
     const centerNote = this.graph.centerNote;
     if (!centerNote) return;
     
@@ -544,4 +585,6 @@ export class AreaManager {
 
     return button;
   }
+  // #endregion
+
 }

@@ -12,7 +12,6 @@ export default class MyBrainPlugin extends Plugin {
   private resolvedEventRef: EventRef | undefined;
   private appPaused = false;
   private resumedAt = 0;
-  private resumeInFlight = false;
   private mobileWarmupUntil = 0;
 
   public isAppPaused(): boolean {
@@ -63,138 +62,82 @@ export default class MyBrainPlugin extends Plugin {
 
   /**
    * Binds global application lifecycle events to synchronize memory caches with vault mutations.
-   * COMPLIANT REFACTOR: Removes 'async' from core event signatures to fulfill strict void criteria.
-   * Leverages immediately invoked asynchronous execution envelopes to isolate data mutations safely [dan].
+   * Leverages the centralized, debounced NetworkGraph architecture to avoid complex view-state pooling.
    */
   private registerGlobalEvents() {
-    // ------------------------------------------------------------------------
     // A. FILE OPEN INTERCEPTOR
-    // ------------------------------------------------------------------------
     this.registerEvent(
       this.app.workspace.on('file-open', (file: TFile | null) => {
-        if (this.appPaused) return;
-        if (!file) return;
+        if (this.appPaused || !file) return;
 
         this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
           if (leaf.view instanceof MyBrainView) {
-            const myView = leaf.view;
-            if (myView.isRenamingShield) return;
-            void myView.onFileChange(file);
+
+            // Direct synchronous trigger: networkGraph handles its own internal timing.
+            leaf.view.onFileChange(file);
           }
         });
       })
     );
 
-    // ------------------------------------------------------------------------
     // B. VAULT RENAME INTERCEPTOR
-    // ------------------------------------------------------------------------
     this.registerEvent(
       this.app.vault.on('rename', (file: TAbstractFile, oldPath: string) => {
-        if (this.appPaused) return;
-        if (!(file instanceof TFile)) return;
+        if (this.appPaused || !(file instanceof TFile)) return;
 
-        // Immediate database cache purge to kill stale filename text-strings in memory slots
-        if (this.networkGraph && this.networkGraph.noteCache) {
+        // 1. Immediate data layer cache purge to clear stale path strings
+        if (this.networkGraph?.noteCache) {
           this.networkGraph.noteCache.delete(oldPath);
           this.networkGraph.noteCache.delete(file.path);
         }
 
-        // Execute background database memory path mapping updates safely
+        // 2. Execute background database memory path mapping updates.
         this.networkGraph.handleFileRename(file, oldPath);
 
-        void (async () => {
-          const leaves = this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE);
+        // 3. Update view tracking states and request a background graph recalculation
+        const leaves = this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE);
+        for (const leaf of leaves) {
+          if (leaf.view instanceof MyBrainView) {
+            const myView = leaf.view;
+            if (!myView.isFullyStarted) continue;
 
-          for (const leaf of leaves) {
-            if (leaf.view instanceof MyBrainView) {
-              const myView = leaf.view;
-              if (!myView.isFullyStarted) continue;
+            const wasCurrentlyVisibleFileRenamed = oldPath === myView.currentFilePath;
+            if (wasCurrentlyVisibleFileRenamed) {
+              myView.currentFilePath = file.path;
 
-              const wasCurrentlyVisibleFileRenamed = oldPath === myView.currentFilePath;
-              if (wasCurrentlyVisibleFileRenamed) {
-                myView.isRenamingShield = true;
-                myView.currentFilePath = file.path;
-
-                const internalCacheBus = this.app.metadataCache;
-
-                const onCacheResolvedOnce = () => {
-                  if (myView.renameDebounceTimer) window.clearTimeout(myView.renameDebounceTimer);
-
-                  myView.renameDebounceTimer = window.setTimeout(() => {
-                    window.requestAnimationFrame(() => {
-                      void (async () => {
-                        if (this.appPaused) return;
-
-                        if (this.networkGraph?.noteCache) {
-                          this.networkGraph.noteCache.delete(file.path);
-                        }
-
-                        const freshFileInstance = this.app.vault.getAbstractFileByPath(file.path);
-                        const activeNow = this.app.workspace.getActiveFile();
-                        if (!activeNow || activeNow.path !== file.path) {
-                          myView.isRenamingShield = false;
-                          return;
-                        }
-
-                        if (freshFileInstance instanceof TFile && this.networkGraph) {
-                          await this.networkGraph.update(freshFileInstance);
-                        }
-
-                        myView.areaManager?.renderGraph();
-                        myView.isRenamingShield = false;
-                      })();
-                    });
-                  }, 0);
-
-                  internalCacheBus.off('resolved', onCacheResolvedOnce);
-                };
-
-                internalCacheBus.on('resolved', onCacheResolvedOnce);
-              }
+              // Synchronously feed the new file instance into the graph engine.
+              // NetworkGraph's internal debouncer aggregates the changes and emits 
+              // 'graph:data-ready' when data coordinates flatten out safely.
+              this.networkGraph.update(file);
             }
           }
-        })();
+        }
       })
     );
 
-    // ------------------------------------------------------------------------
     // C. METADATA RESOLVE INTERCEPTOR
-    // ------------------------------------------------------------------------
     this.registerEvent(
       this.app.metadataCache.on('resolve', (file: TFile) => {
-        if (this.appPaused) return;
-        if (this.isInResumeCooldown(1200)) return;
-        if (this.isInMobileWarmup()) return;
-
+        if (this.appPaused || this.isInResumeCooldown(1200) || this.isInMobileWarmup()) return;
 
         void this.networkGraph.handleFileResolve(file).then((_dataWasUpdated) => {
           this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach((leaf) => {
             if (leaf.view instanceof MyBrainView) {
               const myView = leaf.view;
               if (!myView.isFullyStarted) return;
-              if (myView.isRenamingShield) return;
-
+              
               const isEditingCurrentlyVisibleFile = file.path === myView.currentFilePath;
-
               if (isEditingCurrentlyVisibleFile) {
-                if (myView.resolveDebounceTimer) {
-                  window.clearTimeout(myView.resolveDebounceTimer);
+
+                /** Clear out memory cache mapping for the modified file instance */
+                if (this.networkGraph?.noteCache) {
+                  this.networkGraph.noteCache.delete(file.path);
                 }
 
-                myView.resolveDebounceTimer = window.setTimeout(() => {
-                  void (async () => {
-                    if (isEditingCurrentlyVisibleFile && this.networkGraph?.noteCache) {
-                      this.networkGraph.noteCache.delete(file.path);
-                    }
+                const activeNow = this.app.workspace.getActiveFile();
+                if (!activeNow || activeNow.path !== myView.currentFilePath) return;
 
-                    const activeNow = this.app.workspace.getActiveFile();
-                    if (!activeNow) return;
-                    if (activeNow.path !== myView.currentFilePath) return;
-
-                    await this.networkGraph.update(activeNow);
-                    myView.areaManager?.renderGraph();
-                  })();
-                }, 300);
+                this.networkGraph.update(activeNow);
               }
             }
           });
@@ -203,7 +146,9 @@ export default class MyBrainPlugin extends Plugin {
     );
   }
 
-  // Only document visibility + Obsidian views
+  /**
+   * Encapsulates application hardware suspend and visibility state transitions.
+   */  
   private registerAppLifecycleEvents() {
     const suspendAllViews = () => {
       this.appPaused = true;
@@ -215,18 +160,17 @@ export default class MyBrainPlugin extends Plugin {
     };
 
     const resumeAllViews = () => {
-      if (this.resumeInFlight) return;
-      this.resumeInFlight = true;
+      // 1. Sjekk om det er mindre enn 300ms siden forrige resume ved å bruke tidsstempel
+      if (Date.now() - this.resumedAt < 300) return;
+      
       this.appPaused = false;
-      this.resumedAt = Date.now();
-      this.markResumedNow();
+      this.markResumedNow(); // Dette oppdaterer this.resumedAt til Date.now() med en gang!
 
       this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
         if (leaf.view instanceof MyBrainView) {
           leaf.view.resumeFromBackground();
         }
       });
-      window.setTimeout(() => { this.resumeInFlight = false; }, 300);
     };
 
     this.registerDomEvent(document, 'visibilitychange', () => {
@@ -293,8 +237,6 @@ export default class MyBrainPlugin extends Plugin {
       new Notice("Could not create view leaf");
     }
   }
-
-
   
   onunload() {
     this.appPaused = true;
@@ -303,6 +245,7 @@ export default class MyBrainPlugin extends Plugin {
         leaf.view.suspendForBackground();
       }
     });
+    this.networkGraph.cancel(); 
     this.unregisterResolvedEvent();
   }
 
