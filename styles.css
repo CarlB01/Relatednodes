@@ -1,7 +1,3 @@
-/**
- * GLOBAL BRAND VARIABLES
- * Declares native design tokens mapped seamlessly onto Obsidian's active theme layers.
- */
 :root {
   --rv-line: var(--text-muted, #888888); 
   --rv-line-width: 0.04em; 
@@ -14,13 +10,13 @@
 .workspace-leaf .workspace-leaf-content .view-content.rv-container {
   container-name: main;
   display: grid;
-  grid-template-columns: clamp(4em, 33%, 40em) clamp(4em, 33%, 40em) clamp(4em, 33%, 40em);
+  grid-template-columns: clamp(4em, 33%, 40em) clamp(6em, 33%, 40em) clamp(4em, 33%, 40em);
   
   /* ==========================================================================
-     MAGNETIC CLUSTER ROW DESIGN (Tvinger klyngene inn mot senter!)
-     Rows 1 and 5 act as flexible shock absorbers (1fr) that swallow all empty space,
-     symmetrically compressing rows 2, 3, and 4 together tightly in the center [dan]!
-     ========================================================================== */
+  1. MAGNETIC CLUSTER ROW DESIGN (Forces the clusters towards center)
+  Rows 1 and 5 act as flexible shock absorbers (1fr) that swallow all empty space,
+  symmetrically compressing rows 2, 3, and 4 together tightly in the center [dan]!
+  ========================================================================== */
   grid-template-rows: 1fr auto auto auto 1fr;
   
   position: absolute;
@@ -29,179 +25,85 @@
   width: 100%;
   height: 100%;
   background-color: transparent; 
-  overflow-x: hidden;
-  overflow-y: hidden;
+  overflow: hidden;
   box-sizing: border-box;
+  container-type: inline-size;
   font-size: calc(var(--font-text-size, 11px) * 0.80);
-
-  /* --------------------------------================================--------
-     1. CONTAINER INTERACTION SUB-HOOKS
-     ------------------------------------------------------------------------ */
-
-  .focusable-note-link::before,
-  .focusable-note-link::after {
-    font-size: 0.6em; 
-    transform: translateY(-15%);
-    vertical-align: middle; 
-    line-height: 1;
-    display: inline-block;
-    white-space: nowrap;
-  }
-
-  .rv-link-wrapper {
-    display: inline-flex;
-    align-items: center;
-    position: relative;
-    margin: 0.15em 0.3em; 
-    padding: 0.15em 0.45em;
-    border-radius: 0.3em;
-    white-space: nowrap;
-  }
-
-  .rv-scroll-pane {
-    max-height: 22em; 
-    overflow-y: auto;
-    overflow-x: hidden;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    scroll-behavior: smooth;
-    scrollbar-width: thin;
-  }
 
   /* --------------------------------================================--------
      2. AREAS & QUADRANTS INFRASTRUCTURE (The Compressed Symmetrical Grid)
      ------------------------------------------------------------------------ */
 
-  /**
-   * UPPER QUADRANT (Row 2: Pulls parents tight down against center)
-   */
+  rv-area {
+    overflow: visible;
+    justify-self: stretch;
+  }
+
+  /* UPPER QUADRANT (Row 2: Pulls parents tight down against center)*/
   .rv-area.upper {
     grid-column: 2;
     grid-row: 2; /* Compressed tightly into the upper slot above origo [dan] */
     margin-bottom: 0.3em; 
-    width: 100%;
-    anchor-name: --upper-area; 
     align-self: end;
-    overflow: visible;
   }
 
-  /**
-   * CENTER & LATERAL AREAS (Row 3: Absolute layout origin axis)
-   */
+  /* CENTER & LATERAL AREAS (Row 3: Absolute layout origin axis) */
   .rv-area.left, 
   .rv-area.right,
   .rv-area.center {
-    grid-row: 3; /* Unified flush on the central axis row [dan] */
-    justify-self: stretch;
-    align-self: center;
-    display: flex;
-    flex-direction: column;
-    overflow: visible; 
+    grid-row: 3; 
+    align-self: center; /*vertically */
+  }
+
+  .rv-area.left {
+    grid-column: 1;
+    margin-right: 0.3em;
+  } 
+  
+  .rv-area.right {
+    grid-column: 3;
+    margin-left: 0.3em;
   }
 
   .rv-area.center {
     grid-column: 2;
-    anchor-name: --center-area; 
-    min-width: 10cqw;
-    align-self: center;
-    justify-self: center;
-    width: max-content;
-    max-width: 100%;
-    overflow-x: hidden;
-    overflow-y: visible;
-    padding: clamp(0.2em, 3cqh, 2em) clamp(0.2em, 1cqw, 1.2em);
-  }
- 
-  .rv-area.left {
-    grid-column: 1;
-    margin-right: 0.3em;
-    min-width: 0;
-    overflow-x: hidden;
-    overflow-y: visible;
-  } 
-
-  .rv-area.right {
-    grid-column: 3;
-    margin-left: 0.3em;
-    min-width: 0;
-    overflow-x: hidden;
-    overflow-y: visible;
+    justify-self: center; /* Horizontally */
+    padding: clamp(0.2em, 3cqh, 1.2em) clamp(0.2em, 1cqw, 1.2em);
   }
 
-  /**
-   * LOWER QUADRANT (Row 4: Pulls children tight up against center)
-   */
+  /* LOWER QUADRANT (Row 4: Pulls children tight up against center) */
   .rv-area.lower {
     grid-column: 1 / span 3; 
     grid-row: 4; /* Compressed tightly into the lower slot below origo [dan] */
     margin-top: 0.3em;
     margin-left: 0.35em; 
-    width: 100%;  
     align-self: start; 
-    display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    overflow: visible;
   }
 
   /* ==========================================================================
     3. BOX MODELS & VIEWPORT WRAPPERS (Scroll engines and multi-column constraints)
     ========================================================================== */
 
-  /**
-   * Scroll engine wrapper block.
-   * Regulates multi-layered touch scrolling physics across target quadrant nodes.
-   * COMPLIANT REFACTOR: All legacy !important tokens safely purged via core hierarchy [dan].
-   */
+  /* Scroll engine wrapper block */
   .rv-collection-wrapper {
     display: flex;
     flex-direction: column;
     width: 100%;
-    max-width: 100%;
     box-sizing: border-box;
     overflow-y: auto; 
     overflow-x: hidden; 
     -webkit-overflow-scrolling: touch; /* Preserves native momentum scrolling on iOS */
     touch-action: pan-y;
   }
-
-  /* Structural override tailored specifically to the lower children cluster framework */
-  .rv-area.lower .rv-collection-wrapper {
-    height: clamp(0.75em, 100%, 55vh);
-    max-height: 52vh; 
-    align-items: center;
-    justify-content: flex-start;
-  }
   
-  /* iOS FIX: Replaced parent-selector logic with explicit class-based state marking */
-  .rv-area.lower .rv-collection-wrapper .rv-columns-wrapper.rv-has-2-3-groups {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 0.6em; /* Converted from pixels to relative em to secure seamless fluid zooming [dan] */
-    columns: none;
-    width: 100%;
-    height: auto;
-    min-height: min-content; 
-  }
-
   /* Specific vertical heights constraints preserving canvas breathing space across screens */
-  .rv-area.upper .rv-collection-wrapper {
-    max-height: 22vh; 
-  }
-
-  .rv-area.left .rv-collection-wrapper {
-    max-height: 35vh; 
-  }
-
-  .rv-area.right .rv-collection-wrapper {
-    max-height: 75vh; /* Exploits maximum horizontal canvas density on desktop frames */
-  }
-
+  .rv-area.upper .rv-collection-wrapper { max-height: 22vh; }
+  .rv-area.left .rv-collection-wrapper { max-height: 35vh; }
+  .rv-area.right .rv-collection-wrapper { max-height: 75vh; } /* Exploits maximum horizontal canvas density on desktop frames */
+  .rv-area.lower .rv-collection-wrapper { max-height: 70vh; }
+  
   /* ==========================================================================
      4. COLLECTIONS & COLUMNS (Multi-column content routing engines)
     ========================================================================== */
@@ -220,36 +122,22 @@
     box-sizing: border-box;
   }
 
-  /**
-   * Hardware-accelerated multi-column content router.
-   * COMPLIANT REFACTOR: We chain the .rv-area quadrant class into the selector.
-   * This guarantees that the column layout out-ranks any theme-level flex constraints [dan]!
-   */
-  .rv-area .rv-columns-wrapper, 
-  .rv-columns-wrapper.rv-single-item-group,
-  .rv-columns-wrapper.rv-2-6-items-group {
+  .rv-columns-wrapper {
+
     display: block;
-    columns:clamp(6em, 10vw, 9em);
-    column-gap: 0.5em; 
+    columns: clamp(6em, 20cqw, 12em);
+    column-gap: 0.3em; 
     width: 100%;
-    max-width: 100%;
     height: fit-content;
     overflow-x: hidden;
     overflow-y: visible;
     box-sizing: border-box;
-    margin: 0 auto;
+    padding-top: 0.5em; /* in case +/- button ends up in top row */
   }
-  .rv-area.center .rv-columns-wrapper {
-    padding-right: 1.4em; /* enough space for the info btn */
-  }
-
-  .rv-columns-wrapper.rv-single-item-group {
-    column-count: 1;
-  }
+  .rv-area.center .rv-columns-wrapper { padding-right: 1.4em; } /* enough space for the info btn */
   
-  .rv-columns-wrapper.rv-2-6-items-group {
-    column-count: 2;
-  }
+  .rv-columns-wrapper.rv-single-item-group { column-count: 1; }
+  .rv-columns-wrapper.rv-2-6-items-group { column-count: 2; }
 
   /* ==========================================================================
      5. ADAPTIVE RESPONSIVE FRAME GRID-CHECKS
@@ -287,9 +175,6 @@
     overflow: visible; 
     
     padding: 0.3em;
-    width: 100%;
-    min-width: 0;
-    max-width: 100%; 
     box-sizing: border-box;
 
     /* Strict fragmentation shields forbidding column breakage mid-cell */
@@ -367,8 +252,18 @@
     /* Theme adaptive text mask framework: */
     backdrop-filter: blur(0px); 
     -webkit-backdrop-filter: blur(0px);
-    background-color: color-mix(in srgb, var(--background-secondary), transparent 30%);
+    background-color: color-mix(in srgb, var(--background-secondary), transparent 40%);
     transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
+  }
+
+  .focusable-note-link::before,
+  .focusable-note-link::after {
+    font-size: 0.7em; 
+    transform: translateY(-15%);
+    vertical-align: middle; 
+    line-height: 1;
+    display: inline-block;
+    white-space: nowrap;
   }
 
   /* Forces text-spans to break row blocks inside frames smoothly */

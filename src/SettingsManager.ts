@@ -15,8 +15,8 @@ export class SettingsManager {
   public childProperties: string = 'down, children, members';
   public childTags: string = '#text, #coffee';
   public friendProperties: string = 'left, partner, friends';
-  public friendTags: string = '';
-  public ignoreTags: string = '#excalidraw';
+  public friendTags: string = '#friend';
+  public ignoreTags: string = '#private';
   public ignoreNameFragments: string = '@';
   public displayAliases: boolean = false;
   public groupsCollapsed: boolean = false;
