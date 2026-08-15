@@ -79,6 +79,8 @@
     align-self: start; 
     align-items: center;
     justify-content: flex-start;
+    min-height: 0;
+
   }
 
   /* ==========================================================================
@@ -90,6 +92,7 @@
     display: flex;
     flex-direction: column;
     width: 100%;
+    min-height: 0;
     box-sizing: border-box;
     overflow-y: auto; 
     overflow-x: hidden; 
@@ -251,7 +254,7 @@
     /* Theme adaptive text mask framework: */
     backdrop-filter: blur(0px); 
     -webkit-backdrop-filter: blur(0px);
-    background-color: color-mix(in srgb, var(--background-secondary), transparent 40%);
+    background-color: color-mix(in srgb, var(--background-secondary), transparent 35%);
     transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
   }
 
@@ -601,9 +604,8 @@
 /* Mobile framework override to prevent layout fragmentation on iOS devices */
 .is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container,
 .is-tablet .workspace-leaf .workspace-leaf-content .view-content.rv-container {
-  height: calc(100% - 0.75em);
-  box-sizing: border-box;
-  padding-bottom: 0;
+  height: 100%;
+  padding-bottom: 0;   /* viktig */
   overflow-x: hidden;
   overflow-y: hidden;
 }
@@ -614,6 +616,12 @@
    ========================================================================== */
 .is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .rv-collection-wrapper {
   -webkit-overflow-scrolling: auto; /* disable momentum in nested scrollers on iPhone */
+}
+
+/* Safe-area kun der problemet er */
+.is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .rv-area.lower .rv-collection-wrapper {
+  max-height: 50vh;
+  padding-bottom: max(0.5em, env(safe-area-inset-bottom));
 }
 
 .is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .focusable-note-link {
@@ -628,6 +636,7 @@
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
+
 .is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .item:hover .rv-gate-svg.is-connected circle {
   filter: none;
 }
