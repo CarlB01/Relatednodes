@@ -63,11 +63,7 @@ export class NetworkGraph {
     this.settings = settingsManager;
     this.app = plugin.app; 
 
-    this.debouncedUpdate = debounce(
-      this.executeUpdate.bind(this), 
-      250, 
-      true
-    );
+    this.debouncedUpdate = debounce(this.executeUpdate.bind(this), 120, true);
   }
 
   public cancel(): void {
@@ -85,8 +81,8 @@ export class NetworkGraph {
   }
 
   private async waitUntilCacheStable(file: TFile): Promise<void> {
-    const maxMs = 3000;
-    const stepMs = 60;
+    const maxMs = 1200;
+    const stepMs = 35;
     const start = Date.now();
 
     let prevCount = -1;
@@ -210,9 +206,10 @@ export class NetworkGraph {
         }
       }
 
-      if (++preloadStep % 40 === 0) 
+      if (++preloadStep % 40 === 0) {
         await this.yieldToUI();
         if (tokenAtStart !== this.updateRequestToken) return;
+      }
     }
 
     this.determineFirstDegreeNotes(this.centerNote);

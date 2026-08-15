@@ -55,11 +55,11 @@ export class MyBrainView extends ItemView implements HoverParent {
      * Intervals are micro-optimized based on structural execution weight.
      * Binding execution context ensures strict variable access within implementation targets.
      */
-    this.debouncedLayout = debounce(this.executeLayoutRefresh.bind(this), 100, true);
-    this.debouncedOrientation = debounce(this.executeOrientationChange.bind(this), 150, true);
+    this.debouncedLayout = debounce(this.executeLayoutRefresh.bind(this), 60, true);
+    this.debouncedOrientation = debounce(this.executeOrientationChange.bind(this), 100, true);
     this.debouncedActiveLeaf = debounce(this.executeActiveLeafChange.bind(this), 50, true);
-    this.debouncedVisibilityResume = debounce(this.executeVisibilityResume.bind(this), 250, true);
-    this.debouncedResolve = debounce(this.executeResolve.bind(this), 200, true);
+    this.debouncedVisibilityResume = debounce(this.executeVisibilityResume.bind(this), 120, true);
+    this.debouncedResolve = debounce(this.executeResolve.bind(this), 120, true);
   }
   
   override onResize() {

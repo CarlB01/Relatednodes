@@ -27,6 +27,7 @@ export class AreaManager {
 
   private debouncedRender: Debouncer<[], void>;
   private activeInfoPopup: HTMLElement | null = null;
+  private plusMinusBound = false;
 
   constructor(
     graph: NetworkGraph,
@@ -42,15 +43,13 @@ export class AreaManager {
      * Prevents rapid successive data-ready events from causing UI flickering.
      * 40ms is a tight window that shields the DOM while remaining perceptually instant.
      */
-    this.debouncedRender = debounce(
-      this.executeRenderGraph.bind(this),
-      40,
-      true
-    );
+    this.debouncedRender = debounce(this.executeRenderGraph.bind(this), 40, true );
   }
 
   initiate() {
     this.containerEl.addClass(RV.CONTAINER);
+    this.setupPlusMinusBtnHandler(); // bind once
+    this.setupInfoBtnHandler(); 
   }
 
   // #region PUBLIC METHODS
@@ -201,8 +200,6 @@ export class AreaManager {
 
     // Binds event listeners directly to the initialized layout container frames
     this.setupScrollEventListeners();
-    this.setupInfoBtnHandler();
-    this.setupPlusMinusBtnHandler();
     
     // Evaluate geometric boundary heights exactly once while layout metrics are hidden
     this.yieldIfLeftTall();
@@ -585,7 +582,7 @@ export class AreaManager {
     });
 
     /** Core lifecycle anchor: automatically flushes the satellite block during view close cycles */
-    this.plugin.register(() => { this.cleanupPopup });
+    this.plugin.register(() => { this.cleanupPopup() });
   }
   
   /**
@@ -642,7 +639,10 @@ export class AreaManager {
    * This is called during the DOM build phase in renderGraph / executeRenderGraph.
    */
   private setupPlusMinusBtnHandler() {
-    this.containerEl.on("click", `.${RV.PLUS_MINUS_BTN}`, (event, target) => {
+    if (this.plusMinusBound) return;
+    this.plusMinusBound = true;
+
+    this.containerEl.on("click", `.${RV.PLUS_MINUS_BTN}`, (event: MouseEvent, target: HTMLElement) => {
       event.preventDefault();
       this.onPlusMinusBtnClicked(target);
     });
