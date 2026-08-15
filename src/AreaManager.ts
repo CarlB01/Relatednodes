@@ -209,9 +209,7 @@ export class AreaManager {
     this.yieldIfRightTall();
 
     // SYNCHRONOUS VECTOR COUPLING: Compiles Bezier curves inside memory safely
-    if (this.graph?.centerNote) {
-      this.drawAllGraphLines(); 
-    }
+    this.drawAllGraphLines(); 
 
     // Drops the computational shield precisely on the next browser paint cycle
     window.requestAnimationFrame(() => {
@@ -646,8 +644,7 @@ export class AreaManager {
   private setupPlusMinusBtnHandler() {
     this.containerEl.on("click", `.${RV.PLUS_MINUS_BTN}`, (event, target) => {
       event.preventDefault();
-    if (!target.instanceOf(HTMLElement)) return;
-    this.onPlusMinusBtnClicked(target);
+      this.onPlusMinusBtnClicked(target);
     });
   }
 

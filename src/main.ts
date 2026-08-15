@@ -9,7 +9,6 @@ export default class MyBrainPlugin extends Plugin {
   declare settings: SettingsManager;
   public networkGraph!: NetworkGraph;
   
-  private resolvedEventRef: EventRef | undefined;
   private appPaused = false;
   private resumedAt = 0;
   private mobileWarmupUntil = 0;
@@ -77,7 +76,6 @@ export default class MyBrainPlugin extends Plugin {
 
         this.app.workspace.getLeavesOfType(RV.VIEW_TYPE).forEach(leaf => {
           if (leaf.view instanceof MyBrainView) {
-
             // Direct synchronous trigger: networkGraph handles its own internal timing.
             leaf.view.onFileChange(file);
           }
@@ -109,10 +107,6 @@ export default class MyBrainPlugin extends Plugin {
             const wasCurrentlyVisibleFileRenamed = oldPath === myView.currentFilePath;
             if (wasCurrentlyVisibleFileRenamed) {
               myView.currentFilePath = file.path;
-
-              // Synchronously feed the new file instance into the graph engine.
-              // NetworkGraph's internal debouncer aggregates the changes and emits 
-              // 'graph:data-ready' when data coordinates flatten out safely.
               this.networkGraph.update(file);
             }
           }
@@ -187,38 +181,19 @@ export default class MyBrainPlugin extends Plugin {
 
   /**
    * Activates the custom panel inside the primary viewport framework.
-   * Safeguards against initialization race conditions and prevents duplicated leaves.
-   * COMPLIANT REFACTOR: Prefixes unawaited workspace activation promises with the native void operator [dan].
+   * View lifecycle hooks will handle internal data ignition gracefully [dan].
    */
   async activateGraphView() {
-    // 1. TIMING SAFEGUARD: Defers activation if the core cache is still indexing on cold start
-    const isCacheReady = (this.app.metadataCache as typeof this.app.metadataCache & { initialized?: boolean }).initialized;
-    if (!isCacheReady) {
-      if (!this.resolvedEventRef) {
-        this.resolvedEventRef = this.app.metadataCache.on('resolved', () => {
-          void this.activateGraphView();
-          this.unregisterResolvedEvent(); 
-        });
-        this.registerEvent(this.resolvedEventRef);
-      }
-      return; 
-    }
-
     const { workspace } = this.app;
     
-    // 2. DUPLICATE SAFEGUARD: Avoids redundant tabs by checking for existing active leaves
+    // 1. DUPLICATE SAFEGUARD: Avoids redundant tabs
     let leaf = workspace.getLeavesOfType(RV.VIEW_TYPE)[0];
-    
     if (leaf) {
-      // ==========================================================================
-      // COMPLIANT REFACTOR: Prefixed with 'void' to satisfy the strict floating promises
-      // linting criteria since revealLeaf return signatures operate asynchronously [dan]!
-      // ==========================================================================
       void workspace.revealLeaf(leaf);
       return;
     }
 
-    // 3. MOUNT NEW PANEL: Instantiates a fresh leaf container inside the left sidebar split
+    // 2. MOUNT NEW PANEL: Instantiates a fresh leaf container inside the left sidebar split
     let newLeaf: WorkspaceLeaf | null | undefined = workspace.getLeftLeaf(false);
 
     if (newLeaf) {
@@ -231,7 +206,7 @@ export default class MyBrainPlugin extends Plugin {
       void workspace.revealLeaf(newLeaf);
       workspace.leftSplit?.expand(); // Vertically expands the sidebar partition width
 
-      // INITIAL CONTEXT INJECTION: Feeds the newly instantiated leaf with the current active file
+      // Send files directly to the view. If cache is not ready, the view's own debouncedResolve handles it!
       const activeFile = this.app.workspace.getActiveFile();
       if (activeFile) {
         if (newLeaf.view instanceof MyBrainView) {
@@ -251,17 +226,6 @@ export default class MyBrainPlugin extends Plugin {
       }
     });
     this.networkGraph.cancel(); 
-    this.unregisterResolvedEvent();
-  }
-
-  /**
-   * Safe clean-up mechanism removing listeners to prevent reference leaks.
-   */
-  private unregisterResolvedEvent() {
-    if (this.resolvedEventRef) {
-      this.app.metadataCache.offref(this.resolvedEventRef);
-      this.resolvedEventRef = undefined; 
-    }
   }
 
   /**

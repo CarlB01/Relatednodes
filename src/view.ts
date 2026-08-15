@@ -86,7 +86,6 @@ export class MyBrainView extends ItemView implements HoverParent {
   async onOpen() {
     this.contentEl.empty();
     
-    // Instantiates the structural coordinate layout manager natively
     this.areaManager = new AreaManager(this.plugin.networkGraph, this.contentEl, this.plugin);
     this.areaManager.initiate();
 
@@ -341,12 +340,11 @@ export class MyBrainView extends ItemView implements HoverParent {
     };
 
     const workspaceBus = this.app.workspace as unknown as Partial<GraphDataReadyBus>;
-
     if (workspaceBus.on) {
       this.registerEvent(
         workspaceBus.on("graph:data-ready", (cleanedPath: unknown) => {
           if (typeof cleanedPath === "string") {
-            const activeFile = this.getMostRecentMarkdownFile();
+            const activeFile = this.app.workspace.getActiveFile();
             if (activeFile && activeFile.path === cleanedPath) {
               this.currentFilePath = activeFile.path;
 

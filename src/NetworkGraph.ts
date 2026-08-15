@@ -154,7 +154,7 @@ export class NetworkGraph {
     await this.waitUntilCacheStable(activeFile);
     
     /** Context safety check: Abort if cache wait was intercepted by a newer file-open event */
-    if (tokenAtStart !== this.updateRequestToken || !this.isAborted) return;
+    if (tokenAtStart !== this.updateRequestToken || this.isAborted) return;
 
     // ================================
     // HEAVY DETERMINISTIC CALCULATIONS
