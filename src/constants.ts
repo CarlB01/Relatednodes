@@ -6,7 +6,8 @@ export const RV = {
   // ==========================================================================
   // Obsidian View Identifiers
   // ==========================================================================
-  MYBRAIN_VIEW_TYPE: 'mybrain-view',
+  VIEW_TYPE: 'mybrain-view',
+  DISPLAY_TEXT: 'myBrain',
   
   // Core application visual node icon
   ICON: 'sparkle',

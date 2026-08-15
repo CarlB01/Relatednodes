@@ -5,7 +5,6 @@ import { StringUtils } from "./StringUtils.js";
 import { Anchor } from "./Anchor.js";
 import { SettingsManager } from "./SettingsManager.js";
 import { Gate } from "./Gate.js";
-import { RV } from "./constants.js";
 
 const relationOrder: Record<Relation, number> = {
   "center": 0,
@@ -54,6 +53,8 @@ export class NetworkGraph {
   // takes over and finishes the partly updated caches.
   private updateRequestToken = 0;
 
+  private isAborted = false;
+
   constructor(
     plugin: MyBrainPlugin,
     settingsManager: SettingsManager
@@ -70,16 +71,11 @@ export class NetworkGraph {
   }
 
   public cancel(): void {
+    this.isAborted = true;
     this.debouncedUpdate.cancel();
   }
   
-// #region PRIVATE HELPER FUNCTIONS
-  private isViewVisible(): boolean {
-    const leaves = this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE);
-    const visibleLeaf = leaves.find(l => l.view.containerEl.offsetHeight > 0);
-    return !!visibleLeaf;
-  }
-
+  // #region PRIVATE HELPER FUNCTIONS
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => window.setTimeout(resolve, ms));
   }
@@ -134,7 +130,8 @@ export class NetworkGraph {
    */
   update(activeFile: TFile | null): void {
     if (!activeFile || this.plugin.isAppPaused()) return;
-    if (!this.isViewVisible()) return;
+
+    this.isAborted = false;
 
     /** Increment token immediately to invalidate any legacy async slices currently yielding */
     this.updateRequestToken++;
@@ -148,7 +145,7 @@ export class NetworkGraph {
    * Runs only after the user stops navigating.
    */
   private async executeUpdate(activeFile: TFile | null): Promise<void> {
-    if (!activeFile || this.plugin.isAppPaused() || !this.isViewVisible()) return;
+    if (!activeFile || this.plugin.isAppPaused() || this.isAborted) return;
 
     /** Capture the exact token state before we initiate asynchronous cache polling */
     const tokenAtStart = this.updateRequestToken;
@@ -157,7 +154,7 @@ export class NetworkGraph {
     await this.waitUntilCacheStable(activeFile);
     
     /** Context safety check: Abort if cache wait was intercepted by a newer file-open event */
-    if (tokenAtStart !== this.updateRequestToken || !this.isViewVisible()) return;
+    if (tokenAtStart !== this.updateRequestToken || !this.isAborted) return;
 
     // ================================
     // HEAVY DETERMINISTIC CALCULATIONS

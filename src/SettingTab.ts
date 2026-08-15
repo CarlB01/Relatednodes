@@ -26,7 +26,7 @@ export class SettingTab extends PluginSettingTab {
       this.plugin.networkGraph.noteCache.clear();
     }
 
-    const leaves = this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE);
+    const leaves = this.app.workspace.getLeavesOfType(RV.VIEW_TYPE);
     for (const leaf of leaves) {
       if (!(leaf.view instanceof MyBrainView)) continue;
       const myView = leaf.view;

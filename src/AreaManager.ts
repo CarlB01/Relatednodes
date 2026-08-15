@@ -26,6 +26,7 @@ export class AreaManager {
   private redrawQueued = false;
 
   private debouncedRender: Debouncer<[], void>;
+  private activeInfoPopup: HTMLElement | null = null;
 
   constructor(
     graph: NetworkGraph,
@@ -52,135 +53,7 @@ export class AreaManager {
     this.containerEl.addClass(RV.CONTAINER);
   }
 
-  // #region PRIVATE HELPER FUNCTIONS
-  private setupScrollEventListeners() {
-    // Collects all layout areas configured with layout-level scrolling
-    const scrollableAreas = [this.upper, this.lower, this.left, this.right];
-
-    for (const area of scrollableAreas) {
-      if (!area) continue;
-
-      const scrollWrapper = area.querySelector(`.${RV.COLLECTION_WRAPPER}`) as HTMLElement;
-      if (!scrollWrapper) continue;
-
-      this.plugin.registerDomEvent(
-        scrollWrapper,
-        'scroll',
-        () => {
-          this.requestRedraw();
-        },
-        { passive: true }
-      );
-    }
-  }
-
-  /**
-   * Evaluates layout height and updates CSS dataset flags (data-left-tall).
-   * Executed post graph data updates but preceding path vector rendering.
-   * Forces upper area layout constraints to yield the top-left quadrant to the left area.
-   */
-  private yieldIfLeftTall() {
-    const vc = this.containerEl;
-    const descr = '.rv-area.left';
-    const leftWrapper = vc.querySelector(descr) as HTMLElement;
-    if (!leftWrapper) return;
-
-    const currentValue = vc.getAttribute(RV.LEFT_TALL);
-
-    // Add a strict 15px layout tolerance buffer to eradicate visual flickering thresholds
-    const isLeftTall = leftWrapper.scrollHeight > this.center.offsetHeight + 15;
-    const newValue = isLeftTall ? "true" : "false";
-
-    if (currentValue !== newValue) {
-      vc.setAttribute(RV.LEFT_TALL, newValue);
-    }
-  }
-
-  /**
-   * Evaluates layout height and updates CSS dataset flags (data-right-tall).
-   * Operates symmetrically to yield the bottom-right quadrant to the right gate area.
-   */
-  private yieldIfRightTall() {
-    const vc = this.containerEl;
-    const descr = '.rv-area.right';
-    const rightWrapper = vc.querySelector(descr) as HTMLElement;
-    if (!rightWrapper) return;
-
-    const currentValue = vc.getAttribute(RV.RIGHT_TALL);
-
-    // Add a strict 15px layout tolerance buffer to eradicate visual flickering thresholds
-    const isRightTall = rightWrapper.scrollHeight > (this.center.offsetHeight + this.upper.offsetHeight + 15);
-    const newValue = isRightTall ? "true" : "false";
-
-    if (currentValue !== newValue) {
-      vc.setAttribute(RV.RIGHT_TALL, newValue);
-    }
-  }
-
-  /**
-   * Evaluates coordinate translation offsets for the background SVG layer relative to global layout boundaries.
-   * @returns Coordinate translation delta points required to compensate canvas path generation.
-   */
-  private offBy(): Point | null {
-    const isMobile = Platform.isMobile;
-
-    if (!this.containerEl) return null;
-
-    const rect = this.containerEl.getBoundingClientRect();
-
-    // SAFEGUARD: Terminate routine if the layout container is completely hidden or unrendered (0x0 scale)
-    // This stops vector calculations from collapsing or throwing math errors
-    if (rect.width === 0 || rect.height === 0) {
-      return null;
-    }
-
-    let x = rect.left;
-    let y = rect.top;
-
-    if (isMobile) {
-      // MOBILE OVERRIDE: Tracks hardware-level window offsets natively on iOS/Android viewports
-      x += window.scrollX || 0;
-      y += window.scrollY || 0;
-    } else {
-      x += this.containerEl.scrollLeft || 0;
-      y += this.containerEl.scrollTop || 0;
-    }
-
-    return { x: x, y: y };
-  }
-
-  /**
-   * Resolves display color from node link text (supercharged-compatible).
-   */
-  private getLandingNodeColor(note: Node, colorful: boolean): string | null {
-    if (!colorful) return null;
-    const linkEl = note.div?.querySelector(".focusable-note-link") as HTMLElement | null;
-    if (!linkEl) return null;
-    const c = getComputedStyle(linkEl).color;
-    return c && c.trim().length > 0 ? c : null;
-  }
-
-  /**
-   * Applies/removes gate color override with minimal DOM writes.
-   */
-  private applyGateColor(gate: Gate, color: string | null) {
-    const circle = gate.svg?.querySelector("circle") as SVGCircleElement | null;
-    if (!circle) return;
-
-    if (!color) {
-      if (circle.style.fill) circle.style.removeProperty("fill");
-      if (circle.style.stroke) circle.style.removeProperty("stroke");
-      return;
-    }
-
-    if (circle.style.fill !== color) circle.style.fill = color;
-    if (circle.style.stroke !== color) circle.style.stroke = color;
-  }
-
-// #endregion
-
-
-  // #region PUBLIC FUNCTIONS
+  // #region PUBLIC METHODS
   /**
    * Schedules a fresh redraw synchronized with the hardware screen refresh rate (60Hz).
    * Automatically triggered by scroll vents, window resizing, and following initial DOM injection.
@@ -234,10 +107,27 @@ export class AreaManager {
     }
     this.redrawQueued = false;
   }
+
+  /**
+   * Public destructor called when the parent view layout collapses or closes.
+   */
+  public destroy() {
+    /** 1. Stop the 40ms DOM render debouncer */
+    this.debouncedRender.cancel();
+    
+    /** 2. Abort the 2x rAF hardware animation loops immediately */
+    this.cancelPendingRedraw(); // 💡 Her lever den i beste velgående!
+    
+    /** 3. Clear out the cached SVG Bezier lines */
+    this.linkCache.clear();
+    
+    /** 4. Wipe any visible floating info popups from the screen */
+    this.cleanupPopup(); 
+  }
   // #endregion
 
 
-  // #region MAIN FUNCTIONS
+  // #region GRAPH METHODS
   /**
    * The actual, isolated DOM injection and layout compilation core.
    * Runs safely within the debounced execution window.
@@ -311,6 +201,8 @@ export class AreaManager {
 
     // Binds event listeners directly to the initialized layout container frames
     this.setupScrollEventListeners();
+    this.setupInfoBtnHandler();
+    this.setupPlusMinusBtnHandler();
     
     // Evaluate geometric boundary heights exactly once while layout metrics are hidden
     this.yieldIfLeftTall();
@@ -517,6 +409,196 @@ export class AreaManager {
       }
     }
   }
+  // #endregion
+
+
+  // #region GRAPH HELPER METHODS
+  private setupScrollEventListeners() {
+    // Collects all layout areas configured with layout-level scrolling
+    const scrollableAreas = [this.upper, this.lower, this.left, this.right];
+
+    for (const area of scrollableAreas) {
+      if (!area) continue;
+
+      const scrollWrapper = area.querySelector(`.${RV.COLLECTION_WRAPPER}`) as HTMLElement;
+      if (!scrollWrapper) continue;
+
+      this.plugin.registerDomEvent(
+        scrollWrapper,
+        'scroll',
+        () => {
+          this.requestRedraw();
+        },
+        { passive: true }
+      );
+    }
+  }
+
+  /**
+   * Evaluates layout height and updates CSS dataset flags (data-left-tall).
+   * Executed post graph data updates but preceding path vector rendering.
+   * Forces upper area layout constraints to yield the top-left quadrant to the left area.
+   */
+  private yieldIfLeftTall() {
+    const vc = this.containerEl;
+    const descr = '.rv-area.left';
+    const leftWrapper = vc.querySelector(descr) as HTMLElement;
+    if (!leftWrapper) return;
+
+    const currentValue = vc.getAttribute(RV.LEFT_TALL);
+
+    // Add a strict 15px layout tolerance buffer to eradicate visual flickering thresholds
+    const isLeftTall = leftWrapper.scrollHeight > this.center.offsetHeight + 15;
+    const newValue = isLeftTall ? "true" : "false";
+
+    if (currentValue !== newValue) {
+      vc.setAttribute(RV.LEFT_TALL, newValue);
+    }
+  }
+
+  /**
+   * Evaluates layout height and updates CSS dataset flags (data-right-tall).
+   * Operates symmetrically to yield the bottom-right quadrant to the right gate area.
+   */
+  private yieldIfRightTall() {
+    const vc = this.containerEl;
+    const descr = '.rv-area.right';
+    const rightWrapper = vc.querySelector(descr) as HTMLElement;
+    if (!rightWrapper) return;
+
+    const currentValue = vc.getAttribute(RV.RIGHT_TALL);
+
+    // Add a strict 15px layout tolerance buffer to eradicate visual flickering thresholds
+    const isRightTall = rightWrapper.scrollHeight > (this.center.offsetHeight + this.upper.offsetHeight + 15);
+    const newValue = isRightTall ? "true" : "false";
+
+    if (currentValue !== newValue) {
+      vc.setAttribute(RV.RIGHT_TALL, newValue);
+    }
+  }
+
+  /**
+   * Evaluates coordinate translation offsets for the background SVG layer relative to global layout boundaries.
+   * @returns Coordinate translation delta points required to compensate canvas path generation.
+   */
+  private offBy(): Point | null {
+    const isMobile = Platform.isMobile;
+
+    if (!this.containerEl) return null;
+
+    const rect = this.containerEl.getBoundingClientRect();
+
+    // SAFEGUARD: Terminate routine if the layout container is completely hidden or unrendered (0x0 scale)
+    // This stops vector calculations from collapsing or throwing math errors
+    if (rect.width === 0 || rect.height === 0) {
+      return null;
+    }
+
+    let x = rect.left;
+    let y = rect.top;
+
+    if (isMobile) {
+      // MOBILE OVERRIDE: Tracks hardware-level window offsets natively on iOS/Android viewports
+      x += window.scrollX || 0;
+      y += window.scrollY || 0;
+    } else {
+      x += this.containerEl.scrollLeft || 0;
+      y += this.containerEl.scrollTop || 0;
+    }
+
+    return { x: x, y: y };
+  }
+
+  /**
+   * Resolves display color from node link text (supercharged-compatible).
+   */
+  private getLandingNodeColor(note: Node, colorful: boolean): string | null {
+    if (!colorful) return null;
+    const linkEl = note.div?.querySelector(".focusable-note-link") as HTMLElement | null;
+    if (!linkEl) return null;
+    const c = getComputedStyle(linkEl).color;
+    return c && c.trim().length > 0 ? c : null;
+  }
+
+  /**
+   * Applies/removes gate color override with minimal DOM writes.
+   */
+  private applyGateColor(gate: Gate, color: string | null) {
+    const circle = gate.svg?.querySelector("circle") as SVGCircleElement | null;
+    if (!circle) return;
+
+    if (!color) {
+      if (circle.style.fill) circle.style.removeProperty("fill");
+      if (circle.style.stroke) circle.style.removeProperty("stroke");
+      return;
+    }
+
+    if (circle.style.fill !== color) circle.style.fill = color;
+    if (circle.style.stroke !== color) circle.style.stroke = color;
+  }
+
+// #endregion
+
+
+  // #region INFO BTN HANDLING
+  /**
+   * Configures the dynamic floating info satellite badge component.
+   */
+  private setupInfoBtnHandler() {
+
+    this.containerEl.on("mouseover", ".rv-info-btn", (event: MouseEvent, target: HTMLElement) => {
+      if (this.activeInfoPopup) { 
+        this.activeInfoPopup.remove(); 
+        this.activeInfoPopup = null; 
+      }
+
+      const count = target.getAttribute("data-ignored-count") || "0";
+      const hoverText = `${count} hidden files`;
+ 
+      this.activeInfoPopup = createDiv({ cls: RV.INFO_HOVER });
+      this.activeInfoPopup.createSpan({ text: hoverText, cls: "popup-title" });
+      
+      this.activeInfoPopup.addClass('is-measuring');
+      this.containerEl.appendChild(this.activeInfoPopup);
+
+      const popupWidth = this.activeInfoPopup.offsetWidth || 180;
+      const viewRect = this.containerEl.getBoundingClientRect();
+      const btnRect = target.getBoundingClientRect();
+      const padding = 10;
+
+      const collidesOnRightSide = (btnRect.right + padding + popupWidth) > viewRect.right;
+
+      if (collidesOnRightSide) {
+        this.activeInfoPopup.style.left = `${btnRect.left - viewRect.left - popupWidth - padding}px`;
+      } else {
+        this.activeInfoPopup.style.left = `${btnRect.right - viewRect.left + padding}px`;
+      }
+
+      this.activeInfoPopup.style.top = `${btnRect.top - viewRect.top - 15}px`;
+      this.activeInfoPopup.removeClass('is-measuring');
+      
+    });
+
+    this.containerEl.on("mouseout", ".rv-info-btn", (event: MouseEvent, target: HTMLElement) => {
+      if (this.activeInfoPopup) {
+        this.activeInfoPopup.remove();
+        this.activeInfoPopup = null;
+      }
+    });
+
+    /** Core lifecycle anchor: automatically flushes the satellite block during view close cycles */
+    this.plugin.register(() => { this.cleanupPopup });
+  }
+  
+  /**
+   * Helper utility to safely evict the floating satellite block from the DOM tree.
+   */
+  private cleanupPopup() {
+    if (this.activeInfoPopup) {
+      this.activeInfoPopup.remove();
+      this.activeInfoPopup = null;
+    }
+  }
 
   /**
    * Renders (or removes) the center-node info button that displays ignored-note count.
@@ -553,6 +635,21 @@ export class AreaManager {
 
     anchorEl.appendChild(infoBtn);
   }
+  // #endregion
+
+
+  // #region PLUS MINUS BTN HANDLING
+  /**
+   * Registers the event delegation delegate targeting cluster expand/collapse buttons.
+   * This is called during the DOM build phase in renderGraph / executeRenderGraph.
+   */
+  private setupPlusMinusBtnHandler() {
+    this.containerEl.on("click", `.${RV.PLUS_MINUS_BTN}`, (event, target) => {
+      event.preventDefault();
+    if (!target.instanceOf(HTMLElement)) return;
+    this.onPlusMinusBtnClicked(target);
+    });
+  }
 
   /**
    * Compiles and mounts the tactile expandable/collapsible toggle badge control.
@@ -584,6 +681,41 @@ export class AreaManager {
     button.setAttribute('data-link-tags', group.tag);
 
     return button;
+  }
+
+  /**
+   * Orchestrates the dynamic layout mutation expansion and collapse toggling when a cluster badge is clicked.
+   */
+  private onPlusMinusBtnClicked(target: HTMLElement) {
+    const plus = RV.PLUS;   
+    const minus = RV.MINUS; 
+
+    // Isolates the closest tag group cluster element container currently routing these nodes [dan]
+    const groupDiv = target.closest(`.${RV.GROUPS}`) as HTMLElement;
+    if (!groupDiv) return;
+
+    // Collects all individual visible cells inside this localized structural cluster wrapper
+    const items = Array.from(groupDiv.querySelectorAll('.item'));
+    if (items.length <= 1) return;
+
+    const textContent = target.textContent || "";
+    const count = items.length.toString();
+
+    const rawTag = target.getAttribute("data-tag") || "";
+    const cleanTagName = rawTag.replace(/^#/, "");
+      
+    if (textContent.includes(plus)) {
+      groupDiv.addClass('expanded');
+      items.slice(1).forEach(item => item.removeClass('hidden'));
+      target.textContent = `${minus}${cleanTagName}(${count})`;
+    } else {
+      groupDiv.removeClass('expanded');
+      items.slice(1).forEach(item => item.addClass('hidden'));      
+      target.textContent = `${plus}${cleanTagName}(${count})`;
+    }
+
+  /** Force an immediate geometric update pass via local hardware-coupled refresh */
+    this.requestRedraw();
   }
   // #endregion
 

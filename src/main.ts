@@ -31,6 +31,11 @@ export default class MyBrainPlugin extends Plugin {
     return Date.now() < this.mobileWarmupUntil;
   }
 
+  /**
+   * APPLIED LISTENERS: 
+   * - registerGlobalEvents  ('file-open',  'rename', 'resolve')
+   * - registerAppLifecycleEvents (const suspendAllViews, const resumeAllViews, 'visibilitychange'
+   */
   async onload() {
     await this.loadSettings();
     this.networkGraph = new NetworkGraph(this, this.settings);
@@ -39,7 +44,7 @@ export default class MyBrainPlugin extends Plugin {
   
     // Registers the plugin view architecture allowing it to open as a sidebar or main tab
     this.registerView(
-      RV.MYBRAIN_VIEW_TYPE,
+      RV.VIEW_TYPE,
       (leaf) => new MyBrainView(leaf, this)
     );
 
@@ -70,7 +75,7 @@ export default class MyBrainPlugin extends Plugin {
       this.app.workspace.on('file-open', (file: TFile | null) => {
         if (this.appPaused || !file) return;
 
-        this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
+        this.app.workspace.getLeavesOfType(RV.VIEW_TYPE).forEach(leaf => {
           if (leaf.view instanceof MyBrainView) {
 
             // Direct synchronous trigger: networkGraph handles its own internal timing.
@@ -95,7 +100,7 @@ export default class MyBrainPlugin extends Plugin {
         this.networkGraph.handleFileRename(file, oldPath);
 
         // 3. Update view tracking states and request a background graph recalculation
-        const leaves = this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE);
+        const leaves = this.app.workspace.getLeavesOfType(RV.VIEW_TYPE);
         for (const leaf of leaves) {
           if (leaf.view instanceof MyBrainView) {
             const myView = leaf.view;
@@ -121,7 +126,7 @@ export default class MyBrainPlugin extends Plugin {
         if (this.appPaused || this.isInResumeCooldown(1200) || this.isInMobileWarmup()) return;
 
         void this.networkGraph.handleFileResolve(file).then((_dataWasUpdated) => {
-          this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach((leaf) => {
+          this.app.workspace.getLeavesOfType(RV.VIEW_TYPE).forEach((leaf) => {
             if (leaf.view instanceof MyBrainView) {
               const myView = leaf.view;
               if (!myView.isFullyStarted) return;
@@ -152,7 +157,7 @@ export default class MyBrainPlugin extends Plugin {
   private registerAppLifecycleEvents() {
     const suspendAllViews = () => {
       this.appPaused = true;
-      this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
+      this.app.workspace.getLeavesOfType(RV.VIEW_TYPE).forEach(leaf => {
         if (leaf.view instanceof MyBrainView) {
           leaf.view.suspendForBackground();
         }
@@ -166,7 +171,7 @@ export default class MyBrainPlugin extends Plugin {
       this.appPaused = false;
       this.markResumedNow(); // Dette oppdaterer this.resumedAt til Date.now() med en gang!
 
-      this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
+      this.app.workspace.getLeavesOfType(RV.VIEW_TYPE).forEach(leaf => {
         if (leaf.view instanceof MyBrainView) {
           leaf.view.resumeFromBackground();
         }
@@ -202,7 +207,7 @@ export default class MyBrainPlugin extends Plugin {
     const { workspace } = this.app;
     
     // 2. DUPLICATE SAFEGUARD: Avoids redundant tabs by checking for existing active leaves
-    let leaf = workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE)[0];
+    let leaf = workspace.getLeavesOfType(RV.VIEW_TYPE)[0];
     
     if (leaf) {
       // ==========================================================================
@@ -218,7 +223,7 @@ export default class MyBrainPlugin extends Plugin {
 
     if (newLeaf) {
       await newLeaf.setViewState({
-        type: RV.MYBRAIN_VIEW_TYPE,
+        type: RV.VIEW_TYPE,
         active: true, 
       });
       
@@ -240,7 +245,7 @@ export default class MyBrainPlugin extends Plugin {
   
   onunload() {
     this.appPaused = true;
-    this.app.workspace.getLeavesOfType(RV.MYBRAIN_VIEW_TYPE).forEach(leaf => {
+    this.app.workspace.getLeavesOfType(RV.VIEW_TYPE).forEach(leaf => {
       if (leaf.view instanceof MyBrainView) {
         leaf.view.suspendForBackground();
       }
