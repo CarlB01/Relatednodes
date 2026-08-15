@@ -41,7 +41,6 @@
     margin-bottom: 0.3em; 
     align-self: end;
     overflow: visible;
-    justify-self: stretch;
   }
 
   /* CENTER & LATERAL AREAS (Row 3: Absolute layout origin axis) */
@@ -51,29 +50,24 @@
     grid-row: 3; 
     align-self: center; /*vertically */
     overflow: visible;
-    justify-self: stretch;
   }
 
   .rv-area.left {
     grid-column: 1;
     margin-right: 0.3em;
     overflow: visible;
-    justify-self: stretch;
   } 
   
   .rv-area.right {
     grid-column: 3;
     margin-left: 0.3em;
     overflow: visible;
-    justify-self: stretch;
   }
 
   .rv-area.center {
     grid-column: 2;
     justify-self: center; /* Horizontally */
     padding: clamp(0.2em, 3cqh, 1.2em) clamp(0.2em, 1cqw, 1.2em);
-    overflow: visible;
-    justify-self: stretch;
   }
 
   /* LOWER QUADRANT (Row 4: Pulls children tight up against center) */

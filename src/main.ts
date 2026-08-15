@@ -1,4 +1,4 @@
-import { Plugin, Notice, WorkspaceLeaf, EventRef, TFile, TAbstractFile } from 'obsidian';
+import { Plugin, Notice, WorkspaceLeaf, TFile, TAbstractFile } from 'obsidian';
 import { SettingTab } from "./SettingTab.js";
 import { MyBrainView } from './view.js';
 import { RV } from './constants.js';
