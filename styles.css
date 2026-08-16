@@ -254,8 +254,13 @@
     /* Theme adaptive text mask framework: */
     backdrop-filter: blur(0px); 
     -webkit-backdrop-filter: blur(0px);
-    background-color: color-mix(in srgb, var(--background-secondary), transparent 35%);
+    background-color: color-mix(in srgb, var(--background-primary), transparent 35%);
     transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
+  }
+
+  /* If graph lives in a sidebar:  */
+  :is(.mod-sidedock) & .focusable-note-link {
+    background-color: color-mix(in srgb, var(--background-secondary), transparent 35%);
   }
 
   .focusable-note-link::before,
@@ -416,7 +421,6 @@
     font-weight: 800;
     line-height: 1;
     white-space: nowrap;
-    background-color: var(--background-primary-alt); 
     border: 1.5px solid var(--border-color); 
     color: var(--text-muted);
     cursor: pointer;
