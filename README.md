@@ -120,11 +120,13 @@ The myBrain graph is a normal Obsidian view. Drag its tab and drop it anywhere i
 ### Native-style hover previews
 — peek at note content on hover, consistent with Obsidian’s own page preview behavior.
 
-### 📐 100% Hardware-Accelerated CSS Grid
-All node partitions, column expansions, and quadrant assignments are managed **100% by native, hardware-accelerated CSS Grid infrastructure** instead of heavy, laggy JavaScript calculation matrices.
-* **Zero Layout-Squeezing:** Nodes are generated in a protective off-screen render curtain (`.is-calculating`) to completely isolate DOM reflows.
+### 📐 CSS-first visual engine (now pane-adaptive)
+myBrain is built on a **CSS-first rendering architecture**: quadrants, column flow, spacing, wrapping, and most interaction styling are handled by native, hardware-accelerated CSS.
+* **Now fully pane-adaptive:** The graph dynamically adapts to the exact workspace container it lives in (sidebar, main pane, or detached window).
+* **Lightweight runtime assist:** A small TypeScript layer only handles what CSS cannot do alone reliably across all contexts—runtime container measurement, adaptive height caps, redraw timing, and SVG path refresh.
+* **Zero Layout-Squeezing:** Nodes are still generated in a protective off-screen render curtain (`.is-calculating`) to reduce visible reflow during render.
 
-### 🚀 Pure O(1) JIT Cache Performance
+### 🚀 Fast JIT Cache Performance
 * **No Database Bottlenecks:** Bypasses text-parsing chains and heavy queries during active navigation cycles using an advanced asynchronous Just-In-Time (JIT) memory mesh.
 * **Instantaneous Cross-Linking ("Baits"):** Nodes dynamically cast multi-directional anchor tokens so that *"everyone discovers everyone"* across massive datasets instantly.
 
