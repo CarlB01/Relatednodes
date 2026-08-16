@@ -1,24 +1,26 @@
-:root {
-  --rv-line: var(--text-muted, #888888); 
-  --rv-line-width: 0.04em; 
-}
-
 /* ==========================================================================
-   CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
-   ========================================================================== */
+CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
+========================================================================== */
 
 .workspace-leaf .workspace-leaf-content .view-content.rv-container {
-  container-name: main;
-  display: grid;
-  grid-template-columns: clamp(4em, 33%, 40em) clamp(6em, 33%, 40em) clamp(4em, 33%, 40em);
-  
+  /* Runtime-overwritten caps (fallback to old values if TS not run yet) */
+  --rv-line: var(--text-muted, #888888); 
+  --rv-line-width: 0.04em; 
+
+  --rv-upper-max: 22vh;
+  --rv-left-max: 35vh;
+  --rv-right-max: 75vh;
+  --rv-lower-max: 70vh;
+
   /* ==========================================================================
   1. MAGNETIC CLUSTER ROW DESIGN (Forces the clusters towards center)
   Rows 1 and 5 act as flexible shock absorbers (1fr) that swallow all empty space,
   symmetrically compressing rows 2, 3, and 4 together tightly in the center [dan]!
   ========================================================================== */
-  grid-template-rows: 1fr auto auto auto 1fr;
-  
+  display: grid;
+  grid-template-rows: minmax(0, 0.35fr) auto auto auto minmax(0, 0.35fr);
+  grid-template-columns: clamp(4em, 33%, 40em) clamp(6em, 33%, 40em) clamp(4em, 33%, 40em);
+  align-content: stretch;
   position: absolute;
   top: 0;
   left: 0;
@@ -29,6 +31,7 @@
   box-sizing: border-box;
   container-type: inline-size;
   font-size: calc(var(--font-text-size, 11px) * 0.80);
+
 
   /* --------------------------------================================--------
      2. AREAS & QUADRANTS INFRASTRUCTURE (The Compressed Symmetrical Grid)
@@ -41,6 +44,7 @@
     margin-bottom: 0.3em; 
     align-self: end;
     overflow: visible;
+    min-height: 0;
   }
 
   /* CENTER & LATERAL AREAS (Row 3: Absolute layout origin axis) */
@@ -50,6 +54,7 @@
     grid-row: 3; 
     align-self: center; /*vertically */
     overflow: visible;
+    min-height: 0;
   }
 
   .rv-area.left {
@@ -76,6 +81,7 @@
     grid-row: 4; /* Compressed tightly into the lower slot below origo [dan] */
     margin-top: 0.3em;
     margin-left: 0.35em; 
+    margin-bottom: 1em;
     align-self: start; 
     align-items: center;
     justify-content: flex-start;
@@ -101,11 +107,11 @@
   }
   
   /* Specific vertical heights constraints preserving canvas breathing space across screens */
-  .rv-area.upper .rv-collection-wrapper { max-height: 22vh; }
-  .rv-area.left .rv-collection-wrapper { max-height: 35vh; }
-  .rv-area.right .rv-collection-wrapper { max-height: 75vh; } /* Exploits maximum horizontal canvas density on desktop frames */
-  .rv-area.lower .rv-collection-wrapper { max-height: 70vh; }
-  
+  .rv-area.upper .rv-collection-wrapper { max-height: var(--rv-upper-max); }
+  .rv-area.left .rv-collection-wrapper { max-height: var(--rv-left-max); }
+  .rv-area.right .rv-collection-wrapper { max-height: var(--rv-right-max); } /* Exploits maximum horizontal canvas density on desktop frames */
+  .rv-area.lower .rv-collection-wrapper { max-height: var(--rv-lower-max); }
+
   /* ==========================================================================
      4. COLLECTIONS & COLUMNS (Multi-column content routing engines)
     ========================================================================== */
@@ -254,13 +260,14 @@
     /* Theme adaptive text mask framework: */
     backdrop-filter: blur(0px); 
     -webkit-backdrop-filter: blur(0px);
-    background-color: color-mix(in srgb, var(--background-primary), transparent 35%);
+    background-color: color-mix(in srgb, var(--background-primary), transparent 20%);
     transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
   }
 
   /* If graph lives in a sidebar:  */
   :is(.mod-sidedock) & .focusable-note-link {
-    background-color: color-mix(in srgb, var(--background-secondary), transparent 35%);
+    background-color: color-mix(in srgb, var(--background-secondary), transparent 20%);
+    transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
   }
 
   .focusable-note-link::before,
@@ -421,14 +428,24 @@
     font-weight: 800;
     line-height: 1;
     white-space: nowrap;
+    background-color: var(--background-primary-alt); 
     border: 1.5px solid var(--border-color); 
     color: var(--text-muted);
     cursor: pointer;
     box-sizing: border-box;
+    background-color: color-mix(in srgb, var(--background-primary), transparent 20%);
+    transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); 
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
     break-inside: avoid-column;
   }
+
+  /* If graph lives in a sidebar:  */
+  :is(.mod-sidedock) & .rv-plusminus {
+    background-color: color-mix(in srgb, var(--background-secondary), transparent 20%);
+    transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
+  }
+
 
   .rv-plusminus:hover {
     background-color: var(--interactive-accent); 
@@ -624,7 +641,6 @@
 
 /* Safe-area kun der problemet er */
 .is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .rv-area.lower .rv-collection-wrapper {
-  max-height: 50vh;
   padding-bottom: max(0.5em, env(safe-area-inset-bottom));
 }
 

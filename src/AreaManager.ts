@@ -29,6 +29,7 @@ export class AreaManager {
   private activeInfoPopup: HTMLElement | null = null;
   private plusMinusBound = false;
 
+
   constructor(
     graph: NetworkGraph,
     parentEl: HTMLElement,
@@ -49,7 +50,7 @@ export class AreaManager {
   initiate() {
     this.containerEl.addClass(RV.CONTAINER);
     this.setupPlusMinusBtnHandler(); // bind once
-    this.setupInfoBtnHandler(); 
+    this.setupInfoBtnHandler();
   }
 
   // #region PUBLIC METHODS
@@ -74,7 +75,8 @@ export class AreaManager {
         if (!this.containerEl || !this.containerEl.isConnected) return;
         const rect = this.containerEl.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return;
-
+        
+        this.allocateAreaHeights();
         this.yieldIfLeftTall();
         this.yieldIfRightTall();
 
@@ -122,6 +124,7 @@ export class AreaManager {
     
     /** 4. Wipe any visible floating info popups from the screen */
     this.cleanupPopup(); 
+
   }
   // #endregion
 
@@ -155,9 +158,6 @@ export class AreaManager {
 
     const fragment = createFragment();
     
-    mainContainer.setAttribute(RV.LEFT_TALL, 'false');
-    mainContainer.setAttribute(RV.RIGHT_TALL, 'false');
-
     mainContainer.setAttribute(RV.LEFT_TALL, 'false');
     mainContainer.setAttribute(RV.RIGHT_TALL, 'false');
 
@@ -201,9 +201,12 @@ export class AreaManager {
     // Binds event listeners directly to the initialized layout container frames
     this.setupScrollEventListeners();
     
+    this.allocateAreaHeights();
+  
     // Evaluate geometric boundary heights exactly once while layout metrics are hidden
     this.yieldIfLeftTall();
     this.yieldIfRightTall();
+  
 
     // SYNCHRONOUS VECTOR COUPLING: Compiles Bezier curves inside memory safely
     this.drawAllGraphLines(); 
@@ -336,11 +339,11 @@ export class AreaManager {
       this.applyGateColor(note.lowerGate, null);
       this.applyGateColor(note.friendGate, null);
     }
-    
+
     // Core geometry safeguard validating if target layout elements have established concrete screen coordinates
     const canDraw = (from: Gate, to: Gate) => {
       if (!from || !to || !from.svg || !to.svg || !from.parentNote.div || !to.parentNote.div) return false;
-      
+
       const rA = from.svg.getBoundingClientRect();
       const rB = to.svg.getBoundingClientRect();
       return rA.width > 0 || rB.width > 0;
@@ -429,6 +432,50 @@ export class AreaManager {
     }
   }
 
+   /**
+   * Compute dynamic max-height budgets per scroll-wrapper from the container's
+   * real pixel height and push them as CSS variables.
+   *
+   * Why: CSS columns behave much better when their containing block has a concrete
+   * max-height. Using host-relative px makes this portable to any container size.
+   */
+  private allocateAreaHeights() {
+    const vc = this.containerEl;
+
+    const upperArea = '.rv-area.upper'
+    const lowerArea = '.rv-area.lower';
+    const leftArea = '.rv-area.left';
+    const midArea = '.rv-area.center';
+
+    const upperWrapper = vc.querySelector(upperArea) as HTMLElement;
+    const lowerWrapper = vc.querySelector(lowerArea) as HTMLElement;
+    const leftWrapper =  vc.querySelector(leftArea) as HTMLElement;
+    const midWrapper = vc.querySelector(midArea) as HTMLElement;
+    
+    if (!vc?.isConnected || !upperWrapper || !lowerWrapper || !leftWrapper || !midWrapper) return;
+
+    const upperScrollHeight = Math.max (upperWrapper.scrollHeight, (leftWrapper.scrollHeight - midWrapper.scrollHeight));
+    const lowerScrollHeight = lowerWrapper.scrollHeight;
+    const midScrollHeight = midWrapper.scrollHeight;
+
+    const totalScrollHeight = upperScrollHeight + midScrollHeight + lowerScrollHeight;
+    const vcRemainingHeight = vc.innerHeight-midScrollHeight;
+
+    const upperFract = upperScrollHeight/totalScrollHeight; 
+    
+    // upper grows until 50% of space used, never more.
+    let upper = Math.floor(upperFract * vcRemainingHeight);
+    if (upper < 0.5 * vcRemainingHeight) {upper = 0.5 * vcRemainingHeight};
+    const left = upper + midScrollHeight;
+    const lower = vcRemainingHeight - upper;
+    const right = vc.innerHeight;
+    
+    vc.style.setProperty("--rv-upper-max", `${upper}px`);
+    vc.style.setProperty("--rv-left-max",  `${left}px`);
+    vc.style.setProperty("--rv-right-max", `${right}px`);
+    vc.style.setProperty("--rv-lower-max", `${lower}px`);
+   }
+
   /**
    * Evaluates layout height and updates CSS dataset flags (data-left-tall).
    * Executed post graph data updates but preceding path vector rendering.
@@ -439,10 +486,8 @@ export class AreaManager {
     const descr = '.rv-area.left';
     const leftWrapper = vc.querySelector(descr) as HTMLElement;
     if (!leftWrapper) return;
-
     const currentValue = vc.getAttribute(RV.LEFT_TALL);
 
-    // Add a strict 15px layout tolerance buffer to eradicate visual flickering thresholds
     const isLeftTall = leftWrapper.scrollHeight > this.center.offsetHeight + 15;
     const newValue = isLeftTall ? "true" : "false";
 
