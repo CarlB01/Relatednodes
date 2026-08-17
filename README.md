@@ -1,6 +1,17 @@
 # myBrain for Obsidian
 
-✅ **Now officially available in Obsidian Community Plugins.**
+✅ **New in 1.0.38**
+
+Hover highlighting for connected links and neighboring nodes
+
+When hovering a link or node, the graph now highlights:
+
+the hovered element,
+directly connected links,
+neighboring nodes.
+This makes relationship tracing much faster and improves readability in dense graphs.
+
+---
 
 [![Obsidian Plugin](https://img.shields.io/badge/Obsidian-Plugin-%23483699.svg?logo=obsidian&logoColor=white)](https://obsidian.md)
 [![Available in Community Plugins](https://img.shields.io/badge/Obsidian-Community%20Plugins-success)](https://obsidian.md/plugins?search=myBrain)
