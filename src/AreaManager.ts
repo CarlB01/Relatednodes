@@ -32,7 +32,9 @@ export class AreaManager {
   private activeHoverPath: string | null = null;
   private hoverNeighborEls = new Set<HTMLElement>();
   private nodeElByPath = new Map<string, HTMLElement>();
- 
+  private delegatedHandlersBound = false;
+  private boundClickHandler: ((event: MouseEvent) => void) | null = null;
+
  
 
   constructor(
@@ -52,14 +54,34 @@ export class AreaManager {
     this.debouncedRender = debounce(this.executeRenderGraph.bind(this), 40, true );
   }
 
-  initiate() {
+  // #region PUBLIC METHODS
+  public initiate() {
     this.containerEl.addClass(RV.CONTAINER);
     this.setupPlusMinusBtnHandler(); // bind once
     this.setupHoverHighlightHandlers();
     this.setupInfoBtnHandler();
   }
 
-  // #region PUBLIC METHODS
+  /**
+   * Public destructor called when the parent view layout collapses or closes.
+   */
+  public destroy() {
+    /** 1. Stop the 40ms DOM render debouncer */
+    this.debouncedRender.cancel();
+    
+    /** 2. Abort the 2x rAF hardware animation loops immediately */
+    this.cancelPendingRedraw(); // 💡 Her lever den i beste velgående!
+    
+    /** 3. Clear out the cached SVG Bezier lines */
+    this.linkCache.clear();
+    
+    /** 4. Wipe any visible floating info popups from the screen */
+    this.cleanupPopup(); 
+
+    /** 5. Remove delegated handlers so resume gets a clean rebind */
+    this.teardownPlusMinusBtnHandler();
+  }
+
   /**
    * Schedules a fresh redraw synchronized with the hardware screen refresh rate (60Hz).
    * Automatically triggered by scroll vents, window resizing, and following initial DOM injection.
@@ -113,24 +135,6 @@ export class AreaManager {
       this.animationFrameId = null;
     }
     this.redrawQueued = false;
-  }
-
-  /**
-   * Public destructor called when the parent view layout collapses or closes.
-   */
-  public destroy() {
-    /** 1. Stop the 40ms DOM render debouncer */
-    this.debouncedRender.cancel();
-    
-    /** 2. Abort the 2x rAF hardware animation loops immediately */
-    this.cancelPendingRedraw(); // 💡 Her lever den i beste velgående!
-    
-    /** 3. Clear out the cached SVG Bezier lines */
-    this.linkCache.clear();
-    
-    /** 4. Wipe any visible floating info popups from the screen */
-    this.cleanupPopup(); 
-
   }
   // #endregion
 
@@ -608,7 +612,8 @@ export class AreaManager {
 
 // #endregion
 
-// #region HOVER LINK/NABO HIGHLIGHT
+
+  // #region HOVER LINK/NEIGHBOUR HIGHLIGHT
   private setupHoverHighlightHandlers() {
     if (this.hoverBound) return;
     this.hoverBound = true;
@@ -766,13 +771,33 @@ export class AreaManager {
    * This is called during the DOM build phase in renderGraph / executeRenderGraph.
    */
   private setupPlusMinusBtnHandler() {
-    if (this.plusMinusBound) return;
-    this.plusMinusBound = true;
+    // Always ensure single live delegated listener bound to the current container
+    this.teardownPlusMinusBtnHandler();
 
-    this.containerEl.on("click", `.${RV.PLUS_MINUS_BTN}`, (event: MouseEvent, target: HTMLElement) => {
+    this.boundClickHandler = (event: MouseEvent) => {
+      const rawTarget = event.target as HTMLElement | null;
+      if (!rawTarget) return;
+
+      const btn = rawTarget.closest(`.${RV.PLUS_MINUS_BTN}`) as HTMLElement | null;
+      if (!btn) return;
+      if (!this.containerEl.contains(btn)) return;
+
       event.preventDefault();
-      this.onPlusMinusBtnClicked(target);
-    });
+      this.onPlusMinusBtnClicked(btn);
+    };
+
+    this.containerEl.addEventListener("click", this.boundClickHandler, true);
+    this.plusMinusBound = true;
+    this.delegatedHandlersBound = true;
+   }
+
+  private teardownPlusMinusBtnHandler() {
+    if (this.boundClickHandler && this.delegatedHandlersBound) {
+      this.containerEl.removeEventListener("click", this.boundClickHandler, true);
+    }
+    this.boundClickHandler = null;
+    this.plusMinusBound = false;
+    this.delegatedHandlersBound = false;
   }
 
   /**

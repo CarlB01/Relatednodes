@@ -277,11 +277,13 @@ export class MyBrainView extends ItemView implements HoverParent {
     const activeFile = this.getMostRecentMarkdownFile();
     if (!activeFile) return;
 
-    /** 
-     * Synchronous fire-and-forget: pushes the file change event to NetworkGraph.
-     * Rendering is deferred and handled automatically via the global 'graph:data-ready' event.
-     */
+    // Synchronous fire-and-forget: pushes the file change event to NetworkGraph.
     this.onFileChange(activeFile);
+    
+    // Safety redraw after resume/background transitions (macOS fullscreen overlap + iOS app switch)
+    window.requestAnimationFrame(() => {
+      this.areaManager?.requestRedraw();
+    });
   }
 
   /**
