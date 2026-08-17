@@ -28,7 +28,12 @@ export class AreaManager {
   private debouncedRender: Debouncer<[], void>;
   private activeInfoPopup: HTMLElement | null = null;
   private plusMinusBound = false;
-
+  private hoverBound = false;
+  private activeHoverPath: string | null = null;
+  private hoverNeighborEls = new Set<HTMLElement>();
+  private nodeElByPath = new Map<string, HTMLElement>();
+ 
+ 
 
   constructor(
     graph: NetworkGraph,
@@ -50,6 +55,7 @@ export class AreaManager {
   initiate() {
     this.containerEl.addClass(RV.CONTAINER);
     this.setupPlusMinusBtnHandler(); // bind once
+    this.setupHoverHighlightHandlers();
     this.setupInfoBtnHandler();
   }
 
@@ -173,6 +179,9 @@ export class AreaManager {
     this.renderQuadrant(this.center, [[centerNote]], "center");
     this.renderInfoBtnForCenterNode();
 
+    // map center node for hover-neighbor lookup
+    if (centerNote.div) this.nodeElByPath.set(centerNote.path, centerNote.div);
+
     // 1. UPPER AREA (Verified parent entities)
     const cleanParentsOnly = Array.from(centerNote.relations.parents).filter(n => n.relation === "parent");
     const sortedParents = graph.getSortedNotesForQuadrant(cleanParentsOnly, false);
@@ -207,7 +216,6 @@ export class AreaManager {
     this.yieldIfLeftTall();
     this.yieldIfRightTall();
   
-
     // SYNCHRONOUS VECTOR COUPLING: Compiles Bezier curves inside memory safely
     this.drawAllGraphLines(); 
 
@@ -265,7 +273,12 @@ export class AreaManager {
           // Binds geometrical viewport targets to node data fields
           note.assignedArea = areaName;
 
+          // needed for hover line highlighting
+          if (note.div) note.div.setAttribute("data-note-path", note.path);
+ 
           const noteEl = note.render();
+          noteEl.setAttribute("data-note-path", note.path);
+
           if (overGrensen && index > 0 && this.plugin.settings.groupsCollapsed) {
             noteEl.classList.add('hidden');
           }
@@ -275,6 +288,9 @@ export class AreaManager {
           if (note.upperGate) note.upperGate.areaElement = area;
           if (note.lowerGate) note.lowerGate.areaElement = area;
           if (note.friendGate) note.friendGate.areaElement = area;
+
+          // index node element by note path for hover-neighbor highlighting
+          if (note.div) this.nodeElByPath.set(note.path, note.div);
         });
 
         if (overGrensen) {
@@ -306,6 +322,8 @@ export class AreaManager {
   private drawAllGraphLines() {
     const centerNote = this.graph.centerNote;
     if (!centerNote) return;
+
+    this.nodeElByPath.clear();
     
     const offBy = this.offBy();
     if (!offBy) return;
@@ -325,6 +343,8 @@ export class AreaManager {
     // 1. INITIALIZATION: Collect visible canvas nodes and clear active gate states
     const visibleNotes = Array.from(this.graph.noteCache.values())
       .filter(n => n.isUsed && n.assignedArea !== "ignored");
+
+    for (const n of visibleNotes) if (n.div) this.nodeElByPath.set(n.path, n.div);
 
     for (const link of links.values()) {
         link.used = false; 
@@ -577,7 +597,69 @@ export class AreaManager {
     if (circle.style.stroke !== color) circle.style.stroke = color;
   }
 
+  private parseLineId(lineId: string): [string, string] | null {
+    const idx = lineId.indexOf("->");
+    if (idx <= 0 || idx >= lineId.length - 2) return null;
+    const a = lineId.slice(0, idx);
+    const b = lineId.slice(idx + 2);
+    if (!a || !b) return null;
+    return [a, b];
+  }
+
 // #endregion
+
+// #region HOVER LINK/NABO HIGHLIGHT
+  private setupHoverHighlightHandlers() {
+    if (this.hoverBound) return;
+    this.hoverBound = true;
+
+    this.containerEl.on("mouseover", ".item", (_event: MouseEvent, target: HTMLElement) => {
+      const notePath = target.getAttribute("data-note-path");
+      if (!notePath) return;
+      if (this.activeHoverPath === notePath) return;
+      this.applyHoverHighlight(notePath);
+    });
+
+    this.containerEl.on("mouseout", ".item", (_event: MouseEvent, _target: HTMLElement) => {
+      this.clearHoverHighlight();
+    });
+  }
+
+  private applyHoverHighlight(notePath: string) {
+    this.clearHoverHighlight();
+    this.activeHoverPath = notePath;
+
+    for (const [lineId, cacheItem] of this.linkCache.entries()) {
+      const parsed = this.parseLineId(lineId);
+      if (!parsed) continue;
+      const [a, b] = parsed;
+
+      if (a !== notePath && b !== notePath) continue;
+
+      cacheItem.svgElement.addClass("is-hover-link");
+
+      const neighborPath = a === notePath ? b : a;
+      const neighborEl = this.nodeElByPath.get(neighborPath);
+      if (neighborEl) {
+        neighborEl.addClass("is-hover-neighbor");
+        this.hoverNeighborEls.add(neighborEl);
+      }
+    }
+  }
+
+  private clearHoverHighlight() {
+    this.activeHoverPath = null;
+
+    for (const cacheItem of this.linkCache.values()) {
+      cacheItem.svgElement.removeClass("is-hover-link");
+    }
+
+    for (const el of this.hoverNeighborEls) {
+      el.removeClass("is-hover-neighbor");
+    }
+    this.hoverNeighborEls.clear();
+  }
+  // #endregion
 
 
   // #region INFO BTN HANDLING
@@ -760,5 +842,6 @@ export class AreaManager {
     this.requestRedraw();
   }
   // #endregion
+
 
 }

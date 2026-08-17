@@ -660,3 +660,15 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
 .is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .item:hover .rv-gate-svg.is-connected circle {
   filter: none;
 }
+
+.workspace-leaf .workspace-leaf-content .view-content.rv-container .rv-link-path.is-hover-link {
+  stroke-width: calc(var(--rv-line-width) * 2.2);
+  filter: drop-shadow(0 0 0.22em var(--text-accent));
+  opacity: 1;
+}
+
+.workspace-leaf .workspace-leaf-content .view-content.rv-container .item.is-hover-neighbor .focusable-note-link {
+  box-shadow: 0 0 0.72em color-mix(in srgb, var(--text-accent) 55%, transparent),
+              inset 0 0 0 0.06em var(--text-accent);
+  transform: scale(1.03);
+}
