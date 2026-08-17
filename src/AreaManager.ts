@@ -778,7 +778,7 @@ export class AreaManager {
       const rawTarget = event.target as HTMLElement | null;
       if (!rawTarget) return;
 
-      const btn = rawTarget.closest(`.${RV.PLUS_MINUS_BTN}`) as HTMLElement | null;
+      const btn = rawTarget.closest(`.${RV.PLUS_MINUS_BTN}`) as HTMLElement;
       if (!btn) return;
       if (!this.containerEl.contains(btn)) return;
 
