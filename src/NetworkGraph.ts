@@ -35,7 +35,7 @@ export interface TagGroupedCollection {
 }
 
 export class NetworkGraph {
-  noteCache = new Map<string, Node>(); // path -> Node
+  notesCache = new Map<string, Node>(); // path -> Node
   anchorCache = new Map<string, Anchor>(); // path/basename -> Anchor
   ignoredNotes = new Set<Node>();
   centerNote: Node | null = null;
@@ -52,7 +52,7 @@ export class NetworkGraph {
   // updateRequestToken: token system for incremental cache synchronization.
   // Tracks if new anchors are discovered during build.
   // This happens if obsidian cache was not fully ready.
-  // Helps keeping noteCache and anchorCache while next tread in progress 
+  // Helps keeping notesCache and anchorCache while next tread in progress 
   // takes over and finishes the partly updated caches.
   private updateRequestToken = 0;
 
@@ -87,7 +87,7 @@ export class NetworkGraph {
     }
   }
 
-  // # endregion
+  // #endregion
   
 
   // #region PRIVATE HELPER FUNCTIONS
@@ -182,7 +182,7 @@ export class NetworkGraph {
     // HEAVY DETERMINISTIC CALCULATIONS
     // ================================      
     this.ignoredNotes.clear();
-    for (const note of this.noteCache.values()) {
+    for (const note of this.notesCache.values()) {
       note.isUsed = false;
       note.isIndexedInThisRound = false;
       note.relation = "undefined";
@@ -247,8 +247,8 @@ export class NetworkGraph {
     await this.determineCrossNetworkConnections(this.centerNote, tokenAtStart);
     if (tokenAtStart !== this.updateRequestToken) return;
 
-    for (const [path, note] of this.noteCache.entries()) {
-      if (!note.isUsed) this.noteCache.delete(path);
+    for (const [path, note] of this.notesCache.entries()) {
+      if (!note.isUsed) this.notesCache.delete(path);
     }
     for (const [path, bait] of this.anchorCache.entries()) {
       if (!bait.isUsed || bait.sources.size === 0) this.anchorCache.delete(path);
@@ -268,7 +268,7 @@ export class NetworkGraph {
     if (!file) return null;
 
     // 1. MEMORY SKEW: Check if the node element already populates the path-indexed database
-    let note = this.noteCache.get(file.path);
+    let note = this.notesCache.get(file.path);
 
     if (!note) {
       const isDecrypted = this.memoryFeederCache.has(file.path);
@@ -286,7 +286,7 @@ export class NetworkGraph {
       note = Node.createFromObsidian(file, fileCache, useAlias, this.settings.optIgnoreFragments, this.settings.optIgnoreTags);
       
       // 3. Commit the evaluated record index under file.path
-      this.noteCache.set(file.path, note);
+      this.notesCache.set(file.path, note);
     }
 
     // ==========================================================================
@@ -294,6 +294,11 @@ export class NetworkGraph {
     // Synchronously parses configuration variables exactly once per node per pass.
     // Guarantees high-velocity data availability preceding graph mapping layers.
     // ==========================================================================
+    if (file.extension == 'mdenc') {
+      console.log('note.rawFrontmatter', note.rawFrontmatter)
+      console.log('note.isIndexedInThisRound', note.isIndexedInThisRound)
+    }
+    
     if (note.rawFrontmatter && !note.isIndexedInThisRound) {
       
       const parentProps = this.settings.optParentProperties;
@@ -500,7 +505,7 @@ export class NetworkGraph {
    */
   private async determineCrossNetworkConnections(centerNote: Node, tokenAtStart: number) {
     // 1. COLLECT LAYOUT-RENDERED VIEW CORES
-    const visibleNotes = Array.from(this.noteCache.values())
+    const visibleNotes = Array.from(this.notesCache.values())
       .filter(note => note.isUsed && note.assignedArea !== 'ignored');
 
     if (visibleNotes.length < 2) return;
@@ -843,7 +848,7 @@ export class NetworkGraph {
    */
   public async handleFileResolve(file: TFile): Promise<boolean> {
     // GATE GUARD: High-velocity validation checking if the modified file impacts currently tracked memory paths
-    const påvirkerVisning = this.noteCache.has(file.path) || 
+    const påvirkerVisning = this.notesCache.has(file.path) || 
                             this.anchorCache.has(file.path);
     
     if (påvirkerVisning) {  
@@ -866,9 +871,9 @@ export class NetworkGraph {
    * @param oldPath The absolute historical system path hash originating before the modification.
    */
   public handleFileRename(file: TFile, oldPath: string) {
-    // 1. MEMORY OVERRIDE: Relocate and re-index the element in noteCache
-    if (this.noteCache.has(oldPath)) {
-      const note = this.noteCache.get(oldPath)!;
+    // 1. MEMORY OVERRIDE: Relocate and re-index the element in notesCache
+    if (this.notesCache.has(oldPath)) {
+      const note = this.notesCache.get(oldPath)!;
       note.path = file.path;
       note.basename = file.basename;
       
@@ -876,8 +881,8 @@ export class NetworkGraph {
         note.displayText = file.basename;
       }
       
-      this.noteCache.set(file.path, note);
-      this.noteCache.delete(oldPath); 
+      this.notesCache.set(file.path, note);
+      this.notesCache.delete(oldPath); 
     }
 
     // 2. MEMORY OVERRIDE: Relocate and re-index the string token inside anchorCache

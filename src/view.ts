@@ -278,7 +278,6 @@ export class MyBrainView extends ItemView implements HoverParent {
       const virtualCache = ExternalFeederScanner.scanActiveView(this.app);
       if (virtualCache) {
         this.plugin.networkGraph.handleExternalContentFeed(activeFile, virtualCache);
-        console.log('virtualCache', virtualCache);
       }
     } else {
       this.plugin.networkGraph.clearMemoryFeederCache();

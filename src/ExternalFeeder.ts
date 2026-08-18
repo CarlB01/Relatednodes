@@ -1,302 +1,283 @@
-import { App, CachedMetadata, LinkCache, Pos, TagCache, FrontMatterCache, Loc } from "obsidian";
-type FrontmatterScalar = string | number | boolean | null;
-type FrontmatterValue = FrontmatterScalar | FrontmatterScalar[];
+import { App, CachedMetadata, FrontMatterCache, LinkCache, TagCache } from "obsidian";
 
-/**
- * Produces a CachedMetadata object from the active Obsidian Live Preview DOM.
- * Goal: mimic Obsidian parser output shape as closely as possible.
- */
 export class ExternalFeederScanner {
   public static scanActiveView(app: App): CachedMetadata | null {
-    const encryptPlugin = (app as any)?.plugins?.plugins?.["meld-encrypt"];
-    if (!encryptPlugin) return null;
+    const meldEncrypt = (app as any)?.plugins?.plugins?.["meld-encrypt"];
+    if (!meldEncrypt) return null;
 
-    const activeViewRoot = this.getActiveViewRoot();
-    if (!activeViewRoot) return null;
+    const root = this.getActiveSourceRoot();
+    if (!root) return null;
 
-    const links = this.extractLinks(activeViewRoot);
-    const tagsFromLinks = this.extractTagsFromLinkSpans(activeViewRoot);
-    const frontmatter = this.extractFrontmatter(activeViewRoot);
+    const frontmatter = this.extractFrontmatter(root);
 
-    // Optional: include frontmatter tags as TagCache too, for parity with index behavior
-    const tagsFromFrontmatter = this.extractTagCacheFromFrontmatter(frontmatter);
+    const bodyLinks = this.extractLinksFromBody(root);
+    const fmLinks = this.extractLinksFromFrontmatter(frontmatter);
 
-    const allTags = this.mergeTagCaches(tagsFromLinks, tagsFromFrontmatter);
+    const links = this.mergeLinks(bodyLinks, fmLinks);
+    const tags = this.extractTagCacheFromFrontmatter(frontmatter);
 
-    const result: CachedMetadata = {
+    if (!links.length && !tags.length && !frontmatter) return null;
+
+    return {
       links: links.length ? links : undefined,
-      tags: allTags.length ? allTags : undefined,
+      tags: tags.length ? tags : undefined,
       frontmatter: frontmatter ?? undefined,
-      // Synthetic, because DOM has no source-file byte offsets for YAML block.
-      frontmatterPosition: frontmatter ? this.syntheticFrontmatterPosition : undefined
+      frontmatterPosition: { start: 0, end: 0 } as any
     };
-
-    // If completely empty, return null for caller ergonomics
-    if (!result.links && !result.tags && !result.frontmatter) return null;
-    return result;
   }
 
-  // ---------------------------
-  // Active root / scope
-  // ---------------------------
+  // ---------------------------------------------------------------------------
+  // Root
+  // ---------------------------------------------------------------------------
 
-  private static getActiveViewRoot(): HTMLElement | null {
-    // Prefer active markdown source view content
+  private static getActiveSourceRoot(): HTMLElement | null {
     const activeLeaf = document.querySelector<HTMLElement>(".workspace-leaf.mod-active");
-    if (!activeLeaf) return null;
-
-    const sourceView = activeLeaf.querySelector<HTMLElement>(".markdown-source-view");
-    if (!sourceView) return null;
-
-    const viewContent = sourceView.querySelector<HTMLElement>(".view-content");
-    return viewContent ?? sourceView;
+    if (activeLeaf) {
+      const source = activeLeaf.querySelector<HTMLElement>(".markdown-source-view");
+      if (source) return source;
+    }
+    return document.querySelector<HTMLElement>(".markdown-source-view");
   }
 
-  // ---------------------------
-  // Links / inline tags
-  // ---------------------------
+  // ---------------------------------------------------------------------------
+  // Frontmatter from metadata UI
+  // ---------------------------------------------------------------------------
 
-  private static extractLinks(root: HTMLElement): LinkCache[] {
-    const linkElements = root.querySelectorAll<HTMLElement>("span[data-link-path]");
-    const unique = new Set<string>();
-    const links: LinkCache[] = [];
+  private static extractFrontmatter(root: HTMLElement): FrontMatterCache | null {
+    const container = root.querySelector<HTMLElement>(".metadata-container");
+    if (!container) return null;
 
-    linkElements.forEach((el) => {
+    const props = container.querySelectorAll<HTMLElement>(".metadata-property[data-property-key]");
+    if (!props.length) return null;
+
+    const fm = {} as FrontMatterCache;
+
+    props.forEach((prop) => {
+      const key = (prop.getAttribute("data-property-key") ?? "").trim();
+      if (!key) return;
+
+      const valueType = (
+        prop.querySelector<HTMLElement>(".metadata-property-value")?.getAttribute("data-property-type") ?? ""
+      ).trim();
+
+      const parsed = this.parsePropertyValue(prop, valueType);
+      if (parsed === undefined) return;
+
+      if (key === "tags") {
+        const tags = this.toStringArray(parsed)
+          .map((t) => this.normalizeFrontmatterTag(t))
+          .filter((t): t is string => Boolean(t));
+        if (tags.length) (fm as Record<string, unknown>)[key] = this.dedupe(tags);
+        return;
+      }
+
+      if (key === "alias" || key === "aliases") {
+        const aliases = this.toStringArray(parsed);
+        if (aliases.length) (fm as Record<string, unknown>)["aliases"] = this.dedupe(aliases);
+        return;
+      }
+
+      (fm as Record<string, unknown>)[key] = parsed;
+    });
+
+    return Object.keys(fm as Record<string, unknown>).length ? fm : null;
+  }
+
+  private static parsePropertyValue(prop: HTMLElement, propertyType: string): unknown {
+    if (propertyType === "tags" || propertyType === "multitext") {
+      const pills = Array.from(prop.querySelectorAll<HTMLElement>(".multi-select-pill-content"))
+        .map((pill) => (pill.getAttribute("data-href") ?? pill.textContent ?? "").trim())
+        .filter(Boolean);
+      return pills.length ? pills : undefined;
+    }
+
+    const input = prop.querySelector<HTMLInputElement>(".metadata-property-value input");
+    if (input?.value?.trim()) return this.parseLooseScalarOrList(input.value.trim());
+
+    const editable = prop.querySelector<HTMLElement>(".metadata-property-value [contenteditable='true']");
+    if (editable) {
+      const v = (editable.textContent ?? "").trim();
+      if (v) return this.parseLooseScalarOrList(v);
+    }
+
+    const raw = (prop.querySelector(".metadata-property-value")?.textContent ?? "").trim();
+    if (raw) return this.parseLooseScalarOrList(raw);
+
+    return undefined;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Links
+  // ---------------------------------------------------------------------------
+
+  // 1) Links from body spans
+  private static extractLinksFromBody(root: HTMLElement): LinkCache[] {
+    const out: LinkCache[] = [];
+    const seen = new Set<string>();
+
+    root.querySelectorAll<HTMLElement>("span[data-link-path]").forEach((el) => {
       const path = (el.getAttribute("data-link-path") ?? "").trim();
       if (!path) return;
 
-      // key on path+href combo for safer dedup if aliases differ
       const href = (el.getAttribute("data-link-data-href") ?? path).trim();
-      const key = `${path}::${href}`;
-      if (unique.has(key)) return;
-      unique.add(key);
+      if (!href) return;
 
-      links.push({
+      const key = href.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      out.push({
         link: href,
         original: `[[${href}]]`,
-        position: this.syntheticFrontmatterPosition
+        position: { start: 0, end: 0 } as any
       });
     });
 
-    return links;
+    return out;
   }
 
-  private static extractTagsFromLinkSpans(root: HTMLElement): TagCache[] {
-    const linkElements = root.querySelectorAll<HTMLElement>("span[data-link-tags]");
-    const tags: TagCache[] = [];
+  // 2) Links inferred from frontmatter values
+  private static extractLinksFromFrontmatter(frontmatter: FrontMatterCache | null): LinkCache[] {
+    if (!frontmatter) return [];
+
+    const out: LinkCache[] = [];
+    const seen = new Set<string>();
+    const obj = frontmatter as Record<string, unknown>;
+
+    for (const [key, raw] of Object.entries(obj)) {
+      if (raw == null) continue;
+
+      // skip tags field - not links
+      if (key === "tags") continue;
+
+      const values = this.toStringArray(raw);
+      for (const v of values) {
+        const candidate = this.normalizePossibleLinkValue(v);
+        if (!candidate) continue;
+
+        const dedupeKey = candidate.toLowerCase();
+        if (seen.has(dedupeKey)) continue;
+        seen.add(dedupeKey);
+
+        out.push({
+          link: candidate,
+          original: `[[${candidate}]]`,
+          position: { start: 0, end: 0 } as any
+        });
+      }
+    }
+
+    return out;
+  }
+
+  private static mergeLinks(a: LinkCache[], b: LinkCache[]): LinkCache[] {
+    const out: LinkCache[] = [];
     const seen = new Set<string>();
 
-    linkElements.forEach((el) => {
-      const raw = (el.getAttribute("data-link-tags") ?? "").trim();
-      if (!raw) return;
+    [...a, ...b].forEach((link) => {
+      const key = link.link.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(link);
+    });
 
-      raw.split(/\s+/).forEach((part) => {
-        const normalized = this.normalizeTagForTagCache(part);
-        if (!normalized) return;
-        if (seen.has(normalized)) return;
-        seen.add(normalized);
+    return out;
+  }
 
-        tags.push({
-          tag: normalized, // TagCache convention uses "#tag"
-          position: this.syntheticFrontmatterPosition
-        });
+  // ---------------------------------------------------------------------------
+  // Tags from frontmatter only
+  // ---------------------------------------------------------------------------
+
+  private static extractTagCacheFromFrontmatter(frontmatter: FrontMatterCache | null): TagCache[] {
+    if (!frontmatter) return [];
+
+    const raw = (frontmatter as Record<string, unknown>)["tags"];
+    if (raw == null) return [];
+
+    const out: TagCache[] = [];
+    const seen = new Set<string>();
+
+    this.toStringArray(raw).forEach((t) => {
+      const normalized = this.normalizeTagCacheTag(t);
+      if (!normalized) return;
+      if (seen.has(normalized)) return;
+      seen.add(normalized);
+
+      out.push({
+        tag: normalized,
+        position: { start: 0, end: 0 } as any
       });
     });
 
-    return tags;
+    return out;
   }
 
-  // ---------------------------
-  // Frontmatter extraction
-  // ---------------------------
+  // ---------------------------------------------------------------------------
+  // Normalizers / parsers
+  // ---------------------------------------------------------------------------
 
-private static extractFrontmatter(root: HTMLElement): FrontMatterCache | null {
-  const metadataContainer = root.querySelector<HTMLElement>(".metadata-container");
-  if (!metadataContainer) return null;
+  private static parseLooseScalarOrList(v: string): unknown {
+    const trimmed = v.trim();
+    const low = trimmed.toLowerCase();
 
-  const propertyNodes = metadataContainer.querySelectorAll<HTMLElement>(".metadata-property[data-property-key]");
-  if (!propertyNodes.length) return null;
+    if (low === "true") return true;
+    if (low === "false") return false;
+    if (low === "null") return null;
 
-  // Viktig: FrontMatterCache her
-  const frontmatter = {} as FrontMatterCache;
-  propertyNodes.forEach((propNode) => {
-    const key = (propNode.getAttribute("data-property-key") ?? "").trim();
-    if (!key) return;
-
-    const valueNode = propNode.querySelector<HTMLElement>(".metadata-property-value");
-    const type = (valueNode?.getAttribute("data-property-type") ?? "").trim();
-
-    const parsed = this.parsePropertyValue(propNode, type);
-    if (parsed === undefined) return;
-
-    if (key === "tags") {
-      const normalized = this.normalizeFrontmatterTagsValue(parsed);
-      if (normalized !== undefined) {
-        (frontmatter as any)[key] = normalized;
-      }
-      return;
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      const inner = trimmed.slice(1, -1).trim();
+      if (!inner) return [];
+      return inner.split(",").map((x) => x.trim()).filter(Boolean);
     }
-
-    (frontmatter as any)[key] = parsed;
-  });
-
-  return Object.keys(frontmatter).length ? frontmatter : null;
-}
-
-  private static parsePropertyValue(propNode: HTMLElement, propertyType: string): FrontmatterValue | undefined {
-    // 1) Multi-select style (tags, list, multitext)
-    if (propertyType === "tags" || propertyType === "multitext") {
-      const pills = Array.from(propNode.querySelectorAll<HTMLElement>(".multi-select-pill-content"))
-        .map((pill) => {
-          // Prefer canonical href for internal links
-          const dataHref = pill.getAttribute("data-href");
-          const txt = pill.textContent;
-          return (dataHref ?? txt ?? "").trim();
-        })
-        .filter(Boolean);
-
-      if (!pills.length) return undefined;
-
-      if (propertyType === "tags") {
-        // Return as plain strings for YAML/frontmatter realism
-        return pills
-          .map((t) => this.normalizeTagForFrontmatter(t))
-          .filter((t): t is string => Boolean(t));
-      }
-
-      // multitext -> array of scalar strings
-      return pills;
-    }
-
-    // 2) Direct input (if any)
-    const input = propNode.querySelector<HTMLInputElement>(".metadata-property-value input");
-    if (input) {
-      const value = input.value.trim();
-      if (!value) return undefined;
-      return this.parseScalarOrInlineList(value);
-    }
-
-    // 3) Contenteditable field fallback
-    const editable = propNode.querySelector<HTMLElement>(".metadata-property-value [contenteditable='true']");
-    if (editable) {
-      const value = (editable.textContent ?? "").trim();
-      if (!value) return undefined;
-      return this.parseScalarOrInlineList(value);
-    }
-
-    // 4) Last-resort text content
-    const raw = (propNode.querySelector(".metadata-property-value")?.textContent ?? "").trim();
-    if (!raw) return undefined;
-    return this.parseScalarOrInlineList(raw);
-  }
-
-  private static parseScalarOrInlineList(raw: string): FrontmatterValue {
-    const trimmed = raw.trim();
-    const lower = trimmed.toLowerCase();
-
-    if (lower === "true") return true;
-    if (lower === "false") return false;
-    if (lower === "null") return null;
 
     if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
       const n = Number(trimmed);
       if (!Number.isNaN(n)) return n;
     }
 
-    // YAML-ish inline list support: [a, b, c]
-    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-      const inner = trimmed.slice(1, -1).trim();
-      if (!inner) return [];
-      return inner.split(",").map((v) => v.trim());
-    }
-
     return trimmed;
   }
 
-  // ---------------------------
-  // Tag normalization helpers
-  // ---------------------------
+  private static normalizePossibleLinkValue(input: string): string | null {
+    let v = input.trim();
+    if (!v) return null;
 
-  /** For TagCache: always "#tag" form */
-  private static normalizeTagForTagCache(raw: string): string | null {
-    const t = raw.trim();
-    if (!t) return null;
-    const bare = t.startsWith("#") ? t.slice(1) : t;
-    if (!bare) return null;
-    return `#${bare}`;
-  }
-
-  /** For frontmatter tags: always "tag" (no #) */
-  private static normalizeTagForFrontmatter(raw: string): string | null {
-    const t = raw.trim();
-    if (!t) return null;
-    const bare = t.startsWith("#") ? t.slice(1) : t;
-    return bare || null;
-  }
-
-  private static normalizeFrontmatterTagsValue(value: FrontmatterValue): FrontmatterValue | undefined {
-    if (Array.isArray(value)) {
-      const normalized = value
-        .map((v) => String(v))
-        .map((v) => this.normalizeTagForFrontmatter(v))
-        .filter((v): v is string => Boolean(v));
-
-      if (!normalized.length) return undefined;
-      return normalized;
+    // Remove wikilink wrappers if present: [[note]] / [[note|alias]]
+    if (v.startsWith("[[") && v.endsWith("]]")) {
+      v = v.slice(2, -2).trim();
+      const pipe = v.indexOf("|");
+      if (pipe >= 0) v = v.slice(0, pipe).trim();
     }
 
-    const one = this.normalizeTagForFrontmatter(String(value));
-    return one ?? undefined;
+    // reject obvious non-link scalar values
+    const low = v.toLowerCase();
+    if (!v || low === "true" || low === "false" || low === "null") return null;
+    if (/^-?\d+(\.\d+)?$/.test(v)) return null;
+
+    // treat hashtags as tags, not links
+    if (v.startsWith("#")) return null;
+
+    return v;
   }
 
-  private static extractTagCacheFromFrontmatter(frontmatter: FrontMatterCache | null): TagCache[] {
-    if (!frontmatter) return [];
-    const tagsValue = (frontmatter as any)["tags"];
-    if (tagsValue === undefined) return [];
-
-    const seen = new Set<string>();
-    const out: TagCache[] = [];
-
-    const values = Array.isArray(tagsValue) ? tagsValue : [tagsValue];
-    values.forEach((v) => {
-      const tag = this.normalizeTagForTagCache(String(v));
-      if (!tag) return;
-      if (seen.has(tag)) return;
-      seen.add(tag);
-
-      out.push({
-        tag,
-        position: this.syntheticFrontmatterPosition
-      });
-    });
-
-    return out;
+  private static toStringArray(value: unknown): string[] {
+    if (Array.isArray(value)) return value.map((x) => String(x).trim()).filter(Boolean);
+    if (value == null) return [];
+    return [String(value).trim()].filter(Boolean);
   }
 
-  private static mergeTagCaches(a: TagCache[], b: TagCache[]): TagCache[] {
-    if (!a.length) return b;
-    if (!b.length) return a;
+  private static normalizeFrontmatterTag(tag: string): string | null {
+    const t = tag.trim();
+    if (!t) return null;
+    return t.startsWith("#") ? (t.slice(1).trim() || null) : t;
+    }
 
-    const seen = new Set<string>();
-    const out: TagCache[] = [];
-
-    [...a, ...b].forEach((t) => {
-      if (seen.has(t.tag)) return;
-      seen.add(t.tag);
-      out.push(t);
-    });
-
-    return out;
+  private static normalizeTagCacheTag(tag: string): string | null {
+    const bare = this.normalizeFrontmatterTag(tag);
+    return bare ? `#${bare}` : null;
   }
 
-  // ---------------------------
-  // Synthetic positions
-  // ---------------------------
-
-  private static zeroRange = { start: 0, end: 0 };
-
-  private static loc = { line: 0, col: 0, offset: 0 };
-
-  private static syntheticFrontmatterPosition = { start: this.loc, end: this.loc };
-
+  private static dedupe(arr: string[]): string[] {
+    return Array.from(new Set(arr));
+  }
 }
