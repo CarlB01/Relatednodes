@@ -16,12 +16,7 @@ export class Node {
   readonly aliases: string[];
   readonly tags: string[]; // Sanitized in lowercase keys for high-velocity O(1) matching passes  
   readonly isInitiallyIgnored: boolean;
-
-  // ==========================================================================
-  // PRODUCTION REFACTOR: Replaces unsafe 'any' signatures with Obsidian's core
-  // FrontMatterCache interface definition to pass gallery validations cleanly [dan].
-  // ==========================================================================
-  readonly rawFrontmatter: import("obsidian").FrontMatterCache | null;
+  readonly frontmatterIndex: Map<string, string[]>;
   
   isUsed: boolean = false; // Lifecycle flag managing item element instance recycling
   public isIndexedInThisRound: boolean = false; // Typesafe JIT pass flag tracking JIT passes safely
@@ -65,12 +60,30 @@ export class Node {
     this.aliases = aliases;
     this.tags = tags;
     this.isInitiallyIgnored = isInitiallyIgnored;
-    this.rawFrontmatter = frontmatter;
+    this.frontmatterIndex = Node.buildFrontmatterIndex(frontmatter);
 
     // Lateral GATE starts defaulted to the 'left' vector, but can be updated via render calculations
     this.upperGate  = new Gate(this, 'up');
     this.lowerGate  = new Gate(this, 'down');
     this.friendGate = new Gate(this, 'left');
+  }
+
+  /**
+   * Builds a normalized frontmatter index from raw FrontMatterCache once per Node creation.
+   * Maps each property key to a cleaned string array for efficient lookups.
+   */
+  private static buildFrontmatterIndex(
+    frontmatter: import("obsidian").FrontMatterCache | null
+  ): Map<string, string[]> {
+    const index = new Map<string, string[]>();
+    if (!frontmatter) return index;
+    const fm = frontmatter as Record<string, unknown>;
+    for (const key of Object.keys(fm)) {
+      if (key === "position") continue; // skip Obsidian internal position key
+      const values = StringUtils.normalizeToStringArray(fm[key]);
+      if (values.length > 0) index.set(key, values);
+    }
+    return index;
   }
 
   /**

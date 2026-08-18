@@ -294,12 +294,7 @@ export class NetworkGraph {
     // Synchronously parses configuration variables exactly once per node per pass.
     // Guarantees high-velocity data availability preceding graph mapping layers.
     // ==========================================================================
-    if (file.extension == 'mdenc') {
-      console.log('note.rawFrontmatter', note.rawFrontmatter)
-      console.log('note.isIndexedInThisRound', note.isIndexedInThisRound)
-    }
-    
-    if (note.rawFrontmatter && !note.isIndexedInThisRound) {
+    if (note.frontmatterIndex.size > 0 && !note.isIndexedInThisRound) {
       
       const parentProps = this.settings.optParentProperties;
       const childProps  = this.settings.optChildProperties;
@@ -310,15 +305,10 @@ export class NetworkGraph {
       for (const attrib of allTargetProps) {
         if (!attrib) continue;
         
-        // TYPESAFE INDEX ACCESS: This allows dynamic string lookups ([attrib]) 
-        const frontmatterCache = note.rawFrontmatter as Record<string, unknown> | null;
-        const rawValue = frontmatterCache ? frontmatterCache[attrib] : undefined;
-        if (rawValue == null) continue;
+        const values = note.frontmatterIndex.get(attrib);
+        if (!values) continue;
 
-        // Wash raw YAML structures into pure string fragments via StringUtils pipeline
-        const cleanArray = StringUtils.normalizeToStringArray(rawValue) ?? [];
-
-        for (const targetName of cleanArray) {
+        for (const targetName of values) {
           if (!targetName) continue;
 
           // Forces keys to explicit lowercase and normalizes NFC formatting for emojis
@@ -674,14 +664,9 @@ export class NetworkGraph {
 
     const targetName = otherNote.basename;
     
-    // Cast the native frontmatter structures locally to explicit Record string index maps.
-    // This safely enables high-velocity dynamic lookups ([key])
-    const centerFmIndex = centerNote.rawFrontmatter as Record<string, unknown> | null;
-    const otherFmIndex = otherNote.rawFrontmatter as Record<string, unknown> | null;
-
-    // Checks properties securely using native JavaScript array inclusion filters loop matrices
-    const finnesIFm = (centerFmIndex && Object.keys(centerFmIndex).some(key => String(centerFmIndex[key]).includes(targetName))) ||
-                      (otherFmIndex && Object.keys(otherFmIndex).some(key => String(otherFmIndex[key]).includes(centerNote.basename)));
+    // Use precomputed frontmatterIndex to check if either note references the other in any frontmatter value
+    const finnesIFm = (Array.from(centerNote.frontmatterIndex.values()).some(vals => vals.some(v => v.includes(targetName)))) ||
+                      (Array.from(otherNote.frontmatterIndex.values()).some(vals => vals.some(v => v.includes(centerNote.basename))));
                       
     if (finnesIFm) {
       otherNote.discoverySource = "frontmatter-udefinert";
