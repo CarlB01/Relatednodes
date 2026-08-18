@@ -1,4 +1,4 @@
-import { Plugin, Notice, WorkspaceLeaf, TFile, TAbstractFile } from 'obsidian';
+import { Plugin, Notice, WorkspaceLeaf, TFile, TAbstractFile, CachedMetadata } from 'obsidian';
 import { SettingTab } from "./SettingTab.js";
 import { MyBrainView } from './view.js';
 import { RV } from './constants.js';
@@ -8,7 +8,7 @@ import { SettingsManager } from './SettingsManager.js';
 export default class MyBrainPlugin extends Plugin {
   declare settings: SettingsManager;
   public networkGraph!: NetworkGraph;
-  
+
   private appPaused = false;
   private resumedAt = 0;
   private mobileWarmupUntil = 0;
@@ -61,7 +61,7 @@ export default class MyBrainPlugin extends Plugin {
       id: 'open-view',
       name: 'Open view',
       callback: () => this.activateGraphView(),
-    });    
+    });
   }
 
   /**

@@ -1,4 +1,4 @@
-import { App, BasesEntry, debounce, Debouncer, TFile } from "obsidian";
+import { App, BasesEntry, CachedMetadata, debounce, Debouncer, TFile } from "obsidian";
 import MyBrainPlugin from "./main.js";
 import { Node, Relation } from "./Node.js";
 import { StringUtils } from "./StringUtils.js";
@@ -45,6 +45,9 @@ export class NetworkGraph {
   private settings: SettingsManager;
 
   private debouncedUpdate: Debouncer<[TFile | null], Promise<void>>;
+  
+  /** Explicit path-indexed memory skew holding runtime-compiled virtual structures */
+  private memoryFeederCache: Map<string, CachedMetadata> = new Map();
 
   // updateRequestToken: token system for incremental cache synchronization.
   // Tracks if new anchors are discovered during build.
@@ -55,6 +58,7 @@ export class NetworkGraph {
 
   private isAborted = false;
 
+  // #region LIFECYCLE METHODS
   constructor(
     plugin: MyBrainPlugin,
     settingsManager: SettingsManager
@@ -69,8 +73,23 @@ export class NetworkGraph {
   public cancel(): void {
     this.isAborted = true;
     this.debouncedUpdate.cancel();
+    this.clearMemoryFeederCache(); 
   }
+
+  /**
+   * Expressly purges the transient in-memory virtual metadata structure cache.
+   * Intended to be called instantly when an encrypted context leaves view focus boundaries
+   * to guarantee data isolation and prevent memory leakage of decrypted strings.
+   */
+  public clearMemoryFeederCache(): void {
+    if (this.memoryFeederCache && this.memoryFeederCache.size > 0) {
+      this.memoryFeederCache.clear();
+    }
+  }
+
+  // # endregion
   
+
   // #region PRIVATE HELPER FUNCTIONS
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -127,6 +146,10 @@ export class NetworkGraph {
   update(activeFile: TFile | null): void {
     if (!activeFile || this.plugin.isAppPaused()) return;
 
+    if (this.centerNote && this.centerNote.path !== activeFile.path) {
+      this.memoryFeederCache.delete(this.centerNote.path); // erase that old protected note
+    }
+
     this.isAborted = false;
 
     /** Increment token immediately to invalidate any legacy async slices currently yielding */
@@ -145,12 +168,15 @@ export class NetworkGraph {
 
     /** Capture the exact token state before we initiate asynchronous cache polling */
     const tokenAtStart = this.updateRequestToken;
-
-    /** Wait for Obsidian's background indexer to stabilize links */
-    await this.waitUntilCacheStable(activeFile);
     
-    /** Context safety check: Abort if cache wait was intercepted by a newer file-open event */
-    if (tokenAtStart !== this.updateRequestToken || this.isAborted) return;
+    // If a note exists in memoryFeederCache (decrypted), no need to wait for cache
+    if (!this.memoryFeederCache.has(activeFile.path)) {
+      // Wait for Obsidian's background indexer to stabilize links (ordinary files)
+      await this.waitUntilCacheStable(activeFile);
+      
+      // Context safety check: Abort if cache wait was intercepted by a newer file-open event
+      if (tokenAtStart !== this.updateRequestToken || this.isAborted) return;
+    }
 
     // ================================
     // HEAVY DETERMINISTIC CALCULATIONS
@@ -245,8 +271,13 @@ export class NetworkGraph {
     let note = this.noteCache.get(file.path);
 
     if (!note) {
+      const isDecrypted = this.memoryFeederCache.has(file.path);
+      
       // 2. Fetch fresh cache properties natively from Obsidian Core if instance is missing
-      const fileCache = this.app.metadataCache.getFileCache(file);
+      const fileCache = isDecrypted
+        ? this.returnDecryptedCache(file.path)
+        : this.app.metadataCache.getFileCache(file);
+
       if (!fileCache) return null;
 
       const useAlias = this.plugin.settings.displayAliases;
@@ -713,6 +744,23 @@ export class NetworkGraph {
 
     return connections;
   }
+
+  /**
+   * Resolves the in-memory virtual metadata structure for decrypted nodes.
+   * Guaranteed to never return undefined to prevent falling back to disk cache.
+   */
+  private returnDecryptedCache(path: string): CachedMetadata {
+    const cachedMetadata = this.memoryFeederCache.get(path);
+    
+    if (cachedMetadata) return cachedMetadata;
+
+    /** Fallback: Return a structurally valid, empty blueprint instead of undefined */
+    return {
+      links: [],
+      tags: [],
+      frontmatter: undefined
+    };
+  }
   // #endregion
 
 
@@ -861,6 +909,26 @@ export class NetworkGraph {
       }
     }
   }
-  // #endregion
 
+  /**
+   * External payload entry point. Injects in-memory compiled metadata 
+   * structures directly into the graph processing queue, bypassing disk cache.
+   * 
+   * @param file The targeted decrypted TFile instance.
+   * @param virtualCache The structurally valid, simulated Obsidian metadata object.
+   */
+  public handleExternalContentFeed(file: TFile, virtualCache: CachedMetadata): void {
+    /** Map the transient virtual metadata directly into the path-indexed memory skew */
+    this.memoryFeederCache.set(file.path, virtualCache);
+    
+    /** 
+     * Invalidate legacy asynchronous loop execution slices immediately 
+     * by forcing a token shift boundary configuration.
+     */
+    this.updateRequestToken++;
+    
+    /** Execute the heavy deterministic calculation pass with high-velocity memory structures */
+    void this.executeUpdate(file);
+  }
+  // #endregion
 }

@@ -2,6 +2,7 @@ import myBrainPlugin from './main.js';
 import { HoverPopover, TFile, WorkspaceLeaf, HoverParent, MarkdownView, FileView, Platform, ItemView, App, EventRef, debounce, Debouncer } from 'obsidian';
 import { AreaManager } from './AreaManager.js';
 import { RV } from './constants.js';
+import { ExternalFeederScanner } from './ExternalFeeder.js';
 
 export class MyBrainView extends ItemView implements HoverParent {
 
@@ -231,28 +232,63 @@ export class MyBrainView extends ItemView implements HoverParent {
 
   // #region WINDOW HANDLING
   /**
-   * Fuses layout rendering updates when user focuses structural tab partitions.
+   * Fuses layout rendering updates when the user focuses structural tab partitions.
+   * Acts as the structural ingestion funnel for workspace leaf state changes.
    */
-  private onActiveLeafChanged(leaf: WorkspaceLeaf | null) {
-    if (this.isSuspended) return;
+  private onActiveLeafChanged(leaf: WorkspaceLeaf | null): void {
+    if (this.isSuspended || !leaf || !leaf.view) return;
 
-    if (leaf && leaf.view instanceof MarkdownView) {
+    /** 
+     * BROAD VIEW RESOLUTION CONTRACT:
+     * Validate if the targeted view handles native markdown configurations or encrypted content blocks.
+     */
+    const activeFile = this.app.workspace.getActiveFile();
+    const isMarkdown = leaf.view instanceof MarkdownView;
+    const isEncrypted = activeFile?.path.endsWith(".mdenc") ?? false;
+
+    if (isMarkdown || isEncrypted) {
       if (this.areaManager.containerEl.isShown()) {
-      this.areaManager.requestRedraw();
-    }
+        this.areaManager.requestRedraw();
+      }
       void this.app.workspace.revealLeaf(leaf);
+
+      this.debouncedActiveLeaf();
     }
   }
 
   /**
    * Implementation target for debouncedActiveLeafChange.
+   * Evaluates focused file context changes and triggers the backend data synchronization layer.
    */
   private executeActiveLeafChange(): void {
     if (this.isSuspended || !this.isFullyStarted) return;
 
-    const activeFile = this.getMostRecentMarkdownFile();
-    if (activeFile && activeFile.path !== this.currentFilePath) {
-      this.onFileChange(activeFile);
+    /** Establish a unified source of truth for the absolute visible file pointer */
+    const activeFile = this.app.workspace.getActiveFile();
+    if (!activeFile) return;
+
+    const isEncrypted = activeFile.path.endsWith(".mdenc");
+
+    // =========================================================================
+    // DYNAMIC ENCRYPTION FEEDER LIFECYCLE MANAGEMENT
+    // Synchronously requests a DOM snapshot pass if the context requirements match.
+    // =========================================================================
+    if (isEncrypted) {
+      console.log('ENCRYPTED:')
+      const virtualCache = ExternalFeederScanner.scanActiveView(this.app);
+      if (virtualCache) {
+        this.plugin.networkGraph.handleExternalContentFeed(activeFile, virtualCache);
+        console.log('virtualCache', virtualCache);
+      }
+    } else {
+      this.plugin.networkGraph.clearMemoryFeederCache();
+    }
+
+    /** Force context shift targeting the accurate workspace node structure */
+    const targetFile = isEncrypted ? activeFile : this.getMostRecentMarkdownFile();
+    
+    if (targetFile && targetFile.path !== this.currentFilePath) {
+      this.onFileChange(targetFile);
     }
   }
 
