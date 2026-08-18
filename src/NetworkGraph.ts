@@ -207,11 +207,15 @@ export class NetworkGraph {
 
     this.centerNote = this.getOrCreateNote(activeFile);
     if (!this.centerNote) return;
-
     this.centerNote.relation = "center";
     this.centerNote.assignedArea = "center";
     this.centerNote.isUsed = true;
+    
+    console.log('Fikk lagd center node:', this.centerNote.basename);
+    console.log('notesCache:', this.notesCache)
+    console.log('anchorCache:', this.anchorCache)
 
+    /*
     const firstDegreeFiles = this.getFirstDegreeFiles(this.centerNote.path);
 
     await this.yieldToUI();
@@ -253,11 +257,12 @@ export class NetworkGraph {
     for (const [path, bait] of this.anchorCache.entries()) {
       if (!bait.isUsed || bait.sources.size === 0) this.anchorCache.delete(path);
     }
-
+*/
     /** Final commit boundary: Verify data integrity before deploying to the UI */
     if (tokenAtStart === this.updateRequestToken) {
       this.app.workspace.trigger("graph:data-ready", activeFile.path);
     }
+    
   } 
 
   /**
@@ -300,7 +305,8 @@ export class NetworkGraph {
       const childProps  = this.settings.optChildProperties;
       const friendProps = this.settings.optFriendProperties;
       const allTargetProps = [...parentProps, ...childProps, ...friendProps];
-
+console.log("frontmatterIndex:")
+console.log(note.frontmatterIndex)
       // Scans through explicit target attributes configured inside settings panels
       for (const attrib of allTargetProps) {
         if (!attrib) continue;
@@ -317,6 +323,8 @@ export class NetworkGraph {
           let bait = this.anchorCache.get(lowercaseTarget);
           if (!bait) {
             bait = new Anchor(targetName);
+            console.log('nytt bait!', bait)
+            
             this.anchorCache.set(lowercaseTarget, bait);
           }
           bait.isUsed = true;
