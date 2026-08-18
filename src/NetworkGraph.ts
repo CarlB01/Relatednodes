@@ -305,7 +305,7 @@ export class NetworkGraph {
       for (const attrib of allTargetProps) {
         if (!attrib) continue;
         
-        const values = note.frontmatterIndex.get(attrib);
+        const values = this.getIndexedFrontmatterValues(note, attrib);
         if (!values) continue;
 
         for (const targetName of values) {
@@ -664,9 +664,9 @@ export class NetworkGraph {
 
     const targetName = otherNote.basename;
     
-    // Use precomputed frontmatterIndex to check if either note references the other in any frontmatter value
-    const finnesIFm = (Array.from(centerNote.frontmatterIndex.values()).some(vals => vals.some(v => v.includes(targetName)))) ||
-                      (Array.from(otherNote.frontmatterIndex.values()).some(vals => vals.some(v => v.includes(centerNote.basename))));
+    // Use precomputed frontmatterIndex to preserve prior loose string-matching semantics
+    const finnesIFm = this.hasLooseFrontmatterMatch(centerNote, targetName) ||
+                      this.hasLooseFrontmatterMatch(otherNote, centerNote.basename);
                       
     if (finnesIFm) {
       otherNote.discoverySource = "frontmatter-udefinert";
@@ -675,6 +675,26 @@ export class NetworkGraph {
     }
 
     return "undefined";
+  }
+
+  private getIndexedFrontmatterValues(note: Node, attrib: string): string[] | undefined {
+    const trimmedAttrib = attrib.trim();
+    if (!trimmedAttrib) return undefined;
+
+    return note.frontmatterIndex.get(trimmedAttrib) ??
+           note.frontmatterIndex.get(trimmedAttrib.toLowerCase());
+  }
+
+  private hasLooseFrontmatterMatch(note: Node, targetName: string): boolean {
+    if (!targetName) return false;
+
+    for (const values of note.frontmatterIndex.values()) {
+      for (const value of values) {
+        if (String(value).includes(targetName)) return true;
+      }
+    }
+
+    return false;
   }
 
   /**

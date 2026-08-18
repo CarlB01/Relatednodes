@@ -7,6 +7,8 @@ import { Gate } from "./Gate.js";
 export type Relation = "center" | "parent" | "child" | "friend"| "sibling" | "undefined" | "undefined-sibling" | "ignored";
 
 export class Node {  
+  private static readonly FRONTMATTER_STRINGIFIED_PREFIX = "__stringified__:";
+
   connectionCount: number = 0;
   sharedLinksWithStart: number = 0;
   info: string = "";
@@ -78,11 +80,30 @@ export class Node {
     const index = new Map<string, string[]>();
     if (!frontmatter) return index;
     const fm = frontmatter as Record<string, unknown>;
-    for (const key of Object.keys(fm)) {
-      if (key === "position") continue; // skip Obsidian internal position key
-      const values = StringUtils.normalizeToStringArray(fm[key]);
-      if (values.length > 0) index.set(key, values);
+
+    for (const [rawKey, rawValue] of Object.entries(fm)) {
+      const key = rawKey.trim();
+      if (!key || key === "position") continue; // skip Obsidian internal position key
+
+      const values = StringUtils.normalizeToStringArray(rawValue) ?? [];
+      if (values.length === 0) continue;
+
+      index.set(key, values);
+
+      const lowercaseKey = key.toLowerCase();
+      if (lowercaseKey !== key) {
+        index.set(lowercaseKey, values);
+      }
+
+      const stringifiedValue = String(rawValue).trim();
+      if (!stringifiedValue) continue;
+
+      index.set(`${Node.FRONTMATTER_STRINGIFIED_PREFIX}${key}`, [stringifiedValue]);
+      if (lowercaseKey !== key) {
+        index.set(`${Node.FRONTMATTER_STRINGIFIED_PREFIX}${lowercaseKey}`, [stringifiedValue]);
+      }
     }
+
     return index;
   }
 
