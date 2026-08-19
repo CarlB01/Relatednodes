@@ -1,15 +1,9 @@
 # myBrain for Obsidian
 
-✅ **New in 1.0.38**
-
-Hover highlighting for connected links and neighboring nodes
-
-When hovering a link or node, the graph now highlights:
-
-the hovered element,
-directly connected links,
-neighboring nodes.
-This makes relationship tracing much faster and improves readability in dense graphs.
+✅ **New in v1.0.42: The Ultra-Low-Latency Performance Update**
+- **True O(1) Speed:** Purple-hearted rewrite converting heavy array loops into instant constant-time `Set` hash lookups. 
+- **Zero Memory Churn:** Garbage Collection stuttering eliminated by lazy-caching Unicode NFC normalizations at node birth.
+- **Reactive Engine:** Preload-polling removed in favor of native, debounced event-driven sync with Obsidian's indexer.
 
 ---
 
@@ -137,9 +131,11 @@ myBrain is built on a **CSS-first rendering architecture**: quadrants, column fl
 * **Lightweight runtime assist:** A small TypeScript layer only handles what CSS cannot do alone reliably across all contexts—runtime container measurement, adaptive height caps, redraw timing, and SVG path refresh.
 * **Zero Layout-Squeezing:** Nodes are still generated in a protective off-screen render curtain (`.is-calculating`) to reduce visible reflow during render.
 
-### 🚀 Fast JIT Cache Performance
-* **No Database Bottlenecks:** Bypasses text-parsing chains and heavy queries during active navigation cycles using an advanced asynchronous Just-In-Time (JIT) memory mesh.
-* **Instantaneous Cross-Linking ("Baits"):** Nodes dynamically cast multi-directional anchor tokens so that *"everyone discovers everyone"* across massive datasets instantly.
+### 🚀 Fast O(1) JIT Cache Performance
+- **Zero Database Bottlenecks:** Bypasses text-parsing chains and heavy queries during active navigation cycles using a true O(1) Just-In-Time (JIT) memory mesh.
+- **Instantaneous Cross-Linking ("Baits"):** Every tag, blocklist fragment, and structural layout property lookup is compiled into native JavaScript `Sets`. This converts slow array-scanning loops into ultra-low-latency constant-time hash lookups.
+- **Hardware-Friendly Memory Footprint:** The core matrix avoids mid-loop heap allocations, entirely preventing Garbage Collection (GC) stuttering. It recycles pre-computed Unicode NFC-normalized string identities generated once at node instantiation.
+- **Reactive & Event-Driven:** Instead of polling or forcing data cache synchronization, myBrain listens reactively to Obsidian’s background indexing engine, performing single-pass debounced updates only when topology-relevant data is ready.
 
 ### Excalibrain-like structure
 If your existing structure is Excalibrain-friendly and front-matter based there would be little or no rewrites necessary.
@@ -179,7 +175,7 @@ When Zsolt hinted at gatherings that it was time for a native implementation to 
 
 ## 🔮 Roadmap & Future Horizons
 
-- [x] Colorize Lines & Gates: This update adds colorization for relationship lines and gate nodes, improving readability and direction-scanning in dense graphs.
+- [x] Colorize Lines & Gates: This update adds colorization for relationship lines and gate nodes, improving readability and direction-scanning in dense graphs. (v1.0.38). 
 - [ ] Interactive context popup menus to add parents/children on the fly.
 - [ ] Multi-generation expansion toggles to view grandparents/grandchildren rows.
 - [ ] Inline node image decoding when targeted hyperlink references represent image assets.
