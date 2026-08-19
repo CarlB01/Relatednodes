@@ -2,7 +2,7 @@ import { StringUtils } from "./StringUtils";
 
 /**
  * Configuration and Settings State Manager for myBrain Graph Notes Network.
- * Handles migration mapping, runtime parsing, and low-latency array hydration.
+ * Handles migration mapping, runtime parsing, and ultra-low-latency Set dehydration.
  */
 export class SettingsManager {
   [key: string]: unknown;
@@ -23,45 +23,45 @@ export class SettingsManager {
   public colorful: boolean = true; // line color follows destination node color
 
   // ==========================================================================
-  // Pre-Compiled Hydrated Arrays (Low-latency cache targets for the graph loop)
+  // Pre-Compiled Hydrated Sets (O(1) lookups target for high-velocity graph loops)
   // ==========================================================================
-  public optParentProperties: string[] = [];
-  public optChildProperties: string[] = [];
-  public optFriendProperties: string[] = [];
+  public optParentProperties: Set<string> = new Set();
+  public optChildProperties: Set<string> = new Set();
+  public optFriendProperties: Set<string> = new Set();
   
-  public optParentTags: string[] = [];
-  public optChildTags: string[] = [];
-  public optFriendTags: string[] = [];
-  public optIgnoreFragments: string[] = [];
-  public optIgnoreTags: string[] = [];
+  public optParentTags: Set<string> = new Set();
+  public optChildTags: Set<string> = new Set();
+  public optFriendTags: Set<string> = new Set();
+  public optIgnoreFragments: Set<string> = new Set();
+  public optIgnoreTags: Set<string> = new Set();
 
   constructor() {
     this.prepare();
   }
 
   /**
-   * Hydrates pre-compiled tracking caches synchronously from serialized data fields.
+   * Hydrates pre-compiled tracking caches synchronously into native JavaScript Sets.
    * Strips out carriage returns and enforces lowercase normalization where applicable.
    */
   public prepare() {
-    // Utility pipeline parsing string configurations into optimized structural array arrays
-    const parseStr = (str: string) => {
+    // Utility pipeline parsing string configurations into optimized structural arrays
+    const parseStr = (str: string): string[] => {
       if (!str) return [];
       const cleanStr = str.replace(/[\r\n]+/g, ""); // Purges structural newline characters entirely
       return cleanStr.split(",").map(s => s.trim()).filter(Boolean);
     };
 
     // 1. Structural Field Properties (Preserved case-sensitive for YAML mapping precision)
-    this.optParentProperties = parseStr(this.parentProperties);
-    this.optChildProperties  = parseStr(this.childProperties);
-    this.optFriendProperties = parseStr(this.friendProperties);
+    this.optParentProperties = new Set(parseStr(this.parentProperties));
+    this.optChildProperties  = new Set(parseStr(this.childProperties));
+    this.optFriendProperties = new Set(parseStr(this.friendProperties));
 
-    // 2. Tag Blocks and Fragments (Lowercased to achieve high-velocity case-insensitive matching)
-    this.optParentTags      = parseStr(this.parentTags).map(t => t.toLowerCase());
-    this.optChildTags       = parseStr(this.childTags).map(t => t.toLowerCase());
-    this.optFriendTags      = parseStr(this.friendTags).map(t => t.toLowerCase());
-    this.optIgnoreFragments = parseStr(this.ignoreNameFragments).map(f => f.toLowerCase());
-    this.optIgnoreTags      = parseStr(this.ignoreTags).map(t => t.toLowerCase());
+    // 2. Tag Blocks and Fragments (ULTRA-OPTIMIZATION: Injecting lowercase + NFC normalization at birth)
+    this.optParentTags      = new Set(parseStr(this.parentTags).map(t => t.toLowerCase().normalize('NFC')));
+    this.optChildTags       = new Set(parseStr(this.childTags).map(t => t.toLowerCase().normalize('NFC')));
+    this.optFriendTags      = new Set(parseStr(this.friendTags).map(t => t.toLowerCase().normalize('NFC')));
+    this.optIgnoreFragments = new Set(parseStr(this.ignoreNameFragments).map(f => f.toLowerCase().normalize('NFC')));
+    this.optIgnoreTags      = new Set(parseStr(this.ignoreTags).map(t => t.toLowerCase().normalize('NFC')));
   }
 
   public prepareForSave() {

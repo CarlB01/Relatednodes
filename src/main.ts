@@ -1,4 +1,4 @@
-import { Plugin, Notice, WorkspaceLeaf, TFile, TAbstractFile, CachedMetadata } from 'obsidian';
+import { Plugin, Notice, WorkspaceLeaf, TFile, TAbstractFile, CachedMetadata, debounce } from 'obsidian';
 import { SettingTab } from "./SettingTab.js";
 import { MyBrainView } from './view.js';
 import { RV } from './constants.js';
@@ -115,32 +115,46 @@ export default class MyBrainPlugin extends Plugin {
     );
 
     // C. METADATA RESOLVE INTERCEPTOR
-    this.registerEvent(
-      this.app.metadataCache.on('resolve', (file: TFile) => {
-        if (this.appPaused || this.isInResumeCooldown(1200) || this.isInMobileWarmup()) return;
+    const debouncedGraphUpdate = debounce(() => {
+      const activeNow = this.app.workspace.getActiveFile();
+      if (activeNow) {
+        this.networkGraph.update(activeNow);
+      }
+    }, 250, true);
 
-        void this.networkGraph.handleFileResolve(file).then((_dataWasUpdated) => {
-          this.app.workspace.getLeavesOfType(RV.VIEW_TYPE).forEach((leaf) => {
-            if (leaf.view instanceof MyBrainView) {
-              const myView = leaf.view;
-              if (!myView.isFullyStarted) return;
-              
-              const isEditingCurrentlyVisibleFile = file.path === myView.currentFilePath;
-              if (isEditingCurrentlyVisibleFile) {
+    this.app.metadataCache.on('resolve', (file: TFile) => {
+      if (this.appPaused || this.isInResumeCooldown(1200) || this.isInMobileWarmup()) return;
 
-                /** Clear out memory cache mapping for the modified file instance */
-                if (this.networkGraph?.noteCache) {
-                  this.networkGraph.noteCache.delete(file.path);
-                }
+      // 1. handleFileResolve sjekker relevans og sletter cachen for akkurat den endrede filen
+      void this.networkGraph.handleFileResolve(file).then((påvirkerVisning) => {
+        if (!påvirkerVisning) return; // Hvis filen ikke har noe med grafen å gjøre, stopper vi her!
 
-                const activeNow = this.app.workspace.getActiveFile();
-                if (!activeNow || activeNow.path !== myView.currentFilePath) return;
-
-                this.networkGraph.update(activeNow);
-              }
-            }
-          });
+        this.app.workspace.getLeavesOfType(RV.VIEW_TYPE).forEach((leaf) => {
+          if (leaf.view instanceof MyBrainView) {
+            const myView = leaf.view;
+            if (!myView.isFullyStarted) return;
+            
+            // 2. Fyr av en ENKELT, kontrollert oppdatering av grafen via debouncen!
+            debouncedGraphUpdate();
+          }
         });
+      });
+    });
+    
+    // D. REGISTER THE REACTIVE CONTROLTOWER EVENT
+    const debouncedRefresh = debounce(() => {
+      const activeFile = this.app.workspace.getActiveFile();
+      if (activeFile) {
+        void this.networkGraph.update(activeFile);
+      }
+    }, 250, true); // Venter 250ms etter SISTERE fil-indeksering før den oppdaterer
+    
+    this.registerEvent(
+      this.app.metadataCache.on('changed', (file: TFile) => {
+        // Sjekk lynraskt mot grafens O(1)-cacher om denne filen betyr noe for oss
+        if (this.networkGraph.isFileRelevantToCurrentGraph(file)) {
+          debouncedRefresh();
+        }
       })
     );
   }

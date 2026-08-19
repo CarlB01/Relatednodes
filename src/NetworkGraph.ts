@@ -1,10 +1,12 @@
-import { App, BasesEntry, CachedMetadata, debounce, Debouncer, TFile } from "obsidian";
+import { App, BasesEntry, CachedMetadata, debounce, Debouncer, FrontMatterCache, TFile } from "obsidian";
 import MyBrainPlugin from "./main.js";
-import { Node, Relation } from "./Node.js";
+import { Node } from "./Node.js";
 import { StringUtils } from "./StringUtils.js";
 import { Anchor } from "./Anchor.js";
 import { SettingsManager } from "./SettingsManager.js";
 import { Gate } from "./Gate.js";
+import { createRelationFinder, Relation } from "./RelationClassifier.js";
+import {  } from "./RelationClassifier.js";
 
 const relationOrder: Record<Relation, number> = {
   "center": 0,
@@ -35,7 +37,7 @@ export interface TagGroupedCollection {
 }
 
 export class NetworkGraph {
-  notesCache = new Map<string, Node>(); // path -> Node
+  noteCache = new Map<string, Node>(); // path -> Node
   anchorCache = new Map<string, Anchor>(); // path/basename -> Anchor
   ignoredNotes = new Set<Node>();
   centerNote: Node | null = null;
@@ -52,7 +54,7 @@ export class NetworkGraph {
   // updateRequestToken: token system for incremental cache synchronization.
   // Tracks if new anchors are discovered during build.
   // This happens if obsidian cache was not fully ready.
-  // Helps keeping notesCache and anchorCache while next tread in progress 
+  // Helps keeping noteCache and anchorCache while next tread in progress 
   // takes over and finishes the partly updated caches.
   private updateRequestToken = 0;
 
@@ -178,11 +180,9 @@ export class NetworkGraph {
       if (tokenAtStart !== this.updateRequestToken || this.isAborted) return;
     }
 
-    // ================================
-    // HEAVY DETERMINISTIC CALCULATIONS
-    // ================================      
+    // Reset flags, relations, baits etc.
     this.ignoredNotes.clear();
-    for (const note of this.notesCache.values()) {
+    for (const note of this.noteCache.values()) {
       note.isUsed = false;
       note.isIndexedInThisRound = false;
       note.relation = "undefined";
@@ -194,7 +194,6 @@ export class NetworkGraph {
       note.relations.ignored.clear();
       note.crossingBaits.clear();
     }
-
     Gate.cachedRadius = null;
 
     for (const bait of this.anchorCache.values()) {
@@ -205,43 +204,14 @@ export class NetworkGraph {
     await this.yieldToUI();
     if (tokenAtStart !== this.updateRequestToken) return
 
+    // CENTERNODE
     this.centerNote = this.getOrCreateNote(activeFile);
     if (!this.centerNote) return;
     this.centerNote.relation = "center";
     this.centerNote.assignedArea = "center";
     this.centerNote.isUsed = true;
-    
-    console.log('Fikk lagd center node:', this.centerNote.basename);
-    console.log('notesCache:', this.notesCache)
-    console.log('anchorCache:', this.anchorCache)
 
-    /*
-    const firstDegreeFiles = this.getFirstDegreeFiles(this.centerNote.path);
-
-    await this.yieldToUI();
-    if (tokenAtStart !== this.updateRequestToken) return;
-
-    let preloadStep = 0;
-    for (const file of firstDegreeFiles) {
-      if (file.path !== this.centerNote.path) {
-        const preparedNote = this.getOrCreateNote(file);
-        if (preparedNote) {
-          preparedNote.isUsed = true;
-
-          const relasjonTilSenter = this.findRelation(this.centerNote, preparedNote);
-          if (relasjonTilSenter === "parent") {
-            const parentFiles = this.getFirstDegreeFiles(preparedNote.path);
-            for (const parentFile of parentFiles) this.getOrCreateNote(parentFile);
-          }
-        }
-      }
-
-      if (++preloadStep % 40 === 0) {
-        await this.yieldToUI();
-        if (tokenAtStart !== this.updateRequestToken) return;
-      }
-    }
-
+    // RELATIONS
     this.determineFirstDegreeNotes(this.centerNote);
     if (tokenAtStart !== this.updateRequestToken) return;
 
@@ -251,14 +221,15 @@ export class NetworkGraph {
     await this.determineCrossNetworkConnections(this.centerNote, tokenAtStart);
     if (tokenAtStart !== this.updateRequestToken) return;
 
-    for (const [path, note] of this.notesCache.entries()) {
-      if (!note.isUsed) this.notesCache.delete(path);
+    // PURGE UNUSED
+    for (const [path, note] of this.noteCache.entries()) {
+      if (!note.isUsed) this.noteCache.delete(path);
     }
     for (const [path, bait] of this.anchorCache.entries()) {
       if (!bait.isUsed || bait.sources.size === 0) this.anchorCache.delete(path);
     }
-*/
-    /** Final commit boundary: Verify data integrity before deploying to the UI */
+
+    // COMMIT - Verify data integrity before deploying to the UI
     if (tokenAtStart === this.updateRequestToken) {
       this.app.workspace.trigger("graph:data-ready", activeFile.path);
     }
@@ -273,7 +244,7 @@ export class NetworkGraph {
     if (!file) return null;
 
     // 1. MEMORY SKEW: Check if the node element already populates the path-indexed database
-    let note = this.notesCache.get(file.path);
+    let note = this.noteCache.get(file.path);
 
     if (!note) {
       const isDecrypted = this.memoryFeederCache.has(file.path);
@@ -287,11 +258,16 @@ export class NetworkGraph {
 
       const useAlias = this.plugin.settings.displayAliases;
       
-      // Instantiate Node via the static factory generation protocol
-      note = Node.createFromObsidian(file, fileCache, useAlias, this.settings.optIgnoreFragments, this.settings.optIgnoreTags);
-      
+      // Instantiate Node via the static factory generation protocol 
+      // (This now caches the expensive lowercase + NFC-normalized basename inside Node upon creation)
+      note = Node.createFromObsidian(
+        file, 
+        fileCache, 
+        useAlias, this.settings.optIgnoreFragments,
+        this.settings.optIgnoreTags
+      );
       // 3. Commit the evaluated record index under file.path
-      this.notesCache.set(file.path, note);
+      this.noteCache.set(file.path, note);
     }
 
     // ==========================================================================
@@ -299,22 +275,23 @@ export class NetworkGraph {
     // Synchronously parses configuration variables exactly once per node per pass.
     // Guarantees high-velocity data availability preceding graph mapping layers.
     // ==========================================================================
-    if (note.frontmatterIndex.size > 0 && !note.isIndexedInThisRound) {
-      
-      const parentProps = this.settings.optParentProperties;
-      const childProps  = this.settings.optChildProperties;
-      const friendProps = this.settings.optFriendProperties;
-      const allTargetProps = [...parentProps, ...childProps, ...friendProps];
-console.log("frontmatterIndex:")
-console.log(note.frontmatterIndex)
-      // Scans through explicit target attributes configured inside settings panels
-      for (const attrib of allTargetProps) {
-        if (!attrib) continue;
-        
-        const values = note.frontmatterIndex.get(attrib);
-        if (!values) continue;
+    if (note.rawFrontmatter && !note.isIndexedInThisRound) {      
+      const frontmatterCache = note.rawFrontmatter as Record<string, unknown>;
 
-        for (const targetName of values) {
+      // HIGH-VELOCITY REFACTOR: Inlined inline-iterator to completely bypass array 
+      // allocation and spread operator churn ([...parent, ...child, ...friend])
+      const processAttribute = (attrib: string) => {
+        if (!attrib) return;
+        
+        const rawValue = frontmatterCache[attrib];
+        if (rawValue == null) return;
+
+        // Wash raw YAML structures into pure string fragments via StringUtils pipeline
+        const cleanArray = StringUtils.normalizeToStringArray(rawValue) ?? [];
+        const len = cleanArray.length;
+
+        for (let i = 0; i < len; i++) {
+          const targetName = cleanArray[i];
           if (!targetName) continue;
 
           // Forces keys to explicit lowercase and normalizes NFC formatting for emojis
@@ -322,9 +299,7 @@ console.log(note.frontmatterIndex)
           
           let bait = this.anchorCache.get(lowercaseTarget);
           if (!bait) {
-            bait = new Anchor(targetName);
-            console.log('nytt bait!', bait)
-            
+            bait = new Anchor(targetName);            
             this.anchorCache.set(lowercaseTarget, bait);
           }
           bait.isUsed = true;
@@ -332,7 +307,13 @@ console.log(note.frontmatterIndex)
           // Maps originating nodes back to their target field strings in RAM space
           bait.sources.set(note, attrib); 
         }
-      }
+      };
+
+      // Traverse through the pre-compiled Settings Sets directly. 
+      // Zero heap allocation, maximum execution throughput.
+      this.settings.optParentProperties.forEach(processAttribute);
+      this.settings.optChildProperties.forEach(processAttribute);
+      this.settings.optFriendProperties.forEach(processAttribute);
 
       // Stamps the operational pass flag onto the instance to forbid duplicity loops
       note.isIndexedInThisRound = true; 
@@ -340,6 +321,7 @@ console.log(note.frontmatterIndex)
 
     return note;
   }
+
  
   /**
    * Evaluates and populates 1st-degree biological relationships radiating from the active node.
@@ -350,45 +332,47 @@ console.log(note.frontmatterIndex)
     // Collects a distinct, unified set mapping links and backlink trajectories
     const filesSet = this.getFirstDegreeFiles(centerNote.path);
 
+    const findRelation = createRelationFinder(this.settings, this.anchorCache);
+
     for (const file of filesSet) {
       if (file.path === centerNote.path) continue; // Skip self references
 
-      const newNote = this.getOrCreateNote(file);
-      if (!newNote) continue; 
+      const otherNote = this.getOrCreateNote(file);
+      if (!otherNote) continue; 
 
-      const relation = this.findRelation(centerNote, newNote);
-      newNote.relation = relation;
-      newNote.isUsed = true;
+      const relation = findRelation(centerNote, otherNote);
+      otherNote.relation = relation;
+      otherNote.isUsed = true;
 
       // ==========================================================================
       // SUPPRESSED NODE ALLOCATION
       // ==========================================================================
       if (relation === "ignored") {
-        newNote.assignedArea = "ignored";          // Shields record from standard 5x5 quadrant grids
-        this.ignoredNotes.add(newNote);            // Tracked globally for total data reporting
-        centerNote.relations.ignored.add(newNote); // Logged locally onto the active origin frame
+        otherNote.assignedArea = "ignored";          // Shields record from standard 5x5 quadrant grids
+        this.ignoredNotes.add(otherNote);            // Tracked globally for total data reporting
+        centerNote.relations.ignored.add(otherNote); // Logged locally onto the active origin frame
         continue;
       }
       
       // ==========================================================================
-      // BIU-LAYER ROUTING SECTOR (Two-way ekteskap assignments in memory)
+      // BIU-LAYER ROUTING SECTOR (Two-way marriage assignments in memory)
       // ==========================================================================
       switch (relation) {
         case "parent": 
-          newNote.assignedArea = "upper";
-          newNote.relations.children.add(centerNote);
-          centerNote.relations.parents.add(newNote);
+          otherNote.assignedArea = "upper";
+          otherNote.relations.children.add(centerNote);
+          centerNote.relations.parents.add(otherNote);
           break;
         case "friend": 
-          newNote.assignedArea = "left";
-          newNote.relations.friends.add(centerNote);
-          centerNote.relations.friends.add(newNote);
+          otherNote.assignedArea = "left";
+          otherNote.relations.friends.add(centerNote);
+          centerNote.relations.friends.add(otherNote);
           break;
         case "child": 
         case "undefined": // Fallback architecture: routes all unmapped relationships to the lower bucket
-          newNote.assignedArea = "lower";
-          newNote.relations.parents.add(centerNote);
-          centerNote.relations.children.add(newNote);
+          otherNote.assignedArea = "lower";
+          otherNote.relations.parents.add(centerNote);
+          centerNote.relations.children.add(otherNote);
           break;
       }
     }
@@ -404,57 +388,59 @@ console.log(note.frontmatterIndex)
 
     let step = 0;
 
+    const findRelation = createRelationFinder(this.settings, this.anchorCache);
+
     for (const parent of parents) {
-      const allGraphFiles = this.getFirstDegreeFiles(parent.path);
+      const foundFirstDegreeFiles = this.getFirstDegreeFiles(parent.path);
 
-      for (const graphFile of allGraphFiles) {
-        if (graphFile.path === parent.path) continue; // Skip self references
-        if (graphFile.path === centerNote.path) continue; // Skip origin center node
+      for (const foundFile of foundFirstDegreeFiles) {
+        if (foundFile.path === parent.path) continue; // Skip self references
+        if (foundFile.path === centerNote.path) continue; // Skip origin center node
         
-        const graphNode = this.getOrCreateNote(graphFile);
-        if (!graphNode) continue;
+        const foundNode = this.getOrCreateNote(foundFile);
+        if (!foundNode) continue;
 
-        const relation = this.findRelation(parent, graphNode);
-        
+        const relation = findRelation(parent, foundNode);
+
         // ==========================================================================
         // CASE A: Target instance is already allocated to a dedicated viewport quadrant
         // ==========================================================================
-        if (graphNode.isUsed) { 
+        if (foundNode.isUsed) { 
           switch (relation) {
             case 'child':
             case 'undefined':
               // Commits the vertical relational connection up towards the parent collection
-              parent.relations.children.add(graphNode);
-              graphNode.relations.parents.add(parent);
+              parent.relations.children.add(foundNode);
+              foundNode.relations.parents.add(parent);
               
               // CRITICAL RESTORATION: Enforces that existing active 1st-degree nodes 
               // preserve their structural membership mapping to the center node framework
-              if (graphNode.relation === 'child') {
-                centerNote.relations.children.add(graphNode);
-              } else if (graphNode.relation === 'parent') {
-                centerNote.relations.parents.add(graphNode);
-              } else if (graphNode.relation === 'friend') {
-                centerNote.relations.friends.add(graphNode);
+              if (foundNode.relation === 'child') {
+                centerNote.relations.children.add(foundNode);
+              } else if (foundNode.relation === 'parent') {
+                centerNote.relations.parents.add(foundNode);
+              } else if (foundNode.relation === 'friend') {
+                centerNote.relations.friends.add(foundNode);
               }
               break;
 
             case 'parent':
-              parent.relations.parents.add(graphNode);
-              graphNode.relations.children.add(parent);
+              parent.relations.parents.add(foundNode);
+              foundNode.relations.children.add(parent);
               
               // Safeguards upstream parent links connecting to the origin note
-              if (graphNode.relation === 'parent') {
-                centerNote.relations.parents.add(graphNode);
+              if (foundNode.relation === 'parent') {
+                centerNote.relations.parents.add(foundNode);
               }
               break;
 
             case 'friend': 
-              parent.relations.friends.add(graphNode);
-              graphNode.relations.friends.add(parent);
+              parent.relations.friends.add(foundNode);
+              foundNode.relations.friends.add(parent);
 
               // Safeguards downstream friend links connecting to the origin note
-              if (graphNode.relation === 'friend') {
-                centerNote.relations.friends.add(graphNode);
+              if (foundNode.relation === 'friend') {
+                centerNote.relations.friends.add(foundNode);
               }
               break;
           }
@@ -468,28 +454,25 @@ console.log(note.frontmatterIndex)
         if (relation === 'friend') continue; // Intercepts parent-level friend leakage
 
         // Commits lifecycle flags to register layout rendering bounds
-        graphNode.isUsed = true; 
-        graphNode.assignedArea = 'right'; // Binds instance target coordinates to the right quadrant
+        foundNode.isUsed = true; 
+        foundNode.assignedArea = 'right'; // Binds instance target coordinates to the right quadrant
         
-        // Evaluate if connection originated from an explicit metadata entry inside parent frontmatter
-        const lowercaseSiblingName = graphNode.basename.toLowerCase().normalize('NFC');
-        const parentBait = this.anchorCache.get(lowercaseSiblingName);
-        const isRealFrontmatterLink = parentBait && parentBait.sources.has(parent);
+        const baitForOther = this.anchorCache.get(foundNode.normalizedBasename);
+        const isRealFrontmatterLink = baitForOther && baitForOther.sources.has(parent);
 
         if (isRealFrontmatterLink) {
-          graphNode.relation = "sibling"; // Collection 1: Verified frontmatter siblings
+          foundNode.relation = "sibling"; // Collection 1: Verified frontmatter siblings
         } else {
-          graphNode.relation = "undefined-sibling"; // Collection 2: Bodytext context discovery siblings
+          foundNode.relation = "undefined-sibling"; // Collection 2: Bodytext context discovery siblings
         }
 
-        parent.relations.children.add(graphNode);
-        graphNode.relations.parents.add(parent);
+        parent.relations.children.add(foundNode);
+        foundNode.relations.parents.add(parent);
 
         if (++step % 30 === 0) {
           await this.yieldToUI();
           if (tokenAtStart !== this.updateRequestToken) return;
         }
-
       }
     }
   }
@@ -503,61 +486,70 @@ console.log(note.frontmatterIndex)
    */
   private async determineCrossNetworkConnections(centerNote: Node, tokenAtStart: number) {
     // 1. COLLECT LAYOUT-RENDERED VIEW CORES
-    const visibleNotes = Array.from(this.notesCache.values())
-      .filter(note => note.isUsed && note.assignedArea !== 'ignored');
-
+    const visibleNotes: Node[] = [];
+    for (const note of this.noteCache.values()) {
+      if (note.isUsed && note.assignedArea !== 'ignored') {
+        visibleNotes.push(note);
+      }
+    }
     if (visibleNotes.length < 2) return;
 
-    // Localized helper parsing Obsidian's internal indexes to guarantee a physical anchor link exists
-    const harDirekteFysiskLink = (a: Node, b: Node): boolean => {
-      const resolvedLinks = this.app.metadataCache.resolvedLinks;
-      const unresolvedLinks = this.app.metadataCache.unresolvedLinks;
-      
-      const sjekkKobling = (fraPath: string, tilBasename: string): boolean => {
-        const resObj = resolvedLinks?.[fraPath];
-        if (resObj) {
-          const tilNameLower = tilBasename.toLowerCase();
-          return Object.keys(resObj).some(path => {
-            const pLower = path.toLowerCase();
-            return pLower.includes(tilNameLower) || pLower.endsWith(`/${tilNameLower}.md`);
-          });
-        }
-        const unresObj = unresolvedLinks?.[fraPath];
-        if (unresObj && typeof unresObj === 'object') {
-          const tilNameLower = tilBasename.toLowerCase();
-          return Object.keys(unresObj).some(key => key.toLowerCase().includes(tilNameLower));
-        }
-        return false;
-      };
+    // Cache local pointers to Obsidian's native link indexes (O(1) dictionary lookups)
+    const resolvedLinks = this.app.metadataCache.resolvedLinks;
+    const unresolvedLinks = this.app.metadataCache.unresolvedLinks;
 
-      return sjekkKobling(a.path, b.basename) || sjekkKobling(b.path, a.basename);
-    };
+    // PERFORMANCE OPTIMIZATION: Bootstraps the decoupled relation finder once before the matrix sweep
+    const findRelation = createRelationFinder(this.settings, this.anchorCache);
 
-    // ==========================================================================
-    // 2. PRIMARY PAIRING RECKONING MACHINE (Inherited from cross-bait topology)
-    // Symmetrically pairs all active layout nodes across a flawless double-loop
-    // ==========================================================================
     let step = 0;
-    for (let i = 0; i < visibleNotes.length; i++) {
+    const len = visibleNotes.length;
+
+    // ==========================================================================
+    // PRIMARY PAIRING RECKONING MACHINE (O(N^2) Matrix Sweep)
+    // ==========================================================================
+    for (let i = 0; i < len; i++) {
       const nodeA = visibleNotes[i];
       if (!nodeA) continue;
 
-      for (let j = i + 1; j < visibleNotes.length; j++) {
+      const pathA = nodeA.path;
+      const basenameA = nodeA.basename;
+
+      // Fetch internal link objects for nodeA once outside the nested loop
+      const resA = resolvedLinks?.[pathA];
+      const unresA = unresolvedLinks?.[pathA];
+
+      for (let j = i + 1; j < len; j++) {
         const nodeB = visibleNotes[j];
         if (!nodeB) continue;
 
-        // Shields the center node are anchors as its 1st-degree maps are already spikret
+        // Shields the center node as its 1st-degree maps are already locked down
         if (nodeA.path === centerNote.path || nodeB.path === centerNote.path) continue;
+
+        const pathB = nodeB.path;
+        const basenameB = nodeB.basename;
 
         // DILEMMA DISCOVERY GUARD: Intercepts and blocks lateral lines unless 
         // a verifiable, physical direct hyperlink trajectory is explicitly present in the vault
-        if (!harDirekteFysiskLink(nodeA, nodeB)) continue;
+        // ULTRA-OPTIMIZATION: O(1) PHYSICAL LINK VALIDATION
+        let hasDirectLink = false;
 
-        // 3. Harvest biological classification matching the populated standalone bait caches
-        const relation = this.findRelation(nodeA, nodeB);
+        // 1. Check resolved links from A -> B or B -> A (Instant hash lookup)
+        if ((resA && resA[pathB] !== undefined) || (resolvedLinks?.[pathB]?.[pathA] !== undefined)) {
+          hasDirectLink = true;
+        } 
+        // 2. Fallback to unresolved links if needed (Instant hash lookup based on target basename/clean key)
+        else if ((unresA && unresA[basenameB] !== undefined) || (unresolvedLinks?.[pathB]?.[basenameA] !== undefined)) {
+          hasDirectLink = true;
+        }
+
+        // Intercept and block lateral lines unless a physical hyperlink is explicitly present
+        if (!hasDirectLink) continue;
+
+        // Harvest biological classification matching the populated standalone bait caches
+        const relation = findRelation(nodeA, nodeB);
 
         // ==========================================================================
-        // 4. CROSS-NETWORK INSTANCE COMMITMENT (Two-way RAM cache storage)
+        // CROSS-NETWORK INSTANCE COMMITMENT (Two-way RAM cache storage)
         // ==========================================================================
         switch (relation) {
           case 'child':
@@ -593,97 +585,24 @@ console.log(note.frontmatterIndex)
     }
   }
 
-  /**
-   * Core classification utility evaluating the precise logical intersection between two nodes.
-   * Leverages high-velocity NFC string normalization and explicit token matching to reject fragment alignment.
-   * @param centerNote The origin source entity checking its boundaries.
-   * @param otherNote The target entity being classified into a quadrant structure.
+
+  /** METHOD ANALYSIS
+   * 
+   * METHOD 1: rawFrontmatter + Object.keys
+   * This approach extracts the keys from a raw JavaScript object and evaluates their values.
+   * - Pros: Object.keys() is highly optimized in modern JavaScript engines (V8). The execution short-circuits via .some() immediately upon finding a match.
+   * - Cons: Object.keys() still allocates a new array of keys on every invocation. Forcing string conversion using String(centerFmIndex[key]) at each iteration introduces additional CPU overhead.
+   * 
+   * METHOD 2: frontmatterIndex + Array.from
+   * This approach flattens an underlying Map or Set using Array.from().
+   * - Pros: Data structures are inherently cleaner and more structured.
+   * - Cons (Critical Bottleneck): Array.from(centerNote.frontmatterIndex.values()) clones all values into a completely new array in memory before the loop even starts. Executing this over thousands of iterations triggers severe memory churn, causing application stuttering due to frequent Garbage Collection (GC) pauses.
+   * 
+   * METHOD 3: for...in Loop
+   * This approach iterates directly over the object's properties.
+   * - Pros: Zero array allocations. Zero memory overhead, resulting in maximum throughput and efficiency.
    */
-  private findRelation(centerNote: Node, otherNote: Node): "ignored" | "parent" | "child" | "friend" | "undefined" {
-    if (otherNote.isInitiallyIgnored) return "ignored";
 
-    const parentProps = this.settings.optParentProperties;
-    const childProps  = this.settings.optChildProperties;
-    const friendProps = this.settings.optFriendProperties;
-
-    const lowercaseOtherName  = otherNote.basename.toLowerCase().normalize('NFC');
-    const lowercaseCenterName = centerNote.basename.toLowerCase().normalize('NFC');
-
-    // Fetch memory anchors natively using normalized string tokens
-    const baitForOther  = this.anchorCache.get(lowercaseOtherName);
-    const baitForCenter = this.anchorCache.get(lowercaseCenterName);
-
-    // ==========================================================================
-    // CHECK A: Evaluates if centerNote owns an ACTIVE link to otherNote inside frontmatter
-    // ==========================================================================
-    if (baitForOther && baitForOther.sources.has(centerNote)) {
-      const prop = baitForOther.sources.get(centerNote)!;
-      otherNote.discoverySource = "frontmatter-kriterium";
-
-      if (parentProps.includes(prop)) return "parent";
-      if (childProps.includes(prop))  return "child";
-      if (friendProps.includes(prop)) return "friend";
-    }
-
-    // ==========================================================================
-    // CHECK B: Evaluates if otherNote owns an ACTIVE reciprocal link to centerNote (Mirroring)
-    // HIGH-SCALE RECKONING: Validates distinct file path hashes and raw normalized string identities.
-    // Blocks partial fragment intrusions to guarantee structural stability.
-    // ==========================================================================
-    if (baitForCenter) {
-      for (const [sourceKey, prop] of baitForCenter.sources.entries()) {
-        if (!sourceKey) continue;
-
-        // Cast the variant reference into Node
-        const sourcePath = (typeof sourceKey === 'string') 
-          ? sourceKey 
-          : sourceKey.path || "";
-          
-        const sourceBasename = (typeof sourceKey === 'string') 
-          ? sourceKey 
-          : sourceKey.basename || "";
-
-        // STRICT IDENTICAL SJEKK:
-        if (sourcePath === otherNote.path || sourceBasename.toLowerCase().normalize('NFC') === lowercaseOtherName) {
-          otherNote.discoverySource = "frontmatter-kriterium";
-
-          if (parentProps.includes(prop)) return "child";  
-          if (childProps.includes(prop))  return "parent"; 
-          if (friendProps.includes(prop)) return "friend"; 
-        }
-      }
-    }
-
-    // ==========================================================================
-    // TIER 2 & 3: TAG CLASSIFICATIONS AND RAW BODYTEXT TOKENS
-    // ==========================================================================
-    if (StringUtils.hasAnyOf(otherNote.tags, this.settings.optParentTags)) {
-      otherNote.discoverySource = "frontmatter-kriterium";
-      return "parent";
-    }
-    if (StringUtils.hasAnyOf(otherNote.tags, this.settings.optChildTags)) {
-      otherNote.discoverySource = "frontmatter-kriterium";
-      return "child";
-    }
-    if (StringUtils.hasAnyOf(otherNote.tags, this.settings.optFriendTags)) {
-      otherNote.discoverySource = "frontmatter-kriterium";
-      return "friend";
-    }
-
-    const targetName = otherNote.basename;
-    
-    // Use precomputed frontmatterIndex to check if either note references the other in any frontmatter value
-    const finnesIFm = (Array.from(centerNote.frontmatterIndex.values()).some(vals => vals.some(v => v.includes(targetName)))) ||
-                      (Array.from(otherNote.frontmatterIndex.values()).some(vals => vals.some(v => v.includes(centerNote.basename))));
-                      
-    if (finnesIFm) {
-      otherNote.discoverySource = "frontmatter-udefinert";
-    } else {
-      otherNote.discoverySource = "bodytext";
-    }
-
-    return "undefined";
-  }
 
   /**
    * Fetches incoming backlinks in high-velocity RAM space.
@@ -834,26 +753,43 @@ console.log(note.frontmatterIndex)
   }
 
   /**
-   * Intercepts file resolution events triggered when a user writes inside an active note editor pane.
-   * Evaluates layout dependencies instantly to process live, hot-reloading graph redraws.
-   * @param file The TFile record receiving active markdown metadata modifications.
-   * @returns A promise resolving to a boolean confirming if the structural graph view required a update pass.
+   * Evaluates if a hot-reloaded markdown metadata modification impacts the currently tracked graph.
+   * Stripped of side-effects to allow coordinated, single-pass debounced updates via main.ts.
+   * 
+   * @param file - The TFile record receiving active markdown metadata modifications.
+   * @returns A promise resolving to a boolean confirming if the structural graph view is impacted.
    */
   public async handleFileResolve(file: TFile): Promise<boolean> {
-    // GATE GUARD: High-velocity validation checking if the modified file impacts currently tracked memory paths
-    const påvirkerVisning = this.notesCache.has(file.path) || 
-                            this.anchorCache.has(file.path);
+    // Rely on our dedicated, unified high-velocity cache inspector
+    const påvirkerVisning = this.isFileRelevantToCurrentGraph(file);
     
-    if (påvirkerVisning) {  
-      const activeFile = this.app.workspace.getActiveFile();
-      
-      if (activeFile) {        
-        void this.update(activeFile);
-        return true; 
-      }
+    if (påvirkerVisning) {
+      // Clear the cache for ONLY this specific file so the subsequent update pass fetches fresh YAML
+      this.noteCache.delete(file.path);
+      return true;
     }
     
     return false; 
+  }
+
+  /**
+   * Evaluates with ultra-low latency whether a background metadata update 
+   * directly impacts the active graph topology.
+   */
+  public isFileRelevantToCurrentGraph(file: TFile): boolean {
+    if (!file || !this.centerNote) return false;
+
+    // 1. If it's the active center note itself, it's always relevant
+    if (file.path === this.centerNote.path) return true;
+
+    // 2. O(1) Check: Is this file already a known node in our current graph view?
+    if (this.noteCache.has(file.path)) return true;
+
+    // 3. O(1) Check: Is any node in our graph currently linking to this filename?
+    const normalizedBasename = file.basename.toLowerCase().normalize('NFC');
+    if (this.anchorCache.has(normalizedBasename)) return true;
+
+    return false;
   }
 
   /**
@@ -864,18 +800,19 @@ console.log(note.frontmatterIndex)
    * @param oldPath The absolute historical system path hash originating before the modification.
    */
   public handleFileRename(file: TFile, oldPath: string) {
-    // 1. MEMORY OVERRIDE: Relocate and re-index the element in notesCache
-    if (this.notesCache.has(oldPath)) {
-      const note = this.notesCache.get(oldPath)!;
+    // 1. MEMORY OVERRIDE: Relocate and re-index the element in noteCache
+    if (this.noteCache.has(oldPath)) {
+      const note = this.noteCache.get(oldPath)!;
       note.path = file.path;
       note.basename = file.basename;
-      
+      note.normalizedBasename = file.basename.toLowerCase().normalize('NFC');
+
       if (note.displayText === file.basename || !note.displayText) {
         note.displayText = file.basename;
       }
       
-      this.notesCache.set(file.path, note);
-      this.notesCache.delete(oldPath); 
+      this.noteCache.set(file.path, note);
+      this.noteCache.delete(oldPath); 
     }
 
     // 2. MEMORY OVERRIDE: Relocate and re-index the string token inside anchorCache
@@ -886,24 +823,18 @@ console.log(note.frontmatterIndex)
 
     if (this.anchorCache.has(normalizedOldKey)) {
       const bait = this.anchorCache.get(normalizedOldKey)!;
-  // ==========================================================================
-    // COMPLIANT DOUBLE-CASTING MATRIX (Knuser overlap-feilen permanent!):
-    // Since Anchor and Record do not directly overlap, we safely route the expression
-    // through 'unknown' first as recommended by the compiler. This completely destroys 
-    // the explicit 'any' audit alarm while remaining fully typesafe [dan]!
-    // ==========================================================================
-    ((bait as unknown) as Record<string, unknown>).path = file.path;
-    ((bait as unknown) as Record<string, unknown>).basename = file.basename; 
-      
+  
+      // Update the internal payload text of the anchor to match the new file name
+      bait.targetName = file.basename;
+
       this.anchorCache.set(normalizedNewKey, bait);
       this.anchorCache.delete(normalizedOldKey);
     }
 
     // 3. REFLOW TRIGGERS: Automatically refreshes the visible graph for the active center node context
     if (this.centerNote) {
-      const currentCenterFile = this.app.vault.getFileByPath(this.centerNote.path);
-      if (currentCenterFile) {
-        void this.update(currentCenterFile); 
+      if (this.centerNote.path === file.path) {
+        void this.update(file);
       }
     }
   }

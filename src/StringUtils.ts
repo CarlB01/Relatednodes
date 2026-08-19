@@ -77,22 +77,25 @@ export class StringUtils {
     return segment.replace(StringUtils.WIKILINK_REGEX, '').trim();
   }
  
+
   /**
    * Procedural index validation scanning raw paths against pre-compiled lowercase blacklist fragments.
-   * Enforces rigorous Unicode NFC normalization to guarantee target matches across compound character sets.
-   * @param text The target file system path or raw content string.
-   * @param lowercaseParts Pre-compiled array containing normalized lowercase blacklist parameters.
+   * Leverages Set iteration for memory-efficient validation without allocating transient tracking structures.
+   * 
+   * @param text - The target file system path or raw content string.
+   * @param lowercasePartsSet - Pre-compiled Set containing unified lowercase, NFC-normalized blacklist parameters.
    */
-  static foundPart(text: string, lowercaseParts: string[]): boolean {
-    if (!text || !lowercaseParts || lowercaseParts.length === 0) return false;
+  static foundPart(text: string, lowercasePartsSet: Set<string>): boolean {
+    if (!text || !lowercasePartsSet || lowercasePartsSet.size === 0) return false;
     
-    // Normalizes paths using unified Unicode NFC formatting to safeguard emoji and accent matching parameters
+    // Normalizes paths using unified Unicode NFC formatting once per invocation
     const lowerText = text.toLowerCase().normalize('NFC');
 
-    for (let i = 0; i < lowercaseParts.length; i++) {
-      const part = lowercaseParts[i];
-      
-      if (part && lowerText.includes(part.normalize('NFC'))) {
+    // Use a native for...of loop over the Set values to keep execution paths clean
+    for (const part of lowercasePartsSet) {
+      // PERFORMANCE OPTIMIZATION: Removed inline .normalize('NFC') call from inside the loop.
+      // Fragments within the Set are assumed to be pre-normalized at the boundary layer (SettingsManager).
+      if (part && lowerText.includes(part)) {
         return true; // Match intercepted: abort sequence instantly to save hardware cycles
       }
     }
@@ -102,21 +105,32 @@ export class StringUtils {
 
   /**
    * Procedural tracking checking node metadata tags arrays against global application settings blocklists.
-   * @param noteTags Collection containing raw active frontmatter tag tokens extracted from the vault.
-   * @param lowercaseFilter Pre-compiled comparison array containing target tags strings in lowercase.
+   * Achieves absolute O(1) cross-referencing speeds by shifting array-searches to native Set hash lookups.
+   * 
+   * @param noteTags - Collection containing raw active frontmatter tag tokens extracted from the vault.
+   * @param lowercaseFilterSet - Pre-compiled comparison Set containing target tags strings in lowercase + NFC format.
    */
-  static hasAnyOf(noteTags: string[], lowercaseFilter: string[]): boolean {
-    if (!noteTags || !lowercaseFilter || lowercaseFilter.length === 0) return false;
+  static hasAnyOf(noteTags: string[], lowercaseFilterSet: Set<string>): boolean {
+    if (!noteTags || !lowercaseFilterSet || lowercaseFilterSet.size === 0) return false;
 
-    for (let i = 0; i < noteTags.length; i++) {
+    const len = noteTags.length;
+    for (let i = 0; i < len; i++) {
       const tag = noteTags[i];
-      if (tag && lowercaseFilter.includes(tag.toLowerCase().normalize('NFC'))) {
-        return true; 
+      if (!tag) continue;
+
+      // PERFORMANCE OPTIMIZATION: Replaced O(N) array lookup (.includes) with O(1) Set hashcheck (.has).
+      // Normalization is executed inline strictly before the hash check to match the target Set format.
+      const normalizedTag = tag.toLowerCase().normalize('NFC');
+      if (lowercaseFilterSet.has(normalizedTag)) {
+        return true; // Short-circuit matching validation instantly
       }
     }
     return false;
   }
 
+  /**
+   * Cleans, sanitizes, and alphabetizes comma-separated string collections.
+   */
   static sortItems(rawString: string): string {
     if (!rawString || typeof rawString !== "string") return "";
     return rawString
