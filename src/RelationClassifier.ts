@@ -12,28 +12,28 @@ export type Relation = "center" | "parent" | "child" | "friend"| "sibling" | "un
 function checkFrontmatterValue(fm: FrontMatterCache | null | undefined, searchValue: string): boolean {
   if (!fm) return false;
 
-  for (const key in fm) {
-    if (Object.prototype.hasOwnProperty.call(fm, key)) {
-      const val = fm[key];
-      if (val === null || val === undefined) continue;
-
-      if (Array.isArray(val)) {
-        const len = val.length;
-        for (let i = 0; i < len; i++) {
-          const arrayVal = val[i];
-          if (typeof arrayVal === 'string') {
-            if (arrayVal.includes(searchValue)) return true;
-          } else if (String(arrayVal).includes(searchValue)) {
-            return true;
-          }
-        }
-      } else {
-        // Hurtigvei for rene strenger (slipper funksjonskall og minneallokering)
-        if (typeof val === 'string') {
-          if (val.includes(searchValue)) return true;
-        } else if (String(val).includes(searchValue)) {
+  // Obsidian foretrekker Object.prototype.hasOwnProperty sjekket via Object.entries()
+  // for å unngå "prototype pollution"-sårbarheter og usikre 'any'-oppslag.
+  for (const rawVal of Object.values(fm)) {
+    const val = rawVal as unknown;
+    if (val === null || val === undefined) continue;
+    
+    if (Array.isArray(val)) {
+      // Bruk en vanlig for-løkke for maksimal V8-stabilitet i arrayer
+      const len = val.length;
+      for (let i = 0; i < len; i++) {
+        const arrayVal = val[i] as unknown;
+        if (typeof arrayVal === 'string') {
+          if (arrayVal.includes(searchValue)) return true;
+        } else if (String(arrayVal).includes(searchValue)) {
           return true;
         }
+      }
+    } else {
+      if (typeof val === 'string') {
+        if (val.includes(searchValue)) return true;
+      } else if (String(val).includes(searchValue)) {
+        return true;
       }
     }
   }

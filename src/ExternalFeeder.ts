@@ -1,8 +1,16 @@
 import { App, CachedMetadata, FrontMatterCache, LinkCache, TagCache } from "obsidian";
 
+declare module 'obsidian' {
+  interface App {
+    plugins: {
+      enabledPlugins: Set<string>;
+      plugins: Record<string, any>;
+    };
+  }
+}
 export class ExternalFeederScanner {
   public static scanActiveView(app: App): CachedMetadata | null {
-    const meldEncrypt = (app as any)?.plugins?.plugins?.["meld-encrypt"];
+    const meldEncrypt = app.plugins?.plugins?.["meld-encrypt"];
     if (!meldEncrypt) return null;
 
     const root = this.getActiveSourceRoot();
@@ -22,7 +30,7 @@ export class ExternalFeederScanner {
       links: links.length ? links : undefined,
       tags: tags.length ? tags : undefined,
       frontmatter: frontmatter ?? undefined,
-      frontmatterPosition: { start: 0, end: 0 } as any
+      frontmatterPosition: this.syntheticFrontmatterPosition
     };
   }
 
@@ -80,7 +88,7 @@ export class ExternalFeederScanner {
       (fm as Record<string, unknown>)[key] = parsed;
     });
 
-    return Object.keys(fm as Record<string, unknown>).length ? fm : null;
+    return Object.keys(fm).length ? fm : null;
   }
 
   private static parsePropertyValue(prop: HTMLElement, propertyType: string): unknown {
@@ -129,7 +137,7 @@ export class ExternalFeederScanner {
       out.push({
         link: href,
         original: `[[${href}]]`,
-        position: { start: 0, end: 0 } as any
+        position: this.syntheticFrontmatterPosition
       });
     });
 
@@ -162,7 +170,7 @@ export class ExternalFeederScanner {
         out.push({
           link: candidate,
           original: `[[${candidate}]]`,
-          position: { start: 0, end: 0 } as any
+          position: this.syntheticFrontmatterPosition
         });
       }
     }
@@ -205,12 +213,21 @@ export class ExternalFeederScanner {
 
       out.push({
         tag: normalized,
-        position: { start: 0, end: 0 } as any
+        position: this.syntheticFrontmatterPosition
       });
     });
 
     return out;
   }
+
+  // ---------------------------
+  // Synthetic positions
+  // ---------------------------
+
+  private static loc = { line: 0, col: 0, offset: 0 };
+
+  private static syntheticFrontmatterPosition = { start: this.loc, end: this.loc };
+
 
   // ---------------------------------------------------------------------------
   // Normalizers / parsers

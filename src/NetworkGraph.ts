@@ -1,4 +1,4 @@
-import { App, BasesEntry, CachedMetadata, debounce, Debouncer, FrontMatterCache, TFile } from "obsidian";
+import { App, BasesEntry, CachedMetadata, debounce, Debouncer, TFile } from "obsidian";
 import MyBrainPlugin from "./main.js";
 import { Node } from "./Node.js";
 import { StringUtils } from "./StringUtils.js";

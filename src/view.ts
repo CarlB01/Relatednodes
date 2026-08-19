@@ -274,7 +274,6 @@ export class MyBrainView extends ItemView implements HoverParent {
     // Synchronously requests a DOM snapshot pass if the context requirements match.
     // =========================================================================
     if (isEncrypted) {
-      console.log('ENCRYPTED:')
       const virtualCache = ExternalFeederScanner.scanActiveView(this.app);
       if (virtualCache) {
         this.plugin.networkGraph.handleExternalContentFeed(activeFile, virtualCache);
