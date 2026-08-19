@@ -1,9 +1,12 @@
-# myBrain for Obsidian
+# 🧠 myBrain for Obsidian
 
-✅ **New in v1.0.42: The Ultra-Low-Latency Performance Update**
-- **True O(1) Speed:** Purple-hearted rewrite converting heavy array loops into instant constant-time `Set` hash lookups. 
-- **Zero Memory Churn:** Garbage Collection stuttering eliminated by lazy-caching Unicode NFC normalizations at node birth.
-- **Reactive Engine:** Preload-polling removed in favor of native, debounced event-driven sync with Obsidian's indexer.
+myBrain is a high-velocity, bidirectional structural graph network that maps, classifies, and visualizes connections within your vault in real-time. Built specifically for users who need instant relational awareness without heavy database overhead.
+
+✅ **What's New in v1.0.42: The Mechanical Sympathy Update**
+- **True O(1) Lookups:** Replaced linear array scanning (`.includes`) with native `Set` hashing for tag and property filtering.
+- **Zero-Allocation Sweeps:** Garbage collection pauses are crushed by lazy-caching Unicode NFC string normalizations at node birth.
+- **Reactive Event Sync:** Eliminated speculative preload-polling in favor of a debounced, event-driven harmony with Obsidian's indexer.
+- 📖 **Deep Dive:** Want the unvarnished engineering truths? Read the full [Technical Description](./technical%20description.md).
 
 ---
 
@@ -119,6 +122,8 @@ When a quadrant contains many nodes of the same type, they can optionally be **c
 ## ⚡ Technical Core & Architecture
 Unlike standard chaotic force-directed link graphs, myBrain gives you local orientation. Native-style hover previews — peek at note content on hover, consistent with Obsidian's own page preview behavior.
 
+While traditional graph views treat your vault as a static database requiring constant, heavy query-chain parsing, `myBrain` operates as a **stateless memory-mesh**. It acts as a lightweight logical overlay, transforming native Obsidian cache footprints into structured, real-time relational matrices.
+
 ### Flexible workspace placement
 The myBrain graph is a normal Obsidian view. Drag its tab and drop it anywhere in the workspace—left or right sidebar, main editor area, or a separate window.
 
@@ -131,11 +136,19 @@ myBrain is built on a **CSS-first rendering architecture**: quadrants, column fl
 * **Lightweight runtime assist:** A small TypeScript layer only handles what CSS cannot do alone reliably across all contexts—runtime container measurement, adaptive height caps, redraw timing, and SVG path refresh.
 * **Zero Layout-Squeezing:** Nodes are still generated in a protective off-screen render curtain (`.is-calculating`) to reduce visible reflow during render.
 
-### 🚀 Fast O(1) JIT Cache Performance
-- **Zero Database Bottlenecks:** Bypasses text-parsing chains and heavy queries during active navigation cycles using a true O(1) Just-In-Time (JIT) memory mesh.
-- **Instantaneous Cross-Linking ("Baits"):** Every tag, blocklist fragment, and structural layout property lookup is compiled into native JavaScript `Sets`. This converts slow array-scanning loops into ultra-low-latency constant-time hash lookups.
-- **Hardware-Friendly Memory Footprint:** The core matrix avoids mid-loop heap allocations, entirely preventing Garbage Collection (GC) stuttering. It recycles pre-computed Unicode NFC-normalized string identities generated once at node instantiation.
-- **Reactive & Event-Driven:** Instead of polling or forcing data cache synchronization, myBrain listens reactively to Obsidian’s background indexing engine, performing single-pass debounced updates only when topology-relevant data is ready.
+### 🚀 Fast O(1) Cache Performance
+- **No Database Bottlenecks:** Instead of spinning up separate database instances or heavy background search threads, `myBrain` directly interfaces with Obsidian's internal memory maps, creating a zero-latency indexing pipeline.
+- **Constant-Time Filtering:** Property, blocklist, and tag crossing-trajectories are cached into native JavaScript `Sets`. This shifts the mathematical workload from slow linear array searches ($O(N)$) to near-instantaneous hash validations ($O(1)$).
+- **Algorithmic Reality:** In the interest of full technical transparency, evaluating cross-network connections remains a deliberate matrix pairing sweep ($O(N^2)$). However, by optimizing the inner-loop physical link checks into instant dictionary lookups (`resolvedLinks[A]?.[B]`), the entire pipeline executes in microseconds.
+
+### 🔋 Hardware-Friendly Memory Footprint
+- **GC Churn Mitigation:** Deep loop matrix iterations are protected from heap-allocation spikes. By utilizing stateless functional closures to find relations, the system recycles raw pointer variables and generates zero temporary array garbage.
+- **Normalized at Birth:** Heavy string-lowercasing and Unicode NFC-normalizations (vital for stable emoji and accent matching) are executed **exactly once** when a `Node` instance is created, completely sparing the main loop from redundant CPU work.
+
+### 🔄 Reactive, Event-Driven Topologies
+- **Event-Driven Resilience:** Rather than blindly polling or forcing file cache hydration, `myBrain` hooks directly into Obsidian’s global `metadataCache` events.
+- **Graceful Async Recovery:** If background files are delayed during app startup, the plugin draws available data immediately, and then reactively snaps complete family relations into place the millisecond Obsidian's indexer roars *"Ready!"*.
+- **Intelligent Debounce:** Rapid-fire keystrokes or batch renames are safely collapsed into a single, hardware-efficient redraw pass, saving your CPU (and your laptop's battery) from unnecessary labor.
 
 ### Excalibrain-like structure
 If your existing structure is Excalibrain-friendly and front-matter based there would be little or no rewrites necessary.
