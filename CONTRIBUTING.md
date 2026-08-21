@@ -13,6 +13,7 @@ Thank you for your interest in improving this plugin! Contributions from the com
 - Describe the feature and why it would be useful for other users.
 
 ### 3. Submitting Code changes (Pull Requests)
+- Address one issue at a time. Combined fixes are harder to read and more difficult to disentangle.
 - Fork this repository.
 - Create a new branch for your feature or fix.
 - Make your changes and ensure the code builds successfully.
