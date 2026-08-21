@@ -71,8 +71,9 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
 
   .rv-area.center {
     grid-column: 2;
+    width: 125%;
+    transform: translate(10%);
     justify-self: center; /* Horizontally */
-    padding: clamp(0.2em, 3cqh, 1.2em) clamp(0.2em, 1cqw, 1.2em);
   }
 
   /* LOWER QUADRANT (Row 4: Pulls children tight up against center) */
@@ -142,7 +143,7 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     box-sizing: border-box;
     padding-top: 0.5em; /* in case +/- button ends up in top row */
   }
-  .rv-area.center .rv-columns-wrapper { padding-right: 1.4em; } /* enough space for the info btn */
+  .rv-area.center .rv-columns-wrapper {    padding-right: 1.4em; } /* enough space for the info btn */
   
   .rv-columns-wrapper.rv-single-item-group { column-count: 1; }
   .rv-columns-wrapper.rv-2-6-items-group { column-count: 2; }
