@@ -412,11 +412,13 @@ export class MyBrainView extends ItemView implements HoverParent {
       });
     }
 
-    // DISORIENTATION COMPENSATION: Recalibrates canvas coordinates on portrait/landscape screen rotation flips
+    // DISORIENTATION COMPENSATION: 
+    // On iOS/Android, viewport metrics may settle across multiple frames after rotation.
+    // We trigger a short staged redraw sequence; AreaManager now does deterministic
+    // pending-line retries, so this is just a gentle kick (not a timing gamble).
     this.registerDomEvent(window, 'orientationchange', () => {
       if (this.isSuspended) return;
-      
-      /** Fire the orientation debouncer */
+      // Event storm protection + single redraw entrypoint
       this.debouncedOrientation();
     });
   }
@@ -582,6 +584,8 @@ export class MyBrainView extends ItemView implements HoverParent {
       this.areaManager.requestRedraw(); 
       return; 
     }
+
+    this.clearTouchHoverState();
 
     /** 1. Executes deep navigation pipelines to open the file in the split editor pane */
     await this.openLinkInAdjacentPane(internalLink);
@@ -752,6 +756,17 @@ export class MyBrainView extends ItemView implements HoverParent {
       
       targetBox.addClass('is-hovered');
     }
+  }
+
+  private clearTouchHoverState() {
+    // 1) remove stale CSS hover marker classes from old/new DOM
+    const stuck = this.contentEl.querySelectorAll(".focusable-note-link.is-hovered, .item.is-hover-neighbor");
+    stuck.forEach(el => el.classList.remove("is-hovered", "is-hover-neighbor"));
+    this.lastMouseEvent = null;
+    this.lastMouseTarget = null;
+
+    // 3) clear graph line hover state too
+    this.areaManager?.clearTransientHoverState();
   }
   // #endregion
 

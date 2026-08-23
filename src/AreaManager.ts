@@ -34,8 +34,11 @@ export class AreaManager {
   private nodeElByPath = new Map<string, HTMLElement>();
   private delegatedHandlersBound = false;
   private boundClickHandler: ((event: MouseEvent) => void) | null = null;
+  private geometryRetryCount = 0;
+  private readonly maxGeometryRetries = 8;
+  private pendingInvalidLinks = false;
+  private readonly cornerEpsilon = 6; // px guard for bogus (0,0)-like gate positions
 
- 
 
   constructor(
     graph: NetworkGraph,
@@ -70,7 +73,7 @@ export class AreaManager {
     this.debouncedRender.cancel();
     
     /** 2. Abort the 2x rAF hardware animation loops immediately */
-    this.cancelPendingRedraw(); // 💡 Her lever den i beste velgående!
+    this.cancelPendingRedraw(); 
     
     /** 3. Clear out the cached SVG Bezier lines */
     this.linkCache.clear();
@@ -107,7 +110,7 @@ export class AreaManager {
         this.allocateAreaHeights();
         this.yieldIfLeftTall();
         this.yieldIfRightTall();
-
+        
         if (this.graph?.centerNote) {
           this.drawAllGraphLines();
         }
@@ -135,6 +138,8 @@ export class AreaManager {
       this.animationFrameId = null;
     }
     this.redrawQueued = false;
+    this.geometryRetryCount = 0;
+    this.pendingInvalidLinks = false;
   }
   // #endregion
 
@@ -327,6 +332,8 @@ export class AreaManager {
     const centerNote = this.graph.centerNote;
     if (!centerNote) return;
 
+    this.pendingInvalidLinks = false;
+
     this.nodeElByPath.clear();
     
     const offBy = this.offBy();
@@ -370,8 +377,9 @@ export class AreaManager {
 
       const rA = from.svg.getBoundingClientRect();
       const rB = to.svg.getBoundingClientRect();
-      return rA.width > 0 || rB.width > 0;
-    };
+      if (this.isBadGateRect(rA) || this.isBadGateRect(rB)) return false;
+        return true;
+      };
 
     // ==========================================================================
     // 2. THE GEOMETRICAL VECTOR RENDERING TRACE (Strictly 3 clean rules)
@@ -394,6 +402,8 @@ export class AreaManager {
             nodeB.upperGate.svg!.classList.add('is-connected');
 
             this.applyGateColor(nodeB.upperGate, colorful ? strokeColor : null);
+          } else {
+            this.pendingInvalidLinks = true;
           }
         }
         // RULE 2: B -> A (child)
@@ -406,6 +416,8 @@ export class AreaManager {
             nodeA.upperGate.svg!.classList.add('is-connected');
 
             this.applyGateColor(nodeA.upperGate, colorful ? strokeColor : null);
+          } else {
+            this.pendingInvalidLinks = true;
           }
         }
         // RULE 3: friend
@@ -418,6 +430,8 @@ export class AreaManager {
             nodeB.friendGate.svg!.classList.add('is-connected');
 
             this.applyGateColor(nodeB.friendGate, colorful ? strokeColor : null);
+          } else {
+            this.pendingInvalidLinks = true;
           }
         }
       }
@@ -429,6 +443,18 @@ export class AreaManager {
         link.svgElement.remove(); 
         this.linkCache.delete(key); 
       }
+    }
+
+    // Deterministic recovery pass:
+    // If some links were skipped due to unstable/invalid gate geometry,
+    // schedule another redraw (bounded to avoid infinite loops).
+    if (this.pendingInvalidLinks) {
+      if (this.geometryRetryCount < this.maxGeometryRetries) {
+        this.geometryRetryCount++;
+        this.requestRedraw();
+      }
+    } else {
+      this.geometryRetryCount = 0;
     }
   }
   // #endregion
@@ -459,46 +485,51 @@ export class AreaManager {
    /**
    * Compute dynamic max-height budgets per scroll-wrapper from the container's
    * real pixel height and push them as CSS variables.
+   * Height is set on area while measuring the scroll containers within these areas.
    *
    * Why: CSS columns behave much better when their containing block has a concrete
    * max-height. Using host-relative px makes this portable to any container size.
    */
   private allocateAreaHeights() {
-    const vc = this.containerEl;
+    const vc = this.containerEl;    
+    if (!vc?.isConnected || !this.center) return;
 
-    const upperArea = '.rv-area.upper'
-    const lowerArea = '.rv-area.lower';
-    const leftArea = '.rv-area.left';
-    const midArea = '.rv-area.center';
-
-    const upperWrapper = vc.querySelector(upperArea) as HTMLElement;
-    const lowerWrapper = vc.querySelector(lowerArea) as HTMLElement;
-    const leftWrapper =  vc.querySelector(leftArea) as HTMLElement;
-    const midWrapper = vc.querySelector(midArea) as HTMLElement;
+    const CW = `.${RV.COLLECTION_WRAPPER}`;
+    const upperScroller = this.upper?.querySelector(CW) as HTMLElement | null;
+    const leftScroller  = this.left?.querySelector(CW) as HTMLElement | null;
+    const lowerScroller = this.lower?.querySelector(CW) as HTMLElement | null;
     
-    if (!vc?.isConnected || !upperWrapper || !lowerWrapper || !leftWrapper || !midWrapper) return;
+    const upperScrollHeight = upperScroller?.scrollHeight ?? 0;
+    const leftScrollHeight = leftScroller?.scrollHeight ?? 0;
+    const lowerScrollHeight = lowerScroller?.scrollHeight ?? 0;
+    const midScrollHeight = this.center.scrollHeight; // never null
 
-    const upperScrollHeight = Math.max (upperWrapper.scrollHeight, (leftWrapper.scrollHeight - midWrapper.scrollHeight));
-    const lowerScrollHeight = lowerWrapper.scrollHeight;
-    const midScrollHeight = midWrapper.scrollHeight;
+    const leftPeakAboveCenter = Math.max(0, leftScrollHeight - this.center.scrollHeight);
+    const maxUpperOrLeftScroll = Math.max(1, upperScrollHeight, leftPeakAboveCenter);
+    const totalScrollHeight = Math.max(1, maxUpperOrLeftScroll + midScrollHeight + lowerScrollHeight); // <- guard
+    const upperFraction = maxUpperOrLeftScroll / totalScrollHeight;
 
-    const totalScrollHeight = upperScrollHeight + midScrollHeight + lowerScrollHeight;
-    const vcRemainingHeight = vc.innerHeight-midScrollHeight;
-
-    const upperFract = upperScrollHeight/totalScrollHeight; 
+    const upperProposal = upperFraction * vc.clientHeight;
     
-    // upper grows until 50% of space used, never more.
-    let upper = Math.floor(upperFract * vcRemainingHeight);
-    if (upper < 0.5 * vcRemainingHeight) {upper = 0.5 * vcRemainingHeight};
-    const left = upper + midScrollHeight;
-    const lower = vcRemainingHeight - upper;
-    const right = vc.innerHeight;
+    // upper should have at least 20% of upper
+    let upperH = Math.max(upperProposal, 0.2 * vc.clientHeight); 
     
-    vc.style.setProperty("--rv-upper-max", `${upper}px`);
-    vc.style.setProperty("--rv-left-max",  `${left}px`);
-    vc.style.setProperty("--rv-right-max", `${right}px`);
-    vc.style.setProperty("--rv-lower-max", `${lower}px`);
-   }
+    // upper also grows until 50% of container height, never more.
+    upperH = Math.floor(Math.min(upperH, 0.5 * vc.clientHeight));
+    
+    const leftH = upperH + midScrollHeight;
+    const rightH = vc.clientHeight;
+    
+    let safeLower = Math.max(0, vc.clientHeight - (upperH + midScrollHeight));
+    if (lowerScrollHeight > 0 && lowerScrollHeight < safeLower) {
+      safeLower = lowerScrollHeight;
+    }
+    
+    vc.style.setProperty("--rv-upper-max", `${upperH}px`);
+    vc.style.setProperty("--rv-left-max", `${leftH}px`);
+    vc.style.setProperty("--rv-right-max", `${rightH}px`);
+    vc.style.setProperty("--rv-lower-max", `${safeLower}px`);
+  }
 
   /**
    * Evaluates layout height and updates CSS dataset flags (data-left-tall).
@@ -571,6 +602,19 @@ export class AreaManager {
     }
 
     return { x: x, y: y };
+  }
+
+  /**
+   * Guard against transient invalid gate geometry during heavy layout churn
+   * (rapid graph switching / mobile orientation changes).
+   * Prevents bogus lines being drawn toward viewport origin.
+   */
+  private isBadGateRect(rect: DOMRect): boolean {
+    if (!rect) return true;
+    if (rect.width <= 0 || rect.height <= 0) return true;
+    if (!Number.isFinite(rect.left) || !Number.isFinite(rect.top)) return true;
+    if (rect.left <= this.cornerEpsilon && rect.top <= this.cornerEpsilon) return true;
+    return false;
   }
 
   /**
@@ -663,6 +707,13 @@ export class AreaManager {
       el.removeClass("is-hover-neighbor");
     }
     this.hoverNeighborEls.clear();
+  }
+
+  /**
+   * Public wrapper to clear transient hover visuals/state from outside AreaManager.
+   */
+  public clearTransientHoverState() {
+    this.clearHoverHighlight();
   }
   // #endregion
 

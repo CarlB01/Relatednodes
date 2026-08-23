@@ -1,7 +1,3 @@
-/* ==========================================================================
-CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
-========================================================================== */
-
 .workspace-leaf .workspace-leaf-content .view-content.rv-container {
   /* Runtime-overwritten caps (fallback to old values if TS not run yet) */
   --rv-line: var(--text-muted, #888888); 
@@ -12,30 +8,28 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
   --rv-right-max: 75vh;
   --rv-lower-max: 70vh;
 
-  /* ==========================================================================
-  1. MAGNETIC CLUSTER ROW DESIGN (Forces the clusters towards center)
+  /* =================================================================== */
+  /* 1. MAGNETIC CLUSTER ROW DESIGN 
   Rows 1 and 5 act as flexible shock absorbers (1fr) that swallow all empty space,
-  symmetrically compressing rows 2, 3, and 4 together tightly in the center [dan]!
-  ========================================================================== */
+  symmetrically compressing rows 2, 3, and 4 together tightly in the center  */
   display: grid;
-  grid-template-rows: minmax(0, 0.35fr) auto auto auto minmax(0, 0.35fr);
+  grid-template-rows: 0 auto auto auto 0;
   grid-template-columns: clamp(4em, 33%, 40em) clamp(6em, 33%, 40em) clamp(4em, 33%, 40em);
-  align-content: stretch;
+  align-content: center; 
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
+  padding: 1em 0 1em 1em;
   background-color: transparent; 
   overflow: hidden;
   box-sizing: border-box;
   container-type: inline-size;
   font-size: calc(var(--font-text-size, 11px) * 0.80);
 
-
-  /* --------------------------------================================--------
-     2. AREAS & QUADRANTS INFRASTRUCTURE (The Compressed Symmetrical Grid)
-     ------------------------------------------------------------------------ */
+  /* =================================================================== */
+  /* 2. AREAS & QUADRANTS  */
 
   /* UPPER QUADRANT (Row 2: Pulls parents tight down against center)*/
   .rv-area.upper {
@@ -45,6 +39,7 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     align-self: end;
     overflow: visible;
     min-height: 0;
+    transform: translate(10%);
   }
 
   /* CENTER & LATERAL AREAS (Row 3: Absolute layout origin axis) */
@@ -80,9 +75,7 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
   .rv-area.lower {
     grid-column: 1 / span 3; 
     grid-row: 4; /* Compressed tightly into the lower slot below origo [dan] */
-    margin-top: 0.3em;
-    margin-left: 0.35em; 
-    margin-bottom: 1em;
+    margin: 1em 0 1em 0.35em;
     align-self: start; 
     align-items: center;
     justify-content: flex-start;
@@ -90,9 +83,18 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
 
   }
 
-  /* ==========================================================================
-    3. BOX MODELS & VIEWPORT WRAPPERS (Scroll engines and multi-column constraints)
-    ========================================================================== */
+  /* ADAPTIVE RESPONSIVE FRAME GRID-CHECKS */
+  &[data-left-tall="true"] {
+    .rv-area.upper { grid-column: 2; }                       
+    .rv-area.left { grid-row: 2 / span 2; align-self: end; } 
+  }
+  &[data-right-tall="true"] {
+    .rv-area.lower { grid-column: 1 / span 2; }                  
+    .rv-area.right { grid-row: 2 / span 3; align-self: center; } 
+  }
+
+  /* =================================================================== */
+  /* 3. BOX MODELS & VIEWPORT WRAPPERS  */
 
   /* Scroll engine wrapper block */
   .rv-collection-wrapper {
@@ -107,17 +109,16 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     touch-action: pan-y;
   }
   
-  /* Specific vertical heights constraints preserving canvas breathing space across screens */
+  /* Specific vertical heights constraints */
   .rv-area.upper .rv-collection-wrapper { max-height: var(--rv-upper-max); }
   .rv-area.left .rv-collection-wrapper { max-height: var(--rv-left-max); }
   .rv-area.right .rv-collection-wrapper { max-height: var(--rv-right-max); } /* Exploits maximum horizontal canvas density on desktop frames */
   .rv-area.lower .rv-collection-wrapper { max-height: var(--rv-lower-max); }
 
-  /* ==========================================================================
-     4. COLLECTIONS & COLUMNS (Multi-column content routing engines)
-    ========================================================================== */
-    /**
-    * CENTRALIZED VERTICAL COLUMN STACKER
+  /* =================================================================== */
+  /* 4. COLLECTIONS & COLUMNS (Multi-column content routing engines) */
+  
+    /** CENTRALIZED VERTICAL COLUMN STACKER
     * Uses CSS multicolumn layout to achieve native top-to-bottom element wrapping.
     * Protected by '.is-calculating' layout gating and 'break-inside: avoid' on child 
     * nodes to guarantee stable geometric boundaries for accurate SVG curve rendering.
@@ -130,7 +131,6 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     overflow: visible; 
     box-sizing: border-box;
   }
-
   .rv-columns-wrapper {
 
     display: block;
@@ -141,38 +141,22 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     overflow-x: hidden;
     overflow-y: visible;
     box-sizing: border-box;
-    padding-top: 0.5em; /* in case +/- button ends up in top row */
+    padding: 0.5em;
   }
-  .rv-area.center .rv-columns-wrapper {    padding-right: 1.4em; } /* enough space for the info btn */
-  
-  .rv-columns-wrapper.rv-single-item-group { column-count: 1; }
-  .rv-columns-wrapper.rv-2-6-items-group { column-count: 2; }
-
-  /* ==========================================================================
-     5. ADAPTIVE RESPONSIVE FRAME GRID-CHECKS
-     ========================================================================== */
-
-  /**
-   * Native parent selector binding loops.
-   * Leverages the nested amp '&' token to map layout-shifting mutations directly 
-   * onto Obsidian's parent container grid framework dynamically [dan]!
-   */
-  &[data-left-tall="true"] {
-    .rv-area.upper { grid-column: 2; }                       
-    .rv-area.left { grid-row: 2 / span 2; align-self: end; } 
+  .rv-area.center .rv-columns-wrapper {
+    padding-right: 1.4em; /* enough space for the info btn */
+  } 
+  .rv-columns-wrapper.rv-single-item-group {
+     column-count: 1; 
+  }
+  .rv-columns-wrapper.rv-2-6-items-group {
+     column-count: 2; 
   }
 
-  &[data-right-tall="true"] {
-    .rv-area.lower { grid-column: 1 / span 2; }                  
-    .rv-area.right { grid-row: 2 / span 3; align-self: center; } 
-  }
+  /* =================================================================== */
+  /* 5. INTERACTIVE INDIVIDUAL RAD-BOXES (Item cell blocks) */
 
-  /* ==========================================================================
-     6. INTERACTIVE INDIVIDUAL RAD-BOXES (Item cell blocks)
-     ========================================================================== */
-
-  /**
-   * Node block cell boundaries.
+  /* Node block cell boundaries.
    * Standardized strictly under relative positioning rules to act as vector gate anchor roots.
    */
   .item {
@@ -204,9 +188,8 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     display: none;
   }
 
-  /* ==========================================================================
-     7. LINKDIV WRAPPER (Forbids row breakage and fragmentation)
-     ========================================================================== */
+  /* =================================================================== */
+  /* 6. LINKDIV WRAPPER (Forbids row breakage and fragmentation) */
 
   /**
    * Layout envelope packaging vector ports and node components.
@@ -231,15 +214,16 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     box-shadow: inset 0 0 0.38em rgba(0, 0, 0, 0.05);
   }
 
-  /* ==========================================================================
-     8. HOVER MOTORS & TEXT WRAPPING SAFEGUARDS
-     ========================================================================== */
+  /* INTEGRATED WRAPPER SAFEGUARD: Enforces structure on the node frame inside the first group block */
+  .item.rv-first-in-group .rv-linkdiv {
+    width: fit-content;
+    max-width: 100%;
+    break-inside: avoid-column;
+    break-before: avoid-column;
+  }
 
-  /**
-   * Unified text interaction boundary interface.
-   * Merges custom transparency mixing formula with an advanced frosted-glass layout filter.
-   * Enables comprehensive soft word-breaking while preserving fluid scalability [dan].
-   */
+  /* =================================================================== */
+  /* 7. HOVER MOTORS & TEXT WRAPPING SAFEGUARDS */
       
   .focusable-note-link {
     position: relative;
@@ -299,20 +283,20 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     -webkit-backdrop-filter: blur(2px);
   }
 
-  /* ==========================================================================
-     9. BACK SVGCANVAS LAYER (Bezier curve tracks mapping)
-     ========================================================================== */
+  /* =================================================================== */
+  /* 8. SVG LAYER + LINK PATHS  */
 
-  /**
-   * Symmetrical background SVG layer window bounds.
-   * Placed strictly as an absolute background blanket layer underneath node clusters [dan].
-   */
   svg.rv-svg-layer {
     position: absolute; 
+    display: block; 
+    visibility: visible;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
+    min-width: 100%;
+    min-height: 100%;
+    pointer-events: none; 
     z-index: -1;
     pointer-events: none; /* Disables path tracking intercepting mouse events */
     
@@ -320,7 +304,7 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     -webkit-transform: translateZ(0);
     transform: translateZ(0);
   }
-
+  
   /* Mathematical vector path mapping styles */
   .rv-link-path {
     fill: none; 
@@ -330,15 +314,26 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     stroke-linejoin: round;
   }
 
+  .rv-link-path.is-hover-link {
+    stroke-width: calc(var(--rv-line-width) * 2.2);
+    filter: drop-shadow(0 0 0.22em var(--text-accent));
+    opacity: 1;
+  }
+
+  .item.is-hover-neighbor .focusable-note-link {
+    box-shadow: 0 0 0.72em color-mix(in srgb, var(--text-accent) 55%, transparent),
+                inset 0 0 0 0.06em var(--text-accent);
+    transform: scale(1.03);
+  }
+  
   /* Safely unmounts hidden path connections from rendering cycles when out of bounds */
   .is-hidden,
   svg.is-hidden {
     display: none; 
   }
 
-  /* ==========================================================================
-     10. GEOMETRICAL PORT GATES (Vector docking nodes)
-     ========================================================================== */
+  /* =================================================================== */
+  /* 9. GEOMETRICAL PORT GATES (Vector docking nodes) */
 
   /**
    * Docking coordinate port shapes.
@@ -380,9 +375,8 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     transform: translateY(-50%);
   }
 
-  /* ==========================================================================
-     11. GATE STATE ENGINE (Empty vs Connected filling parameters)
-     ========================================================================== */
+  /* =================================================================== */
+  /* 10. GATE STATE ENGINE (Empty vs Connected filling parameters) */
 
   /* Standard static port vector frame state */
   .rv-gate-svg circle {
@@ -404,14 +398,9 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     filter: drop-shadow(0 0 0.3em var(--rv-line)); 
   }
 
-  /* ==========================================================================
-     12. ULTRA-COMPACT GROUP BADGE CAPSLOCK (Taktil plusminus switch)
-     ========================================================================== */
+  /* =================================================================== */
+  /* 11. GROUP BADGE (Taktil plusminus switch) */
 
-  /**
-   * Proportional expand/collapse interaction toggle button.
-   * Converted from absolute pixels to relative em units to scale during font zooming [dan].
-   */
   .rv-plusminus {
     position: absolute; 
     top: -1.08em;
@@ -445,7 +434,6 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
   }
 
-
   .rv-plusminus:hover {
     background-color: var(--interactive-accent); 
     border-color: var(--interactive-accent);
@@ -463,17 +451,8 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     overflow: visible; /* Permits the 3D button aura shadow to render unclipped */
   }
 
-  /* INTEGRATED WRAPPER SAFEGUARD: Enforces structure on the node frame inside the first group block */
-  .item.rv-first-in-group .rv-linkdiv {
-    width: fit-content;
-    max-width: 100%;
-    break-inside: avoid-column;
-    break-before: avoid-column;
-  }
-
-  /* ==========================================================================
-     13. ELASTIC SATELLITE INFO BUTTON (Taktil metadata switch)
-     ========================================================================== */
+  /* =================================================================== */
+  /* 12. SATELLITE INFO BUTTON (Taktil metadata switch) */
 
   .rv-info-btn {
     position: absolute;
@@ -487,14 +466,21 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   }
 
-  /* ==========================================================================
-     14. METADATA INFO POPUP (Cinematic local presentation layer)
-     ========================================================================== */
+  .rv-info-btn:hover {
+    cursor: pointer;
+    color: var(--text-on-accent, white);
+    background: var(--text-accent);
+    border-color: var(--text-accent);
+    transform: translateY(-1px) scale(1.08);
+    filter: saturate(1.15);
 
-  /**
-   * Floating info satellite badge component.
-   * Blends theme-adaptive secondary background layers smoothly with layout split boundaries.
-   */
+    /* glow + ring */
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--text-accent) 25%, transparent),
+      0 4px 10px color-mix(in srgb, var(--text-accent) 35%, transparent);
+    outline: none;
+  }
+
   .rv-info-hover {
     position: absolute; 
     z-index: var(--layer-menu);
@@ -517,23 +503,8 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     color: var(--text-muted);
   }
 
-  /* ==========================================================================
-     15. AUTOMATIC TEXTAREA RESIZER (Plugin settings dashboard styles)
-     ========================================================================== */
-
-  textarea.rv-setting-textarea {
-    width: 100%;
-    min-width: 11.5em;
-    min-height: 3.8em;
-    max-height: 27em;
-    resize: none;
-    overflow-y: auto;
-    field-sizing: content;
-  }
-
-  /* ==========================================================================
-     16. INSTRUCTIONAL WELCOME FRAME (Premium initial state mask)
-     ========================================================================== */
+  /* =================================================================== */
+  /* 13. INSTRUCTIONAL WELCOME FRAME  */
 
   .rv-welcome-container {
     position: absolute;
@@ -548,9 +519,6 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     padding: 2em;
     box-sizing: border-box;
     text-align: center;
-    
-    /* Smooth fade-in sequence shielding the frame from raw layout pops */
-    animation: rvWelcomeFadeIn 0.2s ease-out forwards;
   }
 
   .rv-welcome-text {
@@ -561,113 +529,59 @@ CENTRAL HIGH-SPECIFICITY INHERITANCE ENVELOPE (The Nesting Architecture)
     line-height: 1.5;
   }
 
-  @keyframes rvWelcomeFadeIn {
-    from {
-      opacity: 0;
-      transform: scale(0.98);
+  /* =================================================================== */
+  /* 14. MOBILE FRAMEWORK OVERRIDE (prevent layout fragmentation on iOS devices) */
+  
+  :is(.is-phone, .is-tablet) {
+
+    .rv-collection-wrapper {
+     -webkit-overflow-scrolling: auto; /* disable momentum in nested scrollers on iPhone */
     }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-
-  /* ==========================================================================
-     17. NATIVE INTERFACE BUTTONS (100% Pure CSS Hover States)
-     ========================================================================== */
-
-  /* Triggers instantly in the browser thread without waking any JavaScript observers [dan]! */
-  .rv-info-btn:hover,
-  .rv-zoom-btn:hover {
-    cursor: pointer;
-    color: var(--text-on-accent, white);
-    background: var(--text-accent);
-    border-color: var(--text-accent);
-    transform: translateY(-1px) scale(1.08);
-    filter: saturate(1.15);
-
-    /* glow + ring */
-    box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--text-accent) 25%, transparent),
-      0 4px 10px color-mix(in srgb, var(--text-accent) 35%, transparent);
-    outline: none;
-  }
-
-  /* ==========================================================================
-     18. SVG LAYER DETACHMENT RECONCILIATION (Full screen grid alignment)
-     ========================================================================== */
-     
-  svg.rv-svg-layer {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    min-width: 100%;
-    min-height: 100%;
-    pointer-events: none; 
-    display: block; 
-    visibility: visible;
-    z-index: -1;
     
-    /* iOS FIX: Minimal transform to stabilize rendering */
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);
+    .rv-area.lower .rv-collection-wrapper {
+      padding-bottom: max(0.5em, env(safe-area-inset-bottom));
+    }
+  
+    .focusable-note-link {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      transition: none;
+    }
+
+    .focusable-note-link.is-hovered {
+      /* do not persist desktop-like modifier hover visuals on touch */
+      box-shadow: none;
+      transform: none;
+      transform: none;
+      box-shadow: none;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+
+    .item:hover .rv-gate-svg.is-connected circle {
+      filter: none;
+    }
   }
 
-} /* <<--- GLOBAL ENVELOPE END!  */
+  /* =================================================================== */
+  /* 15. BREAK AVOID TESTING */
 
-/* ==========================================================================
-   GLOBAL VIEWPORT MODIFIERS (Placed outside the core envelope)
-   ========================================================================== */
+  .rv-groups > .item,
+  .rv-groups > .item .rv-linkdiv,
+  .rv-groups > .item .rv-plusminus {
+    break-inside: avoid-column;
+    -webkit-column-break-inside: avoid;
+    page-break-inside: avoid;
+  }
+ 
+  .rv-groups > .item.rv-first-in-group {
+    display: inline-flex;
+    width: max-content;
+    max-width: 100%;
+  }
 
-/* Mobile framework override to prevent layout fragmentation on iOS devices */
-.is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container,
-.is-tablet .workspace-leaf .workspace-leaf-content .view-content.rv-container {
-  height: 100%;
-  padding-bottom: 0;   /* viktig */
-  overflow-x: hidden;
-  overflow-y: hidden;
-}
-
-/* ==========================================================================
-   iPHONE-ONLY SAFETY OVERRIDES (lock/unlock stability)
-   Keeps iPad + desktop visuals untouched.
-   ========================================================================== */
-.is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .rv-collection-wrapper {
-  -webkit-overflow-scrolling: auto; /* disable momentum in nested scrollers on iPhone */
-}
-
-/* Safe-area kun der problemet er */
-.is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .rv-area.lower .rv-collection-wrapper {
-  padding-bottom: max(0.5em, env(safe-area-inset-bottom));
-}
-
-.is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .focusable-note-link {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  transition: none;
-}
-
-.is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .item:hover .focusable-note-link {
-  transform: none;
-  box-shadow: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.is-phone .workspace-leaf .workspace-leaf-content .view-content.rv-container .item:hover .rv-gate-svg.is-connected circle {
-  filter: none;
-}
-
-.workspace-leaf .workspace-leaf-content .view-content.rv-container .rv-link-path.is-hover-link {
-  stroke-width: calc(var(--rv-line-width) * 2.2);
-  filter: drop-shadow(0 0 0.22em var(--text-accent));
-  opacity: 1;
-}
-
-.workspace-leaf .workspace-leaf-content .view-content.rv-container .item.is-hover-neighbor .focusable-note-link {
-  box-shadow: 0 0 0.72em color-mix(in srgb, var(--text-accent) 55%, transparent),
-              inset 0 0 0 0.06em var(--text-accent);
-  transform: scale(1.03);
-}
+  .rv-plusminus {
+    display: inline-flex;
+    white-space: nowrap;
+  }
+} 
