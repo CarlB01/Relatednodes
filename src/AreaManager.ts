@@ -665,6 +665,7 @@ export class AreaManager {
     this.containerEl.on("mouseover", ".item", (_event: MouseEvent, target: HTMLElement) => {
       const notePath = target.getAttribute("data-note-path");
       if (!notePath) return;
+      console.log ('notePath')
       if (this.activeHoverPath === notePath) return;
       this.applyHoverHighlight(notePath);
     });

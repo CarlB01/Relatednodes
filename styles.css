@@ -1,17 +1,61 @@
-.workspace-leaf .workspace-leaf-content .view-content.rv-container {
-  /* Runtime-overwritten caps (fallback to old values if TS not run yet) */
+/* ===================================================== */
+/* BASIC VARIABLES */
+.rv-container {
+  --rv-bg: var(--background-primary); 
   --rv-line: var(--text-muted, #888888); 
-  --rv-line-width: 0.04em; 
-
+  --rv-line-width: 0.05em; 
+  
   --rv-upper-max: 22vh;
   --rv-left-max: 35vh;
   --rv-right-max: 75vh;
   --rv-lower-max: 70vh;
+  
+  --rv-glow-scale: 1;
+  --rv-glow-size: 0em;
+  --rv-glow-inset-size: 0em;
+  --rv-glow-speed: 0.08s;
+  
+  --rv-lower-padding-bottom: max(0.5em, env(safe-area-inset-bottom));
+  --rv-link-border: 0.12em solid transparent;
+  --rv-link-border-hovered: 0.12em solid var(--text-accent);
+}
 
-  /* =================================================================== */
-  /* 1. MAGNETIC CLUSTER ROW DESIGN 
-  Rows 1 and 5 act as flexible shock absorbers (1fr) that swallow all empty space,
-  symmetrically compressing rows 2, 3, and 4 together tightly in the center  */
+/* SIDEDOCK DEPENDANT VARIABLES (PC or non-PC) */
+:is(.mod-sidedock, .workspace-drawer) .rv-container {
+  --rv-bg: var(--background-secondary);
+}
+
+/* 🖥️ DESKTOP VARIABLES */
+@media (hover: hover) and (pointer: fine) { 
+  .rv-container {
+    --rv-glow-scale: 1.05;
+    --rv-glow-size: 0.72em;
+    --rv-glow-inset-size: 0.08em;
+    
+    --rv-glow-speed: 0.16s;
+
+    --rv-lower-padding-bottom: 0;
+    --rv-link-border: none;
+    --rv-link-border-hovered: none;
+    --rv-link-transform: scale(1.05);
+  }
+}
+
+/* COMPUTED VARIABLES */
+.rv-container {
+  --rv-link-transform: scale(var(--rv-glow-scale));
+  
+  --rv-font-size: calc(var(--font-text-size, 11px) * 0.75);
+  --rv-bg-color: color-mix(in srgb, var(--rv-bg), transparent 20%);
+  --rv-link-box-shadow: 0 0 var(--rv-glow-size) var(--text-accent), 
+                  inset 0 0 0 var(--rv-glow-inset-size) var(--text-accent);
+}
+
+/* =================================================================== */
+/* 1. MAGNETIC CLUSTER ROW DESIGN 
+Rows 1 and 5 act as flexible shock absorbers (1fr) that swallow all empty space,
+symmetrically compressing rows 2, 3, and 4 together tightly in the center  */
+.rv-container {
   display: grid;
   grid-template-rows: 0 auto auto auto 0;
   grid-template-columns: clamp(4em, 33%, 40em) clamp(6em, 33%, 40em) clamp(4em, 33%, 40em);
@@ -26,11 +70,11 @@
   overflow: hidden;
   box-sizing: border-box;
   container-type: inline-size;
-  font-size: calc(var(--font-text-size, 11px) * 0.80);
+}
 
-  /* =================================================================== */
-  /* 2. AREAS & QUADRANTS  */
-
+/* =================================================================== */
+/* 2. AREAS & QUADRANTS  */
+.rv-container {
   /* UPPER QUADRANT (Row 2: Pulls parents tight down against center)*/
   .rv-area.upper {
     grid-column: 2;
@@ -92,10 +136,11 @@
     .rv-area.lower { grid-column: 1 / span 2; }                  
     .rv-area.right { grid-row: 2 / span 3; align-self: center; } 
   }
+}
 
-  /* =================================================================== */
-  /* 3. BOX MODELS & VIEWPORT WRAPPERS  */
-
+/* =================================================================== */
+/* 3. BOX MODELS & VIEWPORT WRAPPERS  */
+.rv-container {
   /* Scroll engine wrapper block */
   .rv-collection-wrapper {
     display: flex;
@@ -113,17 +158,20 @@
   .rv-area.upper .rv-collection-wrapper { max-height: var(--rv-upper-max); }
   .rv-area.left .rv-collection-wrapper { max-height: var(--rv-left-max); }
   .rv-area.right .rv-collection-wrapper { max-height: var(--rv-right-max); } /* Exploits maximum horizontal canvas density on desktop frames */
-  .rv-area.lower .rv-collection-wrapper { max-height: var(--rv-lower-max); }
+  .rv-area.lower .rv-collection-wrapper { 
+    max-height: var(--rv-lower-max); 
+    padding-bottom: var(--rv-lower-padding-bottom);
+  }
+}
 
-  /* =================================================================== */
-  /* 4. COLLECTIONS & COLUMNS (Multi-column content routing engines) */
-  
-    /** CENTRALIZED VERTICAL COLUMN STACKER
-    * Uses CSS multicolumn layout to achieve native top-to-bottom element wrapping.
-    * Protected by '.is-calculating' layout gating and 'break-inside: avoid' on child 
-    * nodes to guarantee stable geometric boundaries for accurate SVG curve rendering.
-    */
-
+/* =================================================================== */
+/* 4. COLLECTIONS & COLUMNS (Multi-column content routing engines) */
+.rv-container {  
+  /** CENTRALIZED VERTICAL COLUMN STACKER
+  * Uses CSS multicolumn layout to achieve native top-to-bottom element wrapping.
+  * Protected by '.is-calculating' layout gating and 'break-inside: avoid' on child 
+  * nodes to guarantee stable geometric boundaries for accurate SVG curve rendering.
+  */
   .rv-collection {
     max-height: none;
     height: auto;
@@ -132,7 +180,6 @@
     box-sizing: border-box;
   }
   .rv-columns-wrapper {
-
     display: block;
     columns: clamp(6em, 20cqw, 12em);
     column-gap: 0.3em; 
@@ -152,45 +199,49 @@
   .rv-columns-wrapper.rv-2-6-items-group {
      column-count: 2; 
   }
+}
 
-  /* =================================================================== */
-  /* 5. INTERACTIVE INDIVIDUAL RAD-BOXES (Item cell blocks) */
-
-  /* Node block cell boundaries.
-   * Standardized strictly under relative positioning rules to act as vector gate anchor roots.
-   */
+/* =================================================================== */
+/* 5. ITEM  */
+.rv-container {
+  /* Node block cell boundaries. */
+  /* Standardized strictly under relative positioning rules to act as vector gate anchor roots. */
   .item {
     display: flex; 
     flex-direction: row;
+    box-sizing: border-box; /* prevents outer box from growing if padding/border */
     align-items: center;  
     justify-content: center; 
     position: relative; 
     overflow: visible; 
-    
-    padding: 0.3em;
-    box-sizing: border-box;
-
-    /* Strict fragmentation shields forbidding column breakage mid-cell */
     break-inside: avoid;
-    page-break-inside: avoid; 
+    break-inside: avoid-column;
+    -webkit-column-break-inside: avoid;
+    page-break-inside: avoid;
+    
+    /* Strict fragmentation shields forbidding column breakage mid-cell */
+    padding: 0.3em;
     z-index: 2;
-  }
+
+    /* Maskinvare-akselerasjon som låser elementet til sitt eget GPU-lag */
+    will-change: transform, box-shadow;
+    transform: scale(1);
+  };
 
   /* Explicit top padding gap deployed only when structural cluster headers fire */
   .item.rv-first-in-group {
     margin-top: 1.38em;
-    flex-direction: column; /* Converts node stacks vertically if headers are deployed */
-    overflow: visible;
   }
 
   /* Standard visibility killer layout schema */
   .item.hidden {
     display: none;
   }
+}
 
-  /* =================================================================== */
-  /* 6. LINKDIV WRAPPER (Forbids row breakage and fragmentation) */
-
+/* =================================================================== */
+/* 6. LINKDIV WRAPPER (Forbids row breakage and fragmentation) */
+.rv-container {
   /**
    * Layout envelope packaging vector ports and node components.
    * Compiles horizontal layouts natively while preventing fragmentation layers.
@@ -205,6 +256,7 @@
     width: fit-content;
     max-width: 100%;
     padding: 0;
+    margin: 0; /* outside */
     overflow: visible;
   }
 
@@ -221,10 +273,11 @@
     break-inside: avoid-column;
     break-before: avoid-column;
   }
+}
 
-  /* =================================================================== */
-  /* 7. HOVER MOTORS & TEXT WRAPPING SAFEGUARDS */
-      
+/* =================================================================== */
+/* 7. NOTE-LINK (Hover motors & text wrapping safeguards) */
+.rv-container {
   .focusable-note-link {
     position: relative;
     display: inline-block;
@@ -236,28 +289,25 @@
     word-break: break-word;
     overflow: visible; 
     cursor: default;
-    
+    border: var(--rv-link-border);
+
     min-width: 0;
     padding: 0.02em 0.4em;
+    font-size: var(--rv-font-size); 
+
     line-height: 1.1; /* prevents extra added air around the link */
     border-radius: 0.25em;
     
     /* Theme adaptive text mask framework: */
     backdrop-filter: blur(0px); 
     -webkit-backdrop-filter: blur(0px);
-    background-color: color-mix(in srgb, var(--background-primary), transparent 20%);
-    transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
+    background-color: var(--rv-bg-color);
+    transition: all var(--glow-speed) ease-out;
   }
-
-  /* If graph lives in a sidebar:  */
-  :is(.mod-sidedock) & .focusable-note-link {
-    background-color: color-mix(in srgb, var(--background-secondary), transparent 20%);
-    transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
-  }
-
+  
   .focusable-note-link::before,
   .focusable-note-link::after {
-    font-size: 0.7em; 
+    font-size: calc(var(--rv-font-size)* 0.7); 
     transform: translateY(-15%);
     vertical-align: middle; 
     line-height: 1;
@@ -265,27 +315,25 @@
     white-space: nowrap;
   }
 
+  .item:hover .focusable-note-link, 
+  .item.is-hover-neighbor .focusable-note-link {
+    border: var(--rv-link-border-hovered);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+    transform: var(--rv-link-transform);
+    box-shadow: var(--rv-link-box-shadow);
+  }
+
   /* Forces text-spans to break row blocks inside frames smoothly */
   .rv-text-span {
     display: inline; 
     pointer-events: none; /* Shields cursor bounds from Obsidian JIT pointer collisions */
   }
+}
 
-  /**
-   * Hardware-accelerated 3D lifting engine.
-   * COMPLIANT HOVER REFACTOR: Swapped static JavaScript class bindings with native CSS :hover loops.
-   * This completely bypasses script threads to ensure 100% stable, layout flicker-free illumination [dan]!
-   */
-  .item:hover .focusable-note-link {
-    transform: scale(1.05);
-    box-shadow: 0 0 0.92em var(--text-accent), inset 0 0 0 0.08em var(--text-accent);
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
-  }
-
-  /* =================================================================== */
-  /* 8. SVG LAYER + LINK PATHS  */
-
+/* =================================================================== */
+/* 8. SVG LAYER + LINK PATHS  */
+.rv-container {
   svg.rv-svg-layer {
     position: absolute; 
     display: block; 
@@ -296,7 +344,6 @@
     height: 100%;
     min-width: 100%;
     min-height: 100%;
-    pointer-events: none; 
     z-index: -1;
     pointer-events: none; /* Disables path tracking intercepting mouse events */
     
@@ -305,7 +352,7 @@
     transform: translateZ(0);
   }
   
-  /* Mathematical vector path mapping styles */
+  /* LINES standard */
   .rv-link-path {
     fill: none; 
     stroke: var(--rv-line);
@@ -314,27 +361,23 @@
     stroke-linejoin: round;
   }
 
+  /* CONNECTED LINES GLOW */
   .rv-link-path.is-hover-link {
-    stroke-width: calc(var(--rv-line-width) * 2.2);
+    stroke-width: calc(var(--rv-line-width) * 2.5);
     filter: drop-shadow(0 0 0.22em var(--text-accent));
     opacity: 1;
   }
 
-  .item.is-hover-neighbor .focusable-note-link {
-    box-shadow: 0 0 0.72em color-mix(in srgb, var(--text-accent) 55%, transparent),
-                inset 0 0 0 0.06em var(--text-accent);
-    transform: scale(1.03);
-  }
-  
   /* Safely unmounts hidden path connections from rendering cycles when out of bounds */
   .is-hidden,
   svg.is-hidden {
     display: none; 
   }
+}
 
-  /* =================================================================== */
-  /* 9. GEOMETRICAL PORT GATES (Vector docking nodes) */
-
+/* =================================================================== */
+/* 9. GATES (Vector docking nodes) */
+.rv-container {
   /**
    * Docking coordinate port shapes.
    * Strictly locks down height/width metrics using em units to preserve zoom mapping matrices [dan].
@@ -374,22 +417,23 @@
     left: auto;
     transform: translateY(-50%);
   }
+}
 
-  /* =================================================================== */
-  /* 10. GATE STATE ENGINE (Empty vs Connected filling parameters) */
-
+/* =================================================================== */ 
+/* 10. GATE STATE ENGINE (Empty vs Connected filling parameters) */
+.rv-container {
   /* Standard static port vector frame state */
   .rv-gate-svg circle {
     fill: var(--background-secondary); 
     stroke: var(--rv-line);
-    stroke-width: 1px;
+    stroke-width: var(--rv-line-width);
   }
 
   /* Activated connected connection state injecting dynamic opacity blending math */
   .rv-gate-svg.is-connected circle {
     fill: color-mix(in srgb, var(--rv-line), transparent 40%);
     stroke: var(--rv-line);
-    stroke-width: 1px;
+    stroke-width: var(--rv-line-width);
   }
 
   /* Focus illumination boost compounding glow filtering on active node paths */
@@ -397,48 +441,51 @@
     fill: var(--rv-line); 
     filter: drop-shadow(0 0 0.3em var(--rv-line)); 
   }
+}
 
-  /* =================================================================== */
-  /* 11. GROUP BADGE (Taktil plusminus switch) */
-
+/* =================================================================== */
+/* 11. GROUP BADGE (PLUS MINUS) (Tactile switch) */
+.rv-container {
   .rv-plusminus {
     position: absolute; 
-    top: -1.08em;
-    right: 0.3em;
-    z-index: 10;
-    width: max-content;
-    height: auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 0.2em 0.45em;
+    box-sizing: border-box;
+
+    top: -1.08em;
+    right: 0.3em;
+    width: max-content;
+    height: auto;
     margin: 0;
-    border-radius: 1.5em; 
-    font-size: 0.8em; 
-    font-weight: 800;
-    line-height: 1;
-    white-space: nowrap;
+    padding: 0.3em;
+    z-index: 10;
+    
     border: 1.5px solid var(--border-color); 
+    border-radius: 1.5em; 
+    
+    font-size: calc(var(--rv-font-size)* 0.9); ; 
+    font-weight: 800;    
+    line-height: 1;
+    
+    break-inside: avoid-column;
+    -webkit-column-break-inside: avoid;
+    page-break-inside: avoid;
+    white-space: nowrap;
+    
     color: var(--text-muted);
     cursor: pointer;
-    box-sizing: border-box;
-    background-color: color-mix(in srgb, var(--background-primary), transparent 20%);
-    transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); 
-    break-inside: avoid-column;
-  }
-
-  /* If graph lives in a sidebar:  */
-  :is(.mod-sidedock) & .rv-plusminus {
-    background-color: color-mix(in srgb, var(--background-secondary), transparent 20%);
-    transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease, backdrop-filter 0.15s ease;
+    
+    background-color: var(--rv-bg-color);
+    transition: all var(--glow-speed) ease-out;
+    box-shadow: 0 0.1em 0.25em rgba(0, 0, 0, 0.2); 
   }
 
   .rv-plusminus:hover {
     background-color: var(--interactive-accent); 
     border-color: var(--interactive-accent);
     color: white;
-    transform: scale(1.05); 
+    transform: var(--rv-link-transform) 
   }
 
   /* INTEGRATED GROUP SAFEGUARD: Enforces constraints on the button element inside the first group block */
@@ -450,20 +497,26 @@
     break-after: avoid-column;
     overflow: visible; /* Permits the 3D button aura shadow to render unclipped */
   }
+}
 
-  /* =================================================================== */
-  /* 12. SATELLITE INFO BUTTON (Taktil metadata switch) */
-
+/* =================================================================== */
+/* 12. INFO BUTTON (Tactile metadata switch) */
+.rv-container {
   .rv-info-btn {
     position: absolute;
     top: -0.25em;
-    right: -0.8em;
+    right: -1em;
+    width: 1.2em;
+    height: 1.2em;
+    border-radius: 50%;
+    border: 0.06em solid;
     z-index: 10;
+    font-size: calc(var(--rv-font-size)* 0.9);
     font-weight: 999;
     color: var(--text-accent); /* Neutral info accent branding matching core elements */
     cursor: pointer;
     box-sizing: border-box;
-    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    transition: all var(--glow-speed) ease-out;
   }
 
   .rv-info-btn:hover {
@@ -476,9 +529,8 @@
 
     /* glow + ring */
     box-shadow:
-      0 0 0 2px color-mix(in srgb, var(--text-accent) 25%, transparent),
-      0 4px 10px color-mix(in srgb, var(--text-accent) 35%, transparent);
-    outline: none;
+      0 0 0 0.25em color-mix(in srgb, var(--text-accent) 25%, transparent),
+      0 0.3em 1em color-mix(in srgb, var(--text-accent) 35%, transparent);
   }
 
   .rv-info-hover {
@@ -486,10 +538,12 @@
     z-index: var(--layer-menu);
     pointer-events: none;
     background-color: var(--background-secondary-alt);
-    border: 1px solid var(--border-color);
+    border: 0.08em solid var(--border-color);
     padding: 0.45em 0.75em;
     border-radius: 0.3em;
-    box-shadow: 0 0.15em 0.6em rgba(0, 0, 0, 0.25);
+    @media (hover: hover) and (pointer: fine) { /* pointer: coarse for phones & pads */
+      box-shadow: 0 0.15em 0.6em rgba(0, 0, 0, 0.25);
+    }
   }
 
   /* Keeps the element dimensionally active for JS offsets while masking visibility [dan] */
@@ -502,10 +556,11 @@
     font-weight: 500;
     color: var(--text-muted);
   }
+}
 
-  /* =================================================================== */
-  /* 13. INSTRUCTIONAL WELCOME FRAME  */
-
+/* =================================================================== */
+/* 13. INSTRUCTIONAL WELCOME FRAME  */
+.rv-container {
   .rv-welcome-container {
     position: absolute;
     top: 0;
@@ -525,63 +580,7 @@
     margin: 0;
     max-width: 21.5em; /* Constrains text width gracefully inside standard sidebar widths */
     color: var(--text-muted);
-    font-size: 1.1em;
+    font-size: calc(var(--rv-font-size)* 1.2);
     line-height: 1.5;
   }
-
-  /* =================================================================== */
-  /* 14. MOBILE FRAMEWORK OVERRIDE (prevent layout fragmentation on iOS devices) */
-  
-  :is(.is-phone, .is-tablet) {
-
-    .rv-collection-wrapper {
-     -webkit-overflow-scrolling: auto; /* disable momentum in nested scrollers on iPhone */
-    }
-    
-    .rv-area.lower .rv-collection-wrapper {
-      padding-bottom: max(0.5em, env(safe-area-inset-bottom));
-    }
-  
-    .focusable-note-link {
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
-      transition: none;
-    }
-
-    .focusable-note-link.is-hovered {
-      /* do not persist desktop-like modifier hover visuals on touch */
-      box-shadow: none;
-      transform: none;
-      transform: none;
-      box-shadow: none;
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
-    }
-
-    .item:hover .rv-gate-svg.is-connected circle {
-      filter: none;
-    }
-  }
-
-  /* =================================================================== */
-  /* 15. BREAK AVOID TESTING */
-
-  .rv-groups > .item,
-  .rv-groups > .item .rv-linkdiv,
-  .rv-groups > .item .rv-plusminus {
-    break-inside: avoid-column;
-    -webkit-column-break-inside: avoid;
-    page-break-inside: avoid;
-  }
- 
-  .rv-groups > .item.rv-first-in-group {
-    display: inline-flex;
-    width: max-content;
-    max-width: 100%;
-  }
-
-  .rv-plusminus {
-    display: inline-flex;
-    white-space: nowrap;
-  }
-} 
+}

@@ -1,6 +1,6 @@
 {
   "name": "mybrain",
-  "version": "1.0.42",
+  "version": "1.0.43",
   "description": "",
   "main": "main.js",
   "devDependencies": {
@@ -15,6 +15,6 @@
   },
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "tsc --noEmit && node esbuild.config.mjs production" 
+    "build": "tsc --noEmit && node esbuild.config.mjs production"
   }
 }
