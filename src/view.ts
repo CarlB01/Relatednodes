@@ -72,6 +72,7 @@ export class MyBrainView extends ItemView implements HoverParent {
    * Executed when the view workspace partition leaf is physically mounted.
    * APPLIED LISTENERS: 
    * - registerWorkspaceLayoutChanges ('layout-change')
+   * - registerZoomAndViewportObservers (ResizeObserver / viewport 'resize' & 'scroll')
    * - registerHoverLinkSource(registerHoverLinkSource)
    * - setupDataReadyHandler( registerEvent(workspaceBus.on("graph:data-ready",...)
    * - setupMobileSafeguards ( 
@@ -92,6 +93,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     // Bind localized viewport context listeners and gesture bus matrices
     this.registerWorkspaceLayoutChanges();
+    this.registerZoomAndViewportObservers();
     this.registerHoverLinkSource();
     this.setupDataReadyHandler(); // Ensure this calls areaManager.renderGraph() on 'graph:data-ready'
     this.setupMobileSafeguards();
@@ -356,6 +358,36 @@ export class MyBrainView extends ItemView implements HoverParent {
       })
     );
   }
+
+    private registerZoomAndViewportObservers() {
+    const currentWindow = this.containerEl.win || window;
+    const currentDocument = this.containerEl.doc || document;
+
+    const safeRedraw = () => {
+      if (this.isSuspended || !this.isFullyStarted) return;
+      currentWindow.requestAnimationFrame(() => this.areaManager?.requestRedraw());
+      this.debouncedLayout();
+    };
+
+    // 1) General layout/zoom/font shifts
+    const zoomObserver = new ResizeObserver(() => {
+      safeRedraw();
+    });
+
+    zoomObserver.observe(currentDocument.documentElement);
+    this.register(() => zoomObserver.disconnect());
+
+    // 2) Pinch signal that actually works
+    const onWheelCapture = (event: WheelEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return; // pinch-like gesture
+      safeRedraw();
+    };
+
+    currentWindow.addEventListener("wheel", onWheelCapture, { passive: true, capture: true });
+    this.register(() => {
+      currentWindow.removeEventListener("wheel", onWheelCapture, { capture: true } as EventListenerOptions);
+    });
+  }
   
   /**
    * Registers custom view identifiers within Obsidian Core to bind downstream Page Preview modifiers.
@@ -491,6 +523,18 @@ export class MyBrainView extends ItemView implements HoverParent {
       this.lastMouseEvent = event;
       this.lastMouseTarget = target;
 
+      // 🔥 FIXED: Only neutralize the *previous* origin node to preserve all active lines and neighbor colors!
+      if (Platform.isMobile) {
+        const oldOrigin = this.contentEl.querySelectorAll('.item.is-pressed-origin');
+        oldOrigin.forEach(el => el.classList.remove('is-pressed-origin'));
+      }
+
+      // Tag the closest parent item node as the fresh touch origin root
+      const parentItem = target.closest('.item') as HTMLElement;
+      if (parentItem && Platform.isMobile) {
+        parentItem.addClass('is-pressed-origin');
+      }
+
       if (event.metaKey && !target.hasClass('is-hovered')) {
         this.onMouseOverLink(event, target);
         target.addClass('is-hovered');
@@ -506,7 +550,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     // 4. KEYDOWN MONITOR: Intercepts active Meta keyboard strokes to invoke hot preview overlays
     this.registerDomEvent(window, 'keydown', (event: KeyboardEvent) => {
-      if (event.key === "Meta" || event.key === "Control") { // Added Control key fallback for Windows users
+      if (event.key === "Meta" || event.key === "Control") {
         if (this.lastMouseTarget && this.lastMouseTarget.matches(':hover')) {
           if (this.lastMouseEvent && !this.lastMouseTarget.hasClass('is-hovered')) {
             this.onMouseOverLink(this.buildMouseEvent(), this.lastMouseTarget);
@@ -521,6 +565,22 @@ export class MyBrainView extends ItemView implements HoverParent {
       if (event.key === "Meta" || event.key === "Control") {
         const elements = this.contentEl.querySelectorAll(".focusable-note-link.is-hovered");
         elements.forEach(el => el.classList.remove("is-hovered"));
+      }
+    });
+
+    // 6. EMPTY CANVAS CLICK: Clears everything safely when tapping on the open background whitespace
+    this.contentEl.on('click', '*', (event: MouseEvent) => {
+      if (!Platform.isMobile) return;
+
+      const rawTarget = event.target as HTMLElement | null;
+      if (!rawTarget) return;
+
+      const clickedLink = rawTarget.closest('.focusable-note-link');
+      const clickedBtn = rawTarget.closest('.rv-plusminus');
+
+      if (!clickedLink && !clickedBtn) {
+        if (this.isSuspended || !this.isFullyStarted) return;
+        this.clearTouchHoverState();
       }
     });
   }
@@ -760,8 +820,11 @@ export class MyBrainView extends ItemView implements HoverParent {
 
   private clearTouchHoverState() {
     // 1) remove stale CSS hover marker classes from old/new DOM
-    const stuck = this.contentEl.querySelectorAll(".focusable-note-link.is-hovered, .item.is-hover-neighbor");
-    stuck.forEach(el => el.classList.remove("is-hovered", "is-hover-neighbor"));
+    const stuck = this.contentEl.querySelectorAll(
+      ".focusable-note-link.is-hover-hovered, .focusable-note-link.is-hover-handled, .item.is-hover-neighbor, .item.is-pressed-origin"
+    );
+    stuck.forEach(el => el.classList.remove("is-hover-neighbor", "is-pressed-origin", "is-hovered"));
+    
     this.lastMouseEvent = null;
     this.lastMouseTarget = null;
 
