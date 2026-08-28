@@ -229,8 +229,10 @@
   }
   .rv-columns-wrapper {
     display: block;
+    /* Safe static fallback for older Obsidian engines */
+    columns: 9em; 
     columns: clamp(6em, 20cqw, 12em);
-    column-gap: 0.3em; 
+    gap: 0 0.3em;
     width: 100%;
     height: fit-content;
     overflow-x: hidden;
@@ -242,10 +244,12 @@
     padding-right: 1.4em; /* enough space for the info btn */
   } 
   .rv-columns-wrapper.rv-single-item-group {
-     column-count: 1; 
+    --rv-forced-columns: 1;
+    column-count: var(--rv-forced-columns);
   }
   .rv-columns-wrapper.rv-2-6-items-group {
-     column-count: 2; 
+    --rv-forced-columns: 2;
+    column-count: var(--rv-forced-columns);
   }
 }
 
