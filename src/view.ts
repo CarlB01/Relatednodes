@@ -359,7 +359,7 @@ export class MyBrainView extends ItemView implements HoverParent {
     );
   }
 
-    private registerZoomAndViewportObservers() {
+  private registerZoomAndViewportObservers() {
     const currentWindow = this.containerEl.win || window;
     const currentDocument = this.containerEl.doc || document;
 
@@ -385,7 +385,7 @@ export class MyBrainView extends ItemView implements HoverParent {
 
     currentWindow.addEventListener("wheel", onWheelCapture, { passive: true, capture: true });
     this.register(() => {
-      currentWindow.removeEventListener("wheel", onWheelCapture, { capture: true } as EventListenerOptions);
+      currentWindow.removeEventListener("wheel", onWheelCapture, { capture: true });
     });
   }
   

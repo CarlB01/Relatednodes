@@ -79,7 +79,7 @@
 
   /* UPPER QUADRANT (Row 2: Pulls parents tight down against center)*/
   .rv-area.upper {
-    grid-column: 2;
+    grid-column-start: 2;
     grid-row: 2; /* Compressed tightly into the upper slot above origo [dan] */
     margin-bottom: 0.3em; 
     align-self: end;
@@ -99,19 +99,19 @@
   }
 
   .rv-area.left {
-    grid-column: 1;
+    grid-column-start: 1;
     margin-right: 0.3em;
     overflow: visible;
   } 
   
   .rv-area.right {
-    grid-column: 3;
+    grid-column-start: 3;
     margin-left: 0.3em;
     overflow: visible;
   }
 
   .rv-area.center {
-    grid-column: 2;
+    grid-column-start: 2;
     width: 125%;
     transform: translate(10%);
     justify-self: center; /* Horizontally */
@@ -119,7 +119,8 @@
 
   /* LOWER QUADRANT (Row 4: Pulls children tight up against center) */
   .rv-area.lower {
-    grid-column: 1 / span 3; 
+    grid-column-start: 1;
+    grid-column-end: span 3; 
     grid-row: 4; /* Compressed tightly into the lower slot below origo [dan] */
     margin: 1em 0 1em 0.35em;
     align-self: start; 
@@ -131,11 +132,14 @@
 
   /* ADAPTIVE RESPONSIVE FRAME GRID-CHECKS */
   &[data-left-tall="true"] {
-    .rv-area.upper { grid-column: 2; }                       
+    .rv-area.upper { grid-column-start: 2; }                       
     .rv-area.left { grid-row: 2 / span 2; align-self: end; } 
   }
   &[data-right-tall="true"] {
-    .rv-area.lower { grid-column: 1 / span 2; }                  
+    .rv-area.lower { 
+      grid-column-start: 1;
+      grid-column-end: span 2; 
+    }                  
     .rv-area.right { grid-row: 2 / span 3; align-self: center; } 
   }
 
@@ -258,7 +262,6 @@
     justify-content: center; 
     position: relative; 
     overflow: visible; 
-    break-inside: avoid;
     break-inside: avoid-column;
     -webkit-column-break-inside: avoid;
     page-break-inside: avoid;

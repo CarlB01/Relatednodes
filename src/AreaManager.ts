@@ -495,9 +495,9 @@ export class AreaManager {
     if (!vc?.isConnected || !this.center) return;
 
     const CW = `.${RV.COLLECTION_WRAPPER}`;
-    const upperScroller = this.upper?.querySelector(CW) as HTMLElement | null;
-    const leftScroller  = this.left?.querySelector(CW) as HTMLElement | null;
-    const lowerScroller = this.lower?.querySelector(CW) as HTMLElement | null;
+    const upperScroller = this.upper?.querySelector(CW) as HTMLElement;
+    const leftScroller  = this.left?.querySelector(CW) as HTMLElement;
+    const lowerScroller = this.lower?.querySelector(CW) as HTMLElement;
     
     const upperScrollHeight = upperScroller?.scrollHeight ?? 0;
     const leftScrollHeight = leftScroller?.scrollHeight ?? 0;

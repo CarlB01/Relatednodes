@@ -4,14 +4,14 @@ declare module 'obsidian' {
   interface App {
     plugins: {
       enabledPlugins: Set<string>;
-      plugins: Record<string, any>;
+      plugins: Record<string, unknown>;
     };
   }
 }
 export class ExternalFeederScanner {
-  public static scanActiveView(app: App): CachedMetadata | null {
-    const meldEncrypt = app.plugins?.plugins?.["meld-encrypt"];
-    if (!meldEncrypt) return null;
+ public static scanActiveView(app: App): CachedMetadata | null {
+    const isMeldEncryptEnabled = Boolean(app.plugins?.plugins?.["meld-encrypt"]);
+    if (!isMeldEncryptEnabled) return null;
 
     const root = this.getActiveSourceRoot();
     if (!root) return null;
