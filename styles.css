@@ -229,8 +229,6 @@
   }
   .rv-columns-wrapper {
     display: block;
-    /* Safe static fallback for older Obsidian engines */
-    columns: 9em; 
     columns: clamp(6em, 20cqw, 12em);
     gap: 0 0.3em;
     width: 100%;
@@ -266,7 +264,7 @@
     justify-content: center; 
     position: relative; 
     overflow: visible; 
-    break-inside: avoid-column;
+    break-inside: avoid;
     -webkit-column-break-inside: avoid;
     page-break-inside: avoid;
     
@@ -327,8 +325,8 @@
   .item.rv-first-in-group .rv-linkdiv {
     width: fit-content;
     max-width: 100%;
-    break-inside: avoid-column;
-    break-before: avoid-column;
+    break-inside: avoid;
+    break-before: avoid;
   }
 }
 
