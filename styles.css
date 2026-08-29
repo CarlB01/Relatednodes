@@ -1,5 +1,6 @@
 /* ===================================================== */
 /* BASIC VARIABLES */
+/* ===================================================== */
 .rv-container {
   --rv-bg: var(--background-primary); 
   --rv-line: var(--text-muted, #888888); 
@@ -51,9 +52,9 @@
                   inset 0 0 0 var(--rv-glow-inset-size) var(--text-accent);
 }
 
-/* =================================================================== 
- * GEOMETRIC ENVELOPE ( GRID + AREAS + SVG layer)
- * =================================================================== */
+/* =================================================================== */
+/* GEOMETRIC ENVELOPE ( GRID + AREAS + SVG layer) */
+/* =================================================================== */
 .workspace-leaf .workspace-leaf-content .view-content.rv-container {
   /* =================================================================== */
   /* 1. MAGNETIC CLUSTER ROW DESIGN 
@@ -242,12 +243,10 @@
     padding-right: 1.4em; /* enough space for the info btn */
   } 
   .rv-columns-wrapper.rv-single-item-group {
-    --rv-forced-columns: 1;
-    column-count: var(--rv-forced-columns);
+    column-count: 1;
   }
   .rv-columns-wrapper.rv-2-6-items-group {
-    --rv-forced-columns: 2;
-    column-count: var(--rv-forced-columns);
+    column-count: 2;
   }
 }
 
@@ -264,7 +263,6 @@
     justify-content: center; 
     position: relative; 
     overflow: visible; 
-    break-inside: avoid;
     -webkit-column-break-inside: avoid;
     page-break-inside: avoid;
     
@@ -469,7 +467,6 @@
 /* =================================================================== */
 /* 11. GROUP BADGE (PLUS MINUS) (Tactile switch) */
 .rv-container {
-  
   .item.rv-first-in-group .rv-plusminus {
     position: relative; 
     display: inline-flex;
@@ -479,18 +476,23 @@
 
     top: 0;
     right: 0;
-    
-    /* Sentrer knappen horisontalt over tekstlenken */
     margin: 0 auto 0.2em auto; 
     
-    width: max-content;
+    /* 🌟 FIX: Force explicit fit-content geometry boundary metrics */
+    width: fit-content;
+    min-width: max-content;
     height: auto;
-    padding: 0.15em 0.45em; 
+    
+    /* 🌟 FIX: Added padding air bounds (0.65em) to prevent the text thread from hitting borders */
+    padding: 0.18em 0.65em; 
     z-index: 10;
     
     border: 1.5px solid var(--border-color); 
     border-radius: 1.5em; 
     
+    /* 🌟 COMPACT FONTS SCHEMAS (Cleaned up letter-spacing squeeze) */
+    font-family: var(--font-interface), "Arial Narrow", -apple-system-short-monospace, sans-serif;
+    font-stretch: condensed;       
     font-size: calc(var(--rv-font-size) * 0.85); 
     font-weight: 800;    
     line-height: 1;
@@ -502,7 +504,6 @@
     color: var(--text-muted);
     cursor: pointer;
     background-color: var(--rv-bg-color);
-    
     box-shadow: 0 0.1em 0.25em rgba(0, 0, 0, 0.15); 
     
     transform: scale(1);
@@ -526,24 +527,29 @@
   }
 }
 
+
 /* =================================================================== */
-/* 12. INFO BUTTON (Tactile metadata switch) */
+/* 12. INFO BUTTON & INTERACTIVE HIDDEN SNAPSHOT LAYOUT */
 .rv-container {
   .rv-info-btn {
     position: absolute;
-    top: -0.25em;
-    right: -1em;
-    width: 1.2em;
-    height: 1.2em;
+    top: -0.4em;
+    right: -1.3em;
+    width: 1.5em;
+    height: 1.5em;
     border-radius: 50%;
     border: 0.06em solid;
     z-index: 10;
-    font-size: calc(var(--rv-font-size) * 0.9);
+    font-size: calc(var(--rv-font-size) * 0.95);
     font-weight: 999;
     color: var(--text-accent); 
+    background-color: var(--rv-bg-color);
     text-align: center;
     cursor: pointer;
     box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition: all var(--glow-speed) ease-out;
   }
 
@@ -554,8 +560,6 @@
     border-color: var(--text-accent);
     transform: translateY(-1px) scale(1.08);
     filter: saturate(1.15);
-
-    /* glow + ring */
     box-shadow:
       0 0 0 0.25em color-mix(in srgb, var(--text-accent) 25%, transparent),
       0 0.3em 1em color-mix(in srgb, var(--text-accent) 35%, transparent);
@@ -565,16 +569,16 @@
     position: absolute; 
     z-index: var(--layer-menu);
     pointer-events: none;
-    background-color: var(--background-secondary-alt);
+    background-color: var(--rv-bg-color);
     border: 0.08em solid var(--border-color);
     padding: 0.45em 0.75em;
     border-radius: 0.3em;
-    @media (hover: hover) and (pointer: fine) { /* pointer: coarse for phones & pads */
+    
+    @media (hover: hover) and (pointer: fine) {
       box-shadow: 0 0.15em 0.6em rgba(0, 0, 0, 0.25);
     }
   }
 
-  /* Keeps the element dimensionally active for JS offsets while masking visibility [dan] */
   .rv-info-hover.is-measuring {
     opacity: 0;
     pointer-events: none;
@@ -583,6 +587,116 @@
   .rv-info-hover .popup-title {
     font-weight: 500;
     color: var(--text-muted);
+    font-size: calc(var(--rv-font-size) * 0.9);
+  }
+
+  /* --- INTERACTIVE POPUP MASTER SHELL CONSTRAINTS --- */
+  .rv-info-hover.active-list.rv-ignored-popup-shell {
+    pointer-events: auto;
+    padding: 0.5em 0.4em;
+    display: flex;
+    flex-direction: column;
+    gap: 0px;
+    background-color: var(--rv-bg-color); /* Matches the exact graph background tone */
+    
+    /* 🌟 REUSES HOVER GLOW SYSTEM: Applies the exact ring border and glow shadow from the main items */
+    border: var(--rv-link-border-hovered);
+    backdrop-filter: blur(0.1em);
+    -webkit-backdrop-filter: blur(0.1em);
+    box-shadow: var(--rv-link-box-shadow);
+  }
+
+  /* --- SUBHEADER STAMP CELL ROUTING --- */
+  .rv-ignored-header-wrapper {
+    width: 100%;
+    text-align: left;
+    padding: 0 0.2em 0.2em 0.2em;
+    border-bottom: 1px solid var(--border-line, rgba(128, 128, 128, 0.15));
+    margin-bottom: 0.6em;
+  }
+
+  .rv-ignored-header-text {
+    font-size: calc(var(--rv-font-size) * 0.8);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: inline-block;
+  }
+
+  /* --- PURE ISOLATED NON-GRID LIST BLOCKS --- */
+  .rv-ignored-pure-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    padding: 0;
+    margin: 0 0 0.4em 0;
+    position: relative;
+    z-index: 20;
+  }
+
+  .rv-ignored-pure-btn {
+    position: relative;
+    margin: 0 0 0.2em 0 !important; 
+    cursor: pointer;
+    font-size: var(--rv-font-size);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 25;
+  }
+
+  .rv-ignored-pure-container {
+    /* display is fully managed via native JS flex/none toggles */
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    padding-left: 0.6em;
+    margin: 0;
+    box-sizing: border-box;
+  }
+
+  .rv-ignored-pure-item {
+    margin: 0;
+    padding: 0.15em 0;
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+    box-sizing: border-box;
+  }
+
+/* --- CELL NODE FLUSHES & CELL TEXT ALIGNMENT --- */
+  .rv-ignored-item-node {
+    margin: 0;
+    padding: 0.15em 0;
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+    box-sizing: border-box;
+  }
+
+  .rv-ignored-note-link {
+    transform: none !important; /* Keep items flat inside the container layout scroll */
+    margin: 0 !important;
+    text-align: left;
+    width: fit-content;
+    max-width: 100%;
+    padding: 0.15em 0.4em; /* Gives a tiny bit of air for the hover capsule */
+    border: 1px solid transparent; /* Smooth border transition gap */
+    border-radius: 4px;
+    transition: all var(--glow-speed) ease-out;
+  }
+
+  /* 🌟 NEW HOVER GLOW: Isolated strictly to the list items within the popup envelope */
+  .rv-ignored-note-link:hover {
+    border: var(--rv-link-border-hovered) !important;
+    box-shadow: var(--rv-link-box-shadow) !important;
+    background-color: color-mix(in srgb, var(--interactive-accent) 8%, transparent) !important;
+  }
+
+  /* Suppress structural ports from appearing within overlay popups */
+  .rv-ignored-item-node .rv-gate-svg {
+    display: none;
   }
 }
 

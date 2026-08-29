@@ -62,7 +62,6 @@ export class AreaManager {
     this.containerEl.addClass(RV.CONTAINER);
     this.setupPlusMinusBtnHandler(); // bind once
     this.setupHoverHighlightHandlers();
-    this.setupInfoBtnHandler();
   }
 
   /**
@@ -237,97 +236,93 @@ export class AreaManager {
   private renderQuadrant(
     area: HTMLElement,
     collections: Node[][], 
-    areaName: "upper" | "lower" | "left" | "right" | "center"
+    areaName: "upper" | "lower" | "left" | "right" | "center" | "ignored"
   ) {
-    area.empty(); // Leverages Obsidian's native high-performance DOM clearing
+    area.empty(); 
     const noteCount = collections.flat().length;
     if (noteCount === 0) return;
 
-    // 1. ALLOCATE VIRTUAL MEMORY CANVAS FRAGMENT
     const areaFragment = createFragment();
-
     const collectionWrapper = areaFragment.createDiv(RV.COLLECTION_WRAPPER);
 
-    // Map through high-level collections (e.g., maximum of 2 tiered layers in lower area)
     collections.forEach(collection => {
       if (collection.length === 0) return;
 
-      // CSS vertical tier engine stacks secondary collection rows directly underneath primary clusters safely
       const areaCollectionDiv = collectionWrapper.createDiv({ cls: RV.COLLECTION });
-
-      // Mounts individual horizontal multi-column layout flows
       const colWrapDiv = areaCollectionDiv.createDiv({ cls: RV.COL_WRAPPER });
       const itemCount = collection.length;
       
-      if (itemCount >= 2 && itemCount <= 6) {
-        colWrapDiv.addClass('rv-2-6-items-group');
-      }
-
-      if (itemCount === 1) {
-        colWrapDiv.addClass('rv-single-item-group');
-      }
+      if (itemCount >= 2 && itemCount <= 6) colWrapDiv.addClass('rv-2-6-items-group');
+      if (itemCount === 1) colWrapDiv.addClass('rv-single-item-group');
     
-      // Group active nodes inside this specific collection dynamically by frontmatter tags
+      // 1. HOVEDGRAFENS TEKNOLOGI: Grupper etter første tagg
       const tagGroupedNotes = this.graph.groupByFirstTag(collection);
 
-      tagGroupedNotes.forEach(group => {
-        // Collapses column breaks across shared clusters by injecting virtual element wrappers
-        const groupDiv = colWrapDiv.createDiv({ cls: RV.GROUPS });
-
-        const groupNotes = group.notes; 
-        const overGrensen = groupNotes.length > 4 && noteCount > 20;
-
-        // Build button nodes, hyperlink paths, and gate anchors directly inside memory space
-        groupNotes.forEach((note, index) => {
-          // Binds geometrical viewport targets to node data fields
-          note.assignedArea = areaName;
-
-          // needed for hover line highlighting
-          if (note.div) note.div.setAttribute("data-note-path", note.path);
- 
-          const noteEl = note.render();
-          noteEl.setAttribute("data-note-path", note.path);
-
-          if (overGrensen && index > 0 && this.plugin.settings.groupsCollapsed) {
-            noteEl.classList.add('hidden');
-          }
-          groupDiv.appendChild(noteEl);
-
-          // Geometrical tracking bounds mapped to the active quadrant layout wrapper
-          if (note.upperGate) note.upperGate.areaElement = area;
-          if (note.lowerGate) note.lowerGate.areaElement = area;
-          if (note.friendGate) note.friendGate.areaElement = area;
-
-          // index node element by note path for hover-neighbor highlighting
-          if (note.div) this.nodeElByPath.set(note.path, note.div);
-        });
-
-        if (overGrensen) {
-          // Typesafe extraction of the initial root node anchoring the expandable cluster
-          const firstNote = groupNotes[0];
-
-          if (firstNote && firstNote.div) {
-            const firstNoteDiv = firstNote.div;
-
-            firstNoteDiv.classList.add('rv-first-in-group');
-
-            const plusMinusBtn = this.buildPlusMinusBtn(firstNoteDiv, group, overGrensen);
-
-            // Appends the toggle switch absolutely anchored above the root note frame
-            firstNoteDiv.prepend(plusMinusBtn);
-          }
-        }
-      });
+      // 2. GJENBRUK: Send de ferdige gruppene til den nye submetoden
+      this.renderGroupCollection(colWrapDiv, tagGroupedNotes, noteCount, areaName);
     });
 
-    // 3. Mounts the fully evaluated virtual fragment layout directly to the visible viewport screen
     area.appendChild(areaFragment);
   }
 
   /**
-    * Evaluates layout geography and draws vector paths across all active nodes.
-    * Leverages localized structural memory caches to execute path tracking in O(1) velocity.
-    */
+   * Evaluates and populates a pre-compiled collection of grouped node entities.
+   * Fully reused by both the primary workspace grid and custom overlay views.
+   */
+  private renderGroupCollection(
+    targetContainer: HTMLElement,
+    groupedData: { tag: string; notes: Node[] }[],
+    totalNoteCount: number,
+    areaName: "upper" | "lower" | "left" | "right" | "center" | "ignored"
+  ) {
+    groupedData.forEach(group => {
+      const groupDiv = targetContainer.createDiv({ cls: RV.GROUPS });
+      const groupNotes = group.notes; 
+      const overGrensen = groupNotes.length > 4 && totalNoteCount > 20;
+
+      groupNotes.forEach((node, index) => {
+        node.assignedArea = areaName;
+        if (node.div) node.div.setAttribute("data-note-path", node.path);
+ 
+        const noteEl = node.render();
+        noteEl.setAttribute("data-note-path", node.path);
+
+        if (areaName === "ignored") {
+          noteEl.classList.add('hidden');
+        } else if (overGrensen && index > 0 && this.plugin.settings.groupsCollapsed) {
+          noteEl.classList.add('hidden');
+        }
+        
+        groupDiv.appendChild(noteEl);
+
+        if (node.upperGate) node.upperGate.areaElement = targetContainer;
+        if (node.lowerGate) node.lowerGate.areaElement = targetContainer;
+        if (node.friendGate) node.friendGate.areaElement = targetContainer;
+        
+        // 🌟 ROLLED BACK: Re-enabled standard registry tracking across all execution boundaries.
+        // The clipping bounds guard in drawAllGraphLines now handles off-screen intersection states.
+        if (node.div) {
+          this.nodeElByPath.set(node.path, node.div);
+        }
+      });
+
+      if (overGrensen || areaName === "ignored") {
+        const firstNoteInstance = groupNotes[0]; 
+        if (firstNoteInstance && firstNoteInstance.div) {
+          const firstNoteDiv = firstNoteInstance.div;
+          firstNoteDiv.classList.add('rv-first-in-group');
+
+          const plusMinusBtn = this.buildPlusMinusBtn(firstNoteDiv, group, true);
+          firstNoteDiv.prepend(plusMinusBtn);
+        }
+      }
+    });
+  }
+
+  /**
+   * Evaluates layout geography and draws vector paths across all active nodes.
+   * Leverages localized structural memory caches to execute path tracking in O(1) velocity.
+   */
   private drawAllGraphLines() {
     const centerNote = this.graph.centerNote;
     if (!centerNote) return;
@@ -371,15 +366,45 @@ export class AreaManager {
       this.applyGateColor(note.friendGate, null);
     }
 
-    // Core geometry safeguard validating if target layout elements have established concrete screen coordinates
+    // Caches the structural dimensions of all active target grid quadrants 
+    const quadrantViewports = {
+      center: this.center?.getBoundingClientRect() ?? null,
+      upper: this.upper?.getBoundingClientRect() ?? null,
+      lower: this.lower?.getBoundingClientRect() ?? null,
+      left: this.left?.getBoundingClientRect() ?? null,
+      right: this.right?.getBoundingClientRect() ?? null,
+      ignored: null
+    };
+
+    // ==========================================================================
+    // 🔍 HIGH-VELOCITY GEOMETRIC INTERSECTION LOG & GUARD
+    // Evaluation layer verifying if port connectors reside inside their active frames.
+    // ==========================================================================
     const canDraw = (from: Gate, to: Gate) => {
       if (!from || !to || !from.svg || !to.svg || !from.parentNote.div || !to.parentNote.div) return false;
 
       const rA = from.svg.getBoundingClientRect();
       const rB = to.svg.getBoundingClientRect();
+      
       if (this.isBadGateRect(rA) || this.isBadGateRect(rB)) return false;
-        return true;
-      };
+
+      // Extract pre-computed DOMRect viewport mask for the source node quadrant in O(1)
+      const viewportA = quadrantViewports[from.parentNote.assignedArea];
+      if (viewportA) {
+        // Discard layout lines if the gate has vertically escaped past its viewport ceiling or floor
+        const isClipped = rA.bottom < viewportA.top || rA.top > viewportA.bottom;
+        if (isClipped) return false;
+      }
+
+      // Extract pre-computed DOMRect viewport mask for the target node quadrant in O(1)
+      const viewportB = quadrantViewports[to.parentNote.assignedArea];
+      if (viewportB) {
+        const isClipped = rB.bottom < viewportB.top || rB.top > viewportB.bottom;
+        if (isClipped) return false;
+      }
+
+      return true;
+    };
 
     // ==========================================================================
     // 2. THE GEOMETRICAL VECTOR RENDERING TRACE (Strictly 3 clean rules)
@@ -435,7 +460,7 @@ export class AreaManager {
           }
         }
       }
-    }  
+    }
 
     // 3. GARBAGE COLLECTION HARVESTING: Purges dead bezier paths from the HTML DOM tree
     for (const [key, link] of this.linkCache.entries()) {
@@ -457,6 +482,9 @@ export class AreaManager {
       this.geometryRetryCount = 0;
     }
   }
+
+
+
   // #endregion
 
 
@@ -720,56 +748,7 @@ export class AreaManager {
 
   // #region INFO BTN HANDLING
   /**
-   * Configures the dynamic floating info satellite badge component.
-   */
-  private setupInfoBtnHandler() {
-
-    this.containerEl.on("mouseover", ".rv-info-btn", (event: MouseEvent, target: HTMLElement) => {
-      if (this.activeInfoPopup) { 
-        this.activeInfoPopup.remove(); 
-        this.activeInfoPopup = null; 
-      }
-
-      const count = target.getAttribute("data-ignored-count") || "0";
-      const hoverText = `${count} hidden files`;
- 
-      this.activeInfoPopup = createDiv({ cls: RV.INFO_HOVER });
-      this.activeInfoPopup.createSpan({ text: hoverText, cls: "popup-title" });
-      
-      this.activeInfoPopup.addClass('is-measuring');
-      this.containerEl.appendChild(this.activeInfoPopup);
-
-      const popupWidth = this.activeInfoPopup.offsetWidth || 180;
-      const viewRect = this.containerEl.getBoundingClientRect();
-      const btnRect = target.getBoundingClientRect();
-      const padding = 10;
-
-      const collidesOnRightSide = (btnRect.right + padding + popupWidth) > viewRect.right;
-
-      if (collidesOnRightSide) {
-        this.activeInfoPopup.style.left = `${btnRect.left - viewRect.left - popupWidth - padding}px`;
-      } else {
-        this.activeInfoPopup.style.left = `${btnRect.right - viewRect.left + padding}px`;
-      }
-
-      this.activeInfoPopup.style.top = `${btnRect.top - viewRect.top - 15}px`;
-      this.activeInfoPopup.removeClass('is-measuring');
-      
-    });
-
-    this.containerEl.on("mouseout", ".rv-info-btn", (event: MouseEvent, target: HTMLElement) => {
-      if (this.activeInfoPopup) {
-        this.activeInfoPopup.remove();
-        this.activeInfoPopup = null;
-      }
-    });
-
-    /** Core lifecycle anchor: automatically flushes the satellite block during view close cycles */
-    this.plugin.register(() => { this.cleanupPopup() });
-  }
-  
-  /**
-   * Helper utility to safely evict the floating satellite block from the DOM tree.
+   * Safely evicts the floating satellite info block from the DOM tree.
    */
   private cleanupPopup() {
     if (this.activeInfoPopup) {
@@ -779,39 +758,240 @@ export class AreaManager {
   }
 
   /**
-   * Renders (or removes) the center-node info button that displays ignored-note count.
-   * The button is anchored to `.rv-linkdiv` to avoid layout drift when `.item` width changes.
+   * Evaluates boundary coordinates and repositions the interactive popup 
+   * relative to the host anchor node utilizing screen edge collision logic.
+   */
+  private repositionPopup(target: HTMLElement) {
+    if (!this.activeInfoPopup) return;
+
+    const popupWidth = this.activeInfoPopup.offsetWidth || 180;
+    const viewRect = this.containerEl.getBoundingClientRect();
+    const btnRect = target.getBoundingClientRect();
+    const padding = 10;
+
+    const collidesOnRightSide = (btnRect.right + padding + popupWidth) > viewRect.right;
+
+    if (collidesOnRightSide) {
+      this.activeInfoPopup.style.left = `${btnRect.left - viewRect.left - popupWidth - padding}px`;
+    } else {
+      this.activeInfoPopup.style.left = `${btnRect.right - viewRect.left + padding}px`;
+    }
+
+    this.activeInfoPopup.style.top = `${btnRect.top - viewRect.top - 15}px`;
+    this.activeInfoPopup.removeClass('is-measuring');
+  }
+
+  /**
+   * Converts the popup into an interactive list, beautifully grouped by ignore-reason.
+   * Completely isolated from grid-class interference to guarantee reliable click targeting.
+   */
+  private openInteractiveIgnoredList(target: HTMLElement) {
+    if (this.activeInfoPopup?.classList.contains('active-list')) {
+      this.cleanupPopup();
+      return;
+    }
+
+    const ignoredGroups = this.graph.ignoredGroups;
+    if (!ignoredGroups || ignoredGroups.size === 0) return;
+
+    if (this.activeInfoPopup) this.activeInfoPopup.remove();
+
+    // 1. Create the master shell container with a clean, isolated list class
+    this.activeInfoPopup = createDiv({ cls: `${RV.INFO_HOVER} active-list rv-ignored-popup-shell` });
+
+    // 2. Instantiate a memory-isolated document fragment matrix to prevent DOM lag
+    const popupFragment = createFragment();
+
+    const headerWrapper = popupFragment.createDiv({ cls: "rv-ignored-header-wrapper" });
+    const listHeader = headerWrapper.createEl("span", { cls: "rv-ignored-header-text" });
+    listHeader.setText("Hidden / Cause");
+
+    // 3. Populate all cluster nodes and buttons entirely inside memory space
+    ignoredGroups.forEach((nodes, reason) => {
+      if (!nodes || nodes.length === 0) return;
+
+      // UNIQUE NON-GRID GROUP CONTEXT: Prevents element layering and ghost clicks
+      const groupDiv = popupFragment.createDiv({ cls: "rv-ignored-pure-group" });
+
+      const cleanReason = reason.replace(/^#/, ""); 
+      const headerBtn = groupDiv.createDiv({ cls: "rv-plusminus rv-ignored-pure-btn" });
+      headerBtn.textContent = `${RV.PLUS}${cleanReason}(${nodes.length})`;
+
+      // Store variables safely as data-attributes on the button to prevent closure leakage
+      headerBtn.setAttribute("data-reason", cleanReason);
+      headerBtn.setAttribute("data-count", String(nodes.length));
+
+      // ISOLATED CONTAINER: Forces the group to start strictly closed via native display properties
+      const linksContainer = groupDiv.createDiv({ cls: "rv-ignored-pure-container" });
+      linksContainer.style.display = "none"; 
+
+      nodes.forEach(node => {
+        const itemWrapper = linksContainer.createDiv({ cls: "rv-ignored-pure-item" });
+
+        const linkEl = itemWrapper.createEl("a", {
+          cls: "focusable-note-link supercharged rv-ignored-note-link",
+          attr: { "data-link-path": node.path }
+        });
+
+        linkEl.createSpan({ text: node.displayText, cls: "rv-text-span" });
+
+        // 🌟 ROLLED BACK: Hover effects that trigger graph highlighting have been fully removed as requested.
+
+        this.plugin.registerDomEvent(linkEl, "click", (e: MouseEvent) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.plugin.app.workspace.openLinkText(node.path, "", false);
+          this.cleanupPopup();
+        });
+      });
+
+      // 🌟 6. FIXED CLICK LIFECYCLE: Completely isolated from loop scopes using local DOM traversal
+      this.plugin.registerDomEvent(headerBtn, "click", (e: MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const clickedBtn = e.currentTarget as HTMLElement;
+        if (!clickedBtn) return;
+
+        const currentGroupDiv = clickedBtn.closest(".rv-ignored-pure-group") as HTMLElement;
+        if (!currentGroupDiv) return;
+
+        // CRITICAL SCOPE REFACTOR: Query the container strictly WITHIN the context of the clicked group
+        const targetContainer = currentGroupDiv.querySelector(".rv-ignored-pure-container") as HTMLElement;
+        if (!targetContainer) return;
+
+        const reasonName = clickedBtn.getAttribute("data-reason") || "";
+        const countStr = clickedBtn.getAttribute("data-count") || "0";
+        const isPlus = clickedBtn.textContent?.includes(RV.PLUS);
+
+        if (isPlus) {
+          currentGroupDiv.classList.add("expanded");
+          targetContainer.style.display = "flex"; // Folds out the list cleanly matching your inner padding
+          clickedBtn.textContent = `${RV.MINUS}${reasonName}(${countStr})`;
+        } else {
+          currentGroupDiv.classList.remove("expanded");
+          targetContainer.style.display = "none"; // Collapses the list entirely from view
+          clickedBtn.textContent = `${RV.PLUS}${reasonName}(${countStr})`;
+        }
+      });
+    });
+
+    this.activeInfoPopup.appendChild(popupFragment);
+    this.containerEl.appendChild(this.activeInfoPopup);
+    this.repositionPopup(target);
+
+    // Global native click listener to capture any interaction landing outside the popup bounds
+    const closeOutsideHandler = (clickEvent: MouseEvent) => {
+      if (!this.activeInfoPopup) return;
+      const clickedEl = clickEvent.target as HTMLElement;
+      if (!clickedEl) return;
+
+      // Check if they clicked the core info button button framework itself
+      const clickedInfoBtn = clickedEl.closest(".rv-info-btn");
+
+      // Since internal clicks are stopped, ANY click that reaches here is guaranteed to be outside!
+      if (!clickedInfoBtn) {
+        this.cleanupPopup();
+      }
+    };
+    
+    // Register the outside-click handler exactly once per presentation phase
+    window.setTimeout(() => {
+      this.plugin.registerDomEvent(document, "click", closeOutsideHandler, { once: true });
+    }, 50);
+  }
+
+
+  /**
+   * Renders the center-node info button and registers natively managed Obsidian event listeners.
+   * Leverages unified, instant event execution without artificial browser timeouts.
    */
   private renderInfoBtnForCenterNode(): void {
     const centerNote = this.graph.centerNote;
     const centerDiv = centerNote?.div;
     if (!centerDiv) return;
 
-    // Prefer stable anchor: gates + link container
     const anchorEl = centerDiv.querySelector(".rv-linkdiv");
     if (!anchorEl) return;
 
-    // Remove stale button from previous render pass
     anchorEl.querySelector(".rv-info-btn")?.remove();
 
-    // Count ignored notes for current graph snapshot
-    let ignoredCount = 0;
-    for (const n of this.graph.noteCache.values()) {
-      if (n.assignedArea === "ignored" || n.isInitiallyIgnored === true) {
-        ignoredCount++;
-      }
-    }
-
-    // Do not render button if there is nothing to report
+    const ignoredCount = this.graph.ignoredNotes?.size || 0;
     if (ignoredCount <= 0) return;
 
-    // Create and mount info button
     const infoBtn = createDiv({ cls: "rv-plusminus rv-info-btn" });
     infoBtn.textContent = "i";
     infoBtn.setAttribute("data-ignored-count", String(ignoredCount));
-    // infoBtn.setAttribute("aria-label", `Ignored notes: ${ignoredCount}`);
-
     anchorEl.appendChild(infoBtn);
+
+    let pressTimerId: number | null = null;
+    let isLongPress = false;
+    const LONG_PRESS_DURATION = 500;
+
+    // 1. MOUSEOVER: Instant execution reflecting your core graph layout logic
+    this.plugin.registerDomEvent(infoBtn, "mouseover", (e: MouseEvent) => {
+      if (this.activeInfoPopup?.classList.contains('active-list')) return;
+      this.cleanupPopup();
+
+      // If a modifier key is active during the hover window sweep, launch the menu instantly
+      if (e.altKey || e.ctrlKey || e.metaKey) {
+        this.openInteractiveIgnoredList(infoBtn);
+        return;
+      }
+
+      // Standard instant lightweight text preview
+      this.activeInfoPopup = createDiv({ cls: RV.INFO_HOVER });
+      this.plugin.registerDomEvent(this.activeInfoPopup, "click", (e: MouseEvent) => {
+        e.stopPropagation();
+      });
+      this.activeInfoPopup.createSpan({ text: `${ignoredCount} hidden nodes`, cls: "popup-title" });
+      this.activeInfoPopup.addClass('is-measuring');
+      this.containerEl.appendChild(this.activeInfoPopup);
+
+      this.repositionPopup(infoBtn);
+    });
+
+    // 🌟 GLOBAL KEYDOWN INTERCEPTOR: Perfectly synchronized with your core items preview framework
+    this.plugin.registerDomEvent(window, "keydown", (e: KeyboardEvent) => {
+      if (e.key === "Meta" || e.key === "Control" || e.key === "Alt") {
+        if (infoBtn.matches(":hover")) {
+          if (!this.activeInfoPopup?.classList.contains('active-list')) {
+            this.openInteractiveIgnoredList(infoBtn);
+          }
+        }
+      }
+    });
+
+    // 2. MOUSEOUT: Clean evacuation pass
+    this.plugin.registerDomEvent(infoBtn, "mouseout", () => {
+      if (this.activeInfoPopup?.classList.contains('active-list')) return;
+      this.cleanupPopup();
+    });
+
+    // 3. POINTERDOWN (Mobile Long-Press)
+    this.plugin.registerDomEvent(infoBtn, "pointerdown", () => {
+      isLongPress = false;
+      pressTimerId = window.setTimeout(() => {
+        isLongPress = true;
+        this.openInteractiveIgnoredList(infoBtn);
+        if (navigator.vibrate) navigator.vibrate(15);
+      }, LONG_PRESS_DURATION);
+    });
+
+    // 4. POINTERUP (Mobile fallback / Desktop standard click click override)
+    this.plugin.registerDomEvent(infoBtn, "pointerup", (e: PointerEvent) => {
+      if (pressTimerId !== null) { window.clearTimeout(pressTimerId); pressTimerId = null; }
+      
+      if (!isLongPress && !Platform.isMobile) {
+        e.stopPropagation();
+        this.openInteractiveIgnoredList(infoBtn);
+      }
+    });
+
+    // 5. POINTERCANCEL
+    this.plugin.registerDomEvent(infoBtn, "pointercancel", () => {
+      if (pressTimerId !== null) { window.clearTimeout(pressTimerId); pressTimerId = null; }
+    });
   }
   // #endregion
 

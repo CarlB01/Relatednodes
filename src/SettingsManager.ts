@@ -10,17 +10,17 @@ export class SettingsManager {
   // ==========================================================================
   // Core Configuration State Fields (Acts as both Types and Runtime Defaults)
   // ==========================================================================
-  public parentProperties: string = 'up, parents, nationality';
-  public parentTags: string = '#boss, #👥group';
-  public childProperties: string = 'down, children, members';
-  public childTags: string = '#text, #coffee';
-  public friendProperties: string = 'left, partner, friends';
-  public friendTags: string = '#friend';
-  public ignoreTags: string = '#private';
-  public ignoreNameFragments: string = '@';
+  public parentProperties: string = '';
+  public parentTags: string = '';
+  public childProperties: string = '';
+  public childTags: string = '';
+  public friendProperties: string = '';
+  public friendTags: string = '';
+  public ignoreTags: string = '';
+  public ignoreNameFragments: string = '';
   public displayAliases: boolean = false;
   public groupsCollapsed: boolean = false;
-  public colorful: boolean = true; // line color follows destination node color
+  public colorful: boolean = true; 
 
   // ==========================================================================
   // Pre-Compiled Hydrated Sets (O(1) lookups target for high-velocity graph loops)

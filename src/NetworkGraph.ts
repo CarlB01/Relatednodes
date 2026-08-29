@@ -8,6 +8,13 @@ import { Gate } from "./Gate.js";
 import { createRelationFinder, Relation } from "./RelationClassifier.js";
 import {  } from "./RelationClassifier.js";
 
+// Inform typescript about the existence of isTargetIgnored
+declare module 'obsidian' {
+  interface MetadataCache {
+    isTargetIgnored?(path: string): boolean;
+  }
+}
+
 const relationOrder: Record<Relation, number> = {
   "center": 0,
   "parent": 1,
@@ -37,10 +44,11 @@ export interface TagGroupedCollection {
 }
 
 export class NetworkGraph {
-  noteCache = new Map<string, Node>(); // path -> Node
-  anchorCache = new Map<string, Anchor>(); // path/basename -> Anchor
-  ignoredNotes = new Set<Node>();
-  centerNote: Node | null = null;
+  public noteCache = new Map<string, Node>(); // path -> Node
+  public anchorCache = new Map<string, Anchor>(); // path/basename -> Anchor
+  public ignoredNotes = new Set<Node>();
+  public ignoredGroups = new Map<string, Node[]>(); 
+  public centerNote: Node | null = null;
 
   private app: App; 
   private plugin: MyBrainPlugin;
@@ -182,6 +190,7 @@ export class NetworkGraph {
 
     // Reset flags, relations, baits etc.
     this.ignoredNotes.clear();
+    this.ignoredGroups.clear();
     for (const note of this.noteCache.values()) {
       note.isUsed = false;
       note.isIndexedInThisRound = false;
@@ -233,7 +242,6 @@ export class NetworkGraph {
     if (tokenAtStart === this.updateRequestToken) {
       this.app.workspace.trigger("graph:data-ready", activeFile.path);
     }
-    
   } 
 
   /**
@@ -351,6 +359,33 @@ export class NetworkGraph {
         otherNote.assignedArea = "ignored";          // Shields record from standard 5x5 quadrant grids
         this.ignoredNotes.add(otherNote);            // Tracked globally for total data reporting
         centerNote.relations.ignored.add(otherNote); // Logged locally onto the active origin frame
+
+        let matchedReason = "Other";
+        
+        // A. hit by name fragment?
+        for (const fragment of this.settings.optIgnoreFragments) {
+          if (otherNote.path.toLowerCase().normalize('NFC').includes(fragment)) {
+            matchedReason = fragment;
+            break;
+          }
+        }
+
+        // B. if not , hit by tag?
+        if (matchedReason === "Other" && otherNote.tags && otherNote.tags.length > 0) {
+          for (const cleanTag of this.settings.optIgnoreTags) {
+            if (otherNote.tags.includes(cleanTag)) {
+              // Vi legger på '#' igjen her KUN for visningen i popup-overskriften
+              matchedReason = `#${cleanTag}`; 
+              break;
+            }
+          }
+        }
+
+        // C. Add to map
+        if (!this.ignoredGroups.has(matchedReason)) {
+          this.ignoredGroups.set(matchedReason, []);
+        }
+        this.ignoredGroups.get(matchedReason)!.push(otherNote);
         continue;
       }
       
@@ -648,6 +683,10 @@ export class NetworkGraph {
     if (resolvedFromThisFile) {
       for (const targetPath in resolvedFromThisFile) {
         if (targetPath === filePath) continue;
+
+        // Drop path if ignored by user
+        if (this.app.metadataCache.isTargetIgnored?.(targetPath)) continue;
+
         const targetFile = this.app.vault.getFileByPath(targetPath);
         if (targetFile) connections.add(targetFile);
       }
@@ -656,6 +695,10 @@ export class NetworkGraph {
     // === 2. EVALUATE INCOMING BACKLINKS ===
     const incoming = this.getIncomingBacklinks(file);
     for (const source of incoming) {
+
+      // make sure hidden files don't reveal themselves.
+      if (this.app.metadataCache.isTargetIgnored?.(source.path)) continue;
+
       connections.add(source);
     }
 

@@ -45,7 +45,7 @@ export class SettingTab extends PluginSettingTab {
 
   /**
    * Declares the full structural configuration scheme for Obsidian's global database indexing framework.
-   * Natively registers each parameter with the application core to ensure reliable settings search indexing.
+   * Placeholders act as grayed-out hints without pre-populating or overwriting the user space.
    */
   override getSettingDefinitions(): SettingDefinitionItem[] {    
     return [
@@ -59,7 +59,7 @@ export class SettingTab extends PluginSettingTab {
             control: {
               type: "textarea",
               key: "parentProperties",
-              placeholder: "Comma separated list",
+              placeholder: "up, parents, nationality", 
               rows: 5,
             },
           },
@@ -69,7 +69,7 @@ export class SettingTab extends PluginSettingTab {
             control: {
               type: "textarea",
               key: "parentTags",
-              placeholder: "Comma separated list",
+              placeholder: "#boss, #👥group", 
               rows: 2,
             },
           },
@@ -79,7 +79,7 @@ export class SettingTab extends PluginSettingTab {
             control: {
               type: "textarea",
               key: "childProperties",
-              placeholder: "Comma separated list",
+              placeholder: "down, children, members", 
               rows: 5,
             },
           },
@@ -89,7 +89,7 @@ export class SettingTab extends PluginSettingTab {
             control: {
               type: "textarea",
               key: "childTags",
-              placeholder: "Comma separated list",
+              placeholder: "#text, #coffee", 
               rows: 2,
             },
           },
@@ -99,7 +99,7 @@ export class SettingTab extends PluginSettingTab {
             control: {
               type: "textarea",
               key: "friendProperties",
-              placeholder: "Comma separated list",
+              placeholder: "left, partner, friends", 
               rows: 3,
             },
           },
@@ -109,7 +109,7 @@ export class SettingTab extends PluginSettingTab {
             control: {
               type: "textarea",
               key: "friendTags",
-              placeholder: "Comma separated list",
+              placeholder: "#friend", 
               rows: 2,
             },
           },
@@ -125,7 +125,7 @@ export class SettingTab extends PluginSettingTab {
             control: {
               type: "text",
               key: "ignoreTags",
-              placeholder: "Comma separated list",
+              placeholder: "#private", 
             },
           },
           {
@@ -134,7 +134,7 @@ export class SettingTab extends PluginSettingTab {
             control: {
               type: "text",
               key: "ignoreNameFragments",
-              placeholder: "Comma separated list",
+              placeholder: "@", 
             },
           },
         ],
@@ -171,6 +171,7 @@ export class SettingTab extends PluginSettingTab {
       },
     ];
   }
+
 
 override async setControlValue(key: string, value: unknown): Promise<void> {
     const settings = this.plugin.settings;
