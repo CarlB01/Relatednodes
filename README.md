@@ -13,7 +13,7 @@ myBrain is a high-velocity, bidirectional structural graph network that maps, cl
 
 ---
 
-## 🚀 What's New in v1.0.48
+## 🚀 What's New in v1.0.50
 
 This update introduces automated Obsidian setting compliance and an advanced interactive inspection panel for hidden vault tracking.
 
