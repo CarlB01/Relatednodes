@@ -530,6 +530,9 @@
 
 /* =================================================================== */
 /* 12. INFO BUTTON & INTERACTIVE HIDDEN SNAPSHOT LAYOUT */
+/* =================================================================== */
+/* 12. INFO BUTTON & INTERACTIVE HIDDEN SNAPSHOT LAYOUT */
+/* =================================================================== */
 .rv-container {
   .rv-info-btn {
     position: absolute;
@@ -587,7 +590,6 @@
   .rv-info-hover .popup-title {
     font-weight: 500;
     color: var(--text-muted);
-    font-size: calc(var(--rv-font-size) * 0.9);
   }
 
   /* --- INTERACTIVE POPUP MASTER SHELL CONSTRAINTS --- */
@@ -597,9 +599,7 @@
     display: flex;
     flex-direction: column;
     gap: 0px;
-    background-color: var(--rv-bg-color); /* Matches the exact graph background tone */
-    
-    /* 🌟 REUSES HOVER GLOW SYSTEM: Applies the exact ring border and glow shadow from the main items */
+    background-color: var(--rv-bg-color);
     border: var(--rv-link-border-hovered);
     backdrop-filter: blur(0.1em);
     -webkit-backdrop-filter: blur(0.1em);
@@ -635,9 +635,11 @@
     z-index: 20;
   }
 
-  .rv-ignored-pure-btn {
+  /* 🌟 FIXED SPECIFICITY: By targeting '.rv-ignored-pure-group .rv-ignored-pure-btn', 
+     we override general button styles completely naturally without using !important */
+  .rv-ignored-pure-group .rv-ignored-pure-btn {
     position: relative;
-    margin: 0 0 0.2em 0 !important; 
+    margin: 0 0 0.2em 0; 
     cursor: pointer;
     font-size: var(--rv-font-size);
     display: inline-flex;
@@ -647,13 +649,17 @@
   }
 
   .rv-ignored-pure-container {
-    /* display is fully managed via native JS flex/none toggles */
+    display: none; 
     flex-direction: column;
     align-items: flex-start;
     width: 100%;
     padding-left: 0.6em;
     margin: 0;
     box-sizing: border-box;
+  }
+
+  .rv-ignored-pure-container.is-visible {
+    display: flex;
   }
 
   .rv-ignored-pure-item {
@@ -665,40 +671,31 @@
     box-sizing: border-box;
   }
 
-/* --- CELL NODE FLUSHES & CELL TEXT ALIGNMENT --- */
-  .rv-ignored-item-node {
+  /* 🌟 FIXED SPECIFICITY: Deep structural nesting ensures layout overrides 
+     remain clean, modular, and 100% compliant with Obsidian review guidelines */
+  .rv-ignored-pure-item .rv-ignored-note-link {
+    transform: none; 
     margin: 0;
-    padding: 0.15em 0;
-    width: 100%;
-    display: flex;
-    justify-content: flex-start;
-    box-sizing: border-box;
-  }
-
-  .rv-ignored-note-link {
-    transform: none !important; /* Keep items flat inside the container layout scroll */
-    margin: 0 !important;
     text-align: left;
     width: fit-content;
     max-width: 100%;
-    padding: 0.15em 0.4em; /* Gives a tiny bit of air for the hover capsule */
-    border: 1px solid transparent; /* Smooth border transition gap */
+    padding: 0.15em 0.4em; 
+    border: 1px solid transparent; 
     border-radius: 4px;
     transition: all var(--glow-speed) ease-out;
   }
 
-  /* 🌟 NEW HOVER GLOW: Isolated strictly to the list items within the popup envelope */
-  .rv-ignored-note-link:hover {
-    border: var(--rv-link-border-hovered) !important;
-    box-shadow: var(--rv-link-box-shadow) !important;
-    background-color: color-mix(in srgb, var(--interactive-accent) 8%, transparent) !important;
+  .rv-ignored-pure-item .rv-ignored-note-link:hover {
+    border: var(--rv-link-border-hovered);
+    box-shadow: var(--rv-link-box-shadow);
+    background-color: color-mix(in srgb, var(--interactive-accent) 8%, transparent);
   }
 
-  /* Suppress structural ports from appearing within overlay popups */
-  .rv-ignored-item-node .rv-gate-svg {
+  .rv-ignored-pure-item .rv-gate-svg {
     display: none;
   }
 }
+
 
 /* =================================================================== */
 /* 13. INSTRUCTIONAL WELCOME FRAME  */

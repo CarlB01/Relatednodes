@@ -796,56 +796,55 @@ export class AreaManager {
 
     if (this.activeInfoPopup) this.activeInfoPopup.remove();
 
-    // 1. Create the master shell container with a clean, isolated list class
     this.activeInfoPopup = createDiv({ cls: `${RV.INFO_HOVER} active-list rv-ignored-popup-shell` });
 
-    // 2. Instantiate a memory-isolated document fragment matrix to prevent DOM lag
+    // Stop all internal clicks from bubbling up to the document level
+    this.plugin.registerDomEvent(this.activeInfoPopup, "click", (e: MouseEvent) => {
+      e.stopPropagation();
+    });
+
     const popupFragment = createFragment();
 
     const headerWrapper = popupFragment.createDiv({ cls: "rv-ignored-header-wrapper" });
-    const listHeader = headerWrapper.createEl("span", { cls: "rv-ignored-header-text" });
+    const listHeader = headerWrapper.createEl("span");
+    listHeader.addClass("rv-ignored-header-text");
     listHeader.setText("Hidden / Cause");
 
-    // 3. Populate all cluster nodes and buttons entirely inside memory space
     ignoredGroups.forEach((nodes, reason) => {
       if (!nodes || nodes.length === 0) return;
 
-      // UNIQUE NON-GRID GROUP CONTEXT: Prevents element layering and ghost clicks
       const groupDiv = popupFragment.createDiv({ cls: "rv-ignored-pure-group" });
 
       const cleanReason = reason.replace(/^#/, ""); 
       const headerBtn = groupDiv.createDiv({ cls: "rv-plusminus rv-ignored-pure-btn" });
       headerBtn.textContent = `${RV.PLUS}${cleanReason}(${nodes.length})`;
 
-      // Store variables safely as data-attributes on the button to prevent closure leakage
       headerBtn.setAttribute("data-reason", cleanReason);
       headerBtn.setAttribute("data-count", String(nodes.length));
 
-      // ISOLATED CONTAINER: Forces the group to start strictly closed via native display properties
+      // 🌟 FIXED: Links container defaults to hidden via styles.css (No inline js display used)
       const linksContainer = groupDiv.createDiv({ cls: "rv-ignored-pure-container" });
-      linksContainer.style.display = "none"; 
 
       nodes.forEach(node => {
         const itemWrapper = linksContainer.createDiv({ cls: "rv-ignored-pure-item" });
 
-        const linkEl = itemWrapper.createEl("a", {
-          cls: "focusable-note-link supercharged rv-ignored-note-link",
-          attr: { "data-link-path": node.path }
-        });
+        const linkEl = itemWrapper.createEl("a");
+        linkEl.addClass("focusable-note-link");
+        linkEl.addClass("supercharged");
+        linkEl.addClass("rv-ignored-note-link");
+        linkEl.setAttribute("data-link-path", node.path);
 
         linkEl.createSpan({ text: node.displayText, cls: "rv-text-span" });
-
-        // 🌟 ROLLED BACK: Hover effects that trigger graph highlighting have been fully removed as requested.
 
         this.plugin.registerDomEvent(linkEl, "click", (e: MouseEvent) => {
           e.preventDefault();
           e.stopPropagation();
-          this.plugin.app.workspace.openLinkText(node.path, "", false);
+          void this.plugin.app.workspace.openLinkText(node.path, "", false);
           this.cleanupPopup();
         });
       });
 
-      // 🌟 6. FIXED CLICK LIFECYCLE: Completely isolated from loop scopes using local DOM traversal
+      // 🌟 FIXED CLICK LIFECYCLE: Standard clean event binding using CSS class states instead of inline styles
       this.plugin.registerDomEvent(headerBtn, "click", (e: MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
@@ -856,21 +855,22 @@ export class AreaManager {
         const currentGroupDiv = clickedBtn.closest(".rv-ignored-pure-group") as HTMLElement;
         if (!currentGroupDiv) return;
 
-        // CRITICAL SCOPE REFACTOR: Query the container strictly WITHIN the context of the clicked group
         const targetContainer = currentGroupDiv.querySelector(".rv-ignored-pure-container") as HTMLElement;
         if (!targetContainer) return;
 
         const reasonName = clickedBtn.getAttribute("data-reason") || "";
         const countStr = clickedBtn.getAttribute("data-count") || "0";
-        const isPlus = clickedBtn.textContent?.includes(RV.PLUS);
+        
+        // 🌟 Check class presence instead of inline style string properties
+        const isCurrentlyClosed = !targetContainer.classList.contains("is-visible");
 
-        if (isPlus) {
+        if (isCurrentlyClosed) {
           currentGroupDiv.classList.add("expanded");
-          targetContainer.style.display = "flex"; // Folds out the list cleanly matching your inner padding
+          targetContainer.classList.add("is-visible"); // 🌟 CSS handles the display flex mapping
           clickedBtn.textContent = `${RV.MINUS}${reasonName}(${countStr})`;
         } else {
           currentGroupDiv.classList.remove("expanded");
-          targetContainer.style.display = "none"; // Collapses the list entirely from view
+          targetContainer.classList.remove("is-visible"); // 🌟 CSS handles the display none mapping
           clickedBtn.textContent = `${RV.PLUS}${reasonName}(${countStr})`;
         }
       });
@@ -880,27 +880,22 @@ export class AreaManager {
     this.containerEl.appendChild(this.activeInfoPopup);
     this.repositionPopup(target);
 
-    // Global native click listener to capture any interaction landing outside the popup bounds
     const closeOutsideHandler = (clickEvent: MouseEvent) => {
       if (!this.activeInfoPopup) return;
       const clickedEl = clickEvent.target as HTMLElement;
       if (!clickedEl) return;
 
-      // Check if they clicked the core info button button framework itself
       const clickedInfoBtn = clickedEl.closest(".rv-info-btn");
 
-      // Since internal clicks are stopped, ANY click that reaches here is guaranteed to be outside!
       if (!clickedInfoBtn) {
         this.cleanupPopup();
       }
     };
     
-    // Register the outside-click handler exactly once per presentation phase
     window.setTimeout(() => {
       this.plugin.registerDomEvent(document, "click", closeOutsideHandler, { once: true });
     }, 50);
   }
-
 
   /**
    * Renders the center-node info button and registers natively managed Obsidian event listeners.
