@@ -806,9 +806,11 @@ export class AreaManager {
     const popupFragment = createFragment();
 
     const headerWrapper = popupFragment.createDiv({ cls: "rv-ignored-header-wrapper" });
-    const listHeader = headerWrapper.createEl("span");
+    const listHeader = popupFragment.createEl("span");
     listHeader.addClass("rv-ignored-header-text");
     listHeader.setText("Hidden / Cause");
+    
+    headerWrapper.appendChild(listHeader);
 
     ignoredGroups.forEach((nodes, reason) => {
       if (!nodes || nodes.length === 0) return;
