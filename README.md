@@ -13,19 +13,19 @@ myBrain is a high-velocity, bidirectional structural graph network that maps, cl
 
 ---
 
-## 🚀 What's New in v1.0.47
+## 🚀 What's New in v1.0.48
 
-This update makes the graph significantly more stable and responsive, whether you are using a phone, a Mac trackpad, or multiple monitors.
+This update introduces automated Obsidian setting compliance and an advanced interactive inspection panel for hidden vault tracking.
 
+- **Privacy & Settings Compliance:** Fully integrated with Obsidian's core folder settings. The graph now automatically skips and filters out notes located inside your globally configured "Excluded files" directories right at birth.
+- **Hidden / Cause Inspection Panel:** Enhanced the status badge (`i`) on the center node. Desktop users can now use **Cmd/Ctrl/Alt + Hover** (or standard click), and mobile users can **Long-Press** the badge to open a live, glowing telemetry list breakdown.
+- **Dynamic Rule Grouping:** Suppressed nodes matching your plugin blacklist filters are compiled in memory and instantly partitioned into isolated dropdown clusters inside the popup panel based on the exact rule that filtered them (e.g., specific `#tags` or filename `@fragments`).
+- **Scan-Speed Layout Protection:** Completely refactored the vector line tracing boundaries. By pre-computing area dimensions exactly once per paint loop, the graph guarantees high-velocity scroll operations and completely eradicates phantom clipping trimmings.
+
+### ⚡ Previous Highlights (v1.0.47)
 - **Seamless Zooming:** Vector lines now recalculate perfectly when using pinch-to-zoom on Mac trackpads or changing application font sizes.
 - **Popout Windows:** Full native support for dragging the graph view out into its own detached, standalone Obsidian window.
 - **Better Mobile Touch:** Improved mobile touch highlighting and completely fixed the annoying iOS "ghost hover" bug where Safari remembered old touches.
-- **Workspace Blending:** The background color now automatically shifts to blend seamlessly whether the graph is docked in the sidebar or opened as a main tab.
-- **No More Jumping Text:** Fixed a layout engine bug so buttons and columns stay perfectly anchored without sudden layout shifts.
-
-### ⚡ Previous Highlights (v1.0.42)
-- **Extreme Speed:** The background engine was overhauled to filter tags and properties instantly, no matter how large your vault is.
-- **Battery Friendly:** The graph now redraws intelligently only when relevant data changes, saving massive laptop battery life.
 
 ---
 
@@ -158,12 +158,23 @@ Unlike standard horizontal CSS flex layouts, myBrain utilizes CSS Multi-column l
 
 ---
 
-## 🔒 Privacy & Data Safety
+## 🔒 Privacy, Security & Permissions
 
-This plugin triggers an automated notice during the Obsidian community review process called **Vault Enumeration** (due to the use of `vault.getMarkdownFiles()`). 
+This repository triggers an automated notice during the Obsidian community submission check called **Vault Enumeration** because it utilizes `app.vault.getMarkdownFiles()`. This behavior is completely intentional and represents the structural foundation required for the semantic graph to function.
 
-* **100% Local Processing:** This function is strictly used to map note relationships natively and build your semantic graph in real-time.
-* **No External Transmission:** No file paths, note titles, or contents are ever sent to external servers, trackers, or third-party APIs. Your data remains completely yours, offline, and inside your vault.
+### 🛡️ Dual-Layer Exclusion Architecture (Critical Distinction)
+
+To guarantee both maximum privacy and deep relational integrity, `myBrain` operates using a strict two-layer filtering architecture. It is vital to distinguish how these layers handle data:
+
+1. **Layer 1: Obsidian Core Exclusion (`metadataCache.isTargetIgnored`)**
+   - **Behavior:** Files matching Obsidian's global "Excluded files" app settings are intercepted *before* graph indexing occurs. 
+   - **Impact:** These records are completely blocked from entering the plugin's environment. They are never instantiated as `Node` memory models, carry zero performance footprint, and **will not appear** in the `Hidden / Cause` inspection popup because they do not exist inside the plugin's data cache.
+
+2. **Layer 2: Custom myBrain Blacklist Filters (`ignoreTags` / `ignoreNameFragments`)**
+   - **Behavior:** Files that are part of the active graph network but match your custom plugin rules (e.g., `#private` or `@` fragments) are captured dynamically during relationship mapping.
+   - **Impact:** These notes are gracefully suppressed from the main visual quadrants, stored in an isolated, pre-compiled tracking cache (`ignoredNotes`), and are **exclusively compiled** inside the interactive `Hidden / Cause` panel for telemetry inspection.
+
+- **Total Data Isolation:** Regardless of the filtering layer, all relationship calculations and caches are handled entirely in-memory on your local hardware device. Note metadata, file paths, and content strings are **never** serialized, tracked, or transmitted to external endpoints.
 
 ---
 
