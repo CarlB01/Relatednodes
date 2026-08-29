@@ -13,14 +13,19 @@ myBrain is a high-velocity, bidirectional structural graph network that maps, cl
 
 ---
 
-## 🚀 What's New in v1.0.42
+## 🚀 What's New in v1.0.47
 
-This update introduces a complete optimization of the core indexing engine. By moving away from heavy background loops and embracing a clean, event-driven architecture, v1.0.42 delivers maximum stability and battery efficiency—even for vaults with thousands of notes.
+This update makes the graph significantly more stable and responsive, whether you are using a phone, a Mac trackpad, or multiple monitors.
 
-* **True O(1) Speed:** Replaced slow array scans with native `Set` hashing. Tag and property filters now execute instantly, regardless of vault size.
-* **Zero Memory Churn:** Eliminated interface micro-stutters by lazy-caching Unicode NFC normalizations the exact millisecond a note is indexed.
-* **Reactive Core Sync:** Removed speculative preload loops. The graph now listens directly to Obsidian’s engine, performing single-pass debounced redraws only when relevant data changes.
-* **Pure TypeScript Compliance:** Fully purged explicit `any` casting alarms for flawless compatibility and lightweight execution.
+- **Seamless Zooming:** Vector lines now recalculate perfectly when using pinch-to-zoom on Mac trackpads or changing application font sizes.
+- **Popout Windows:** Full native support for dragging the graph view out into its own detached, standalone Obsidian window.
+- **Better Mobile Touch:** Improved mobile touch highlighting and completely fixed the annoying iOS "ghost hover" bug where Safari remembered old touches.
+- **Workspace Blending:** The background color now automatically shifts to blend seamlessly whether the graph is docked in the sidebar or opened as a main tab.
+- **No More Jumping Text:** Fixed a layout engine bug so buttons and columns stay perfectly anchored without sudden layout shifts.
+
+### ⚡ Previous Highlights (v1.0.42)
+- **Extreme Speed:** The background engine was overhauled to filter tags and properties instantly, no matter how large your vault is.
+- **Battery Friendly:** The graph now redraws intelligently only when relevant data changes, saving massive laptop battery life.
 
 ---
 
