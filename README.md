@@ -149,7 +149,7 @@ Unlike traditional graph views that treat your vault as a heavy database requiri
 If your existing structure is Excalibrain-friendly and front-matter based there would be little or no rewrites necessary.
 
 ### Supercharged Links Ready
-Respects your existing tag-based font colors, customized icons, and core appearance settings natively out of the box.
+Respects your existing tag-based font colors, customized icons, and core appearance settings natively out of the box. (Consider [re-supercharged links](https://github.com/CarlB01/re-supercharged-links) with support for light/dark mode - and more.
 
 ### Dynamic Top-to-Bottom Column Wrapping
 Unlike standard horizontal CSS flex layouts, myBrain utilizes CSS Multi-column layout containers inside its responsive areas. 
